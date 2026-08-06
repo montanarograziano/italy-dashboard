@@ -1,0 +1,34 @@
+*.db
+.states
+.web
+*.py[cod]
+# Data snapshots (regenerate with: python -m ingestion.fetch refresh)
+data/*
+!data/.gitkeep
+
+# Reflex
+.web/
+.states/
+assets/external/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.pyrefly_cache/
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+logs/
+
+# zensical docs build
+site/
+.zensical/
+
+# bridge transfer leftovers
+_to_delete/

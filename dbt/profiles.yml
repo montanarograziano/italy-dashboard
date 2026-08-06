@@ -1,0 +1,9 @@
+# dbt-duckdb profile. ITALY_DATA_DIR lets tests point at a temp directory;
+# defaults to the repo's data/ when running via `just transform`.
+italy_dashboard:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('ITALY_DATA_DIR', 'data') }}/dbt.duckdb"
+      threads: 4

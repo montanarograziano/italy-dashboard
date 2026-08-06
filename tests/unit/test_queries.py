@@ -1,0 +1,299 @@
+"""Unit tests for the DuckDB read layer, against a synthetic snapshot."""
+
+from __future__ import annotations
+
+import polars as pl
+import pytest
+
+from italy_dashboard import queries as q
+
+
+@pytest.fixture
+def crime_mart(sample_db, monkeypatch):
+    """Small deterministic mart_crime.parquet in the temp marts dir."""
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = []
+    regions = [("IT", "Italy", True), ("ITC4", "Lombardia", False), ("ITI4", "Lazio", False)]
+    offences = [("THEFT", "theft"), ("FRAUD", "fraud")]  # no offence total row
+    sexes = [("1", "males", False), ("2", "females", False), ("9", "total", True)]
+    ages = [
+        ("TOTAL", "total", True),
+        ("Y18-24", "18-24 years", False),
+        ("Y25-34", "25-34 years", False),
+    ]
+    for year in ("2022", "2023"):
+        for rc, rn, rtot in regions:
+            for oc, on in offences:
+                for sc, sn, stot in sexes:
+                    for ac, an, atot in ages:
+                        base = 100 if oc == "THEFT" else 40
+                        v = base * (3 if rtot else 1) * (2 if stot else 1) * (2 if atot else 1)
+                        rows.append(
+                            {
+                                "year": year,
+                                "region_code": rc,
+                                "region_name": rn,
+                                "offence_code": oc,
+                                "offence_name": on,
+                                "sex_code": sc,
+                                "sex_name": sn,
+                                "age_code": ac,
+                                "age_name": an,
+                                "region_is_total": rtot,
+                                "offence_is_total": False,
+                                "sex_is_total": stot,
+                                "age_is_total": atot,
+                                "value": float(v),
+                            }
+                        )
+    pl.DataFrame(rows).write_parquet(marts / "mart_crime.parquet")
+    return marts
+
+
+ALL_SEL = {"region": q.ALL, "offence": q.ALL, "sex": q.ALL, "age": q.ALL}
+
+# All fixtures come from tests/conftest.py: `sample_db` wires queries.DB_PATH
+# to a temp DuckDB built from synthetic data; `missing_db` points at nothing.
+
+
+def test_db_ready_reflects_file_existence(sample_db, missing_db_not_used=None):
+    assert q.db_ready() is True
+
+
+def test_everything_degrades_gracefully_without_db(missing_db):
+    assert q.db_ready() is False
+    assert q.region_names() == [q.NATIONAL]
+    assert q.crime_trend(dict.fromkeys(["region", "offence", "sex", "age"], q.ALL)) == []
+    assert q.kpis() == {
+        "crime": "—",
+        "population": "—",
+        "unemployment": "—",
+        "inflation": "—",
+    }
+
+
+def test_region_names_start_with_national_and_are_sorted(sample_db):
+    names = q.region_names()
+    assert names[0] == q.NATIONAL
+    rest = names[1:]
+    assert rest == sorted(rest)
+    assert "Lombardia" in rest
+
+
+def test_crime_options_exclude_totals_and_start_with_all(crime_mart):
+    options = q.crime_options()
+    assert options["region"] == [q.ALL, "Lazio", "Lombardia"]  # "Italy" total excluded
+    assert options["sex"] == [q.ALL, "females", "males"]  # "total" excluded
+    assert options["offence"] == [q.ALL, "fraud", "theft"]
+
+
+def test_crime_trend_all_prefers_total_rows(crime_mart):
+    # region/sex/age have total rows -> picked; offence has none -> summed.
+    rows = q.crime_trend(ALL_SEL)
+    # IT total x sex total x age total: theft 100*3*2*2 + fraud 40*3*2*2 = 1680
+    assert rows == [
+        {"period": "2022", "value": 1680},
+        {"period": "2023", "value": 1680},
+    ]
+
+
+def test_crime_trend_specific_region_filters_rows(crime_mart):
+    rows = q.crime_trend({**ALL_SEL, "region": "Lombardia"})
+    # 100*2*2 + 40*2*2 (sex+age totals, region detail)
+    assert rows[0]["value"] == 560
+
+
+def test_crime_trend_pivot_split_by_sex(crime_mart):
+    rows, labels = q.crime_trend_pivot(ALL_SEL, "sex")
+    assert set(labels) == {"males", "females"}  # totals excluded
+    assert rows[0]["s1"] == rows[0]["s2"]  # deterministic fixture: equal split
+    assert {"period", "s1", "s2"} <= set(rows[0])
+
+
+def test_crime_trend_pivot_caps_series_at_three(crime_mart):
+    _, labels = q.crime_trend_pivot(ALL_SEL, "region")
+    assert len(labels) <= 3
+
+
+def test_crime_offence_breakdown_sorted_and_filtered(crime_mart):
+    rows = q.crime_offence_breakdown(ALL_SEL)
+    assert [r["name"] for r in rows] == ["theft", "fraud"]
+    rows_lazio = q.crime_offence_breakdown({**ALL_SEL, "region": "Lazio"})
+    assert rows_lazio[0]["value"] < rows[0]["value"]
+
+
+def test_crime_mart_missing_degrades_gracefully(sample_db):
+    assert q.crime_mart_ready() is False
+    assert q.crime_options() == {
+        "region": [q.ALL],
+        "offence": [q.ALL],
+        "sex": [q.ALL],
+        "age": [q.ALL],
+    }
+    assert q.crime_trend(ALL_SEL) == []
+    assert q.crime_trend_pivot(ALL_SEL, "sex") == ([], [])
+
+
+def test_foreign_share_is_a_percentage(sample_db):
+    rows = q.foreign_share_timeseries(q.NATIONAL)
+    assert rows, "expected non-empty share series"
+    assert all(0.0 < r["value"] < 100.0 for r in rows)
+
+
+def test_unemployment_series_has_selected_and_national(sample_db):
+    rows = q.unemployment_series("Sicilia")
+    assert rows
+    for r in rows:
+        assert set(r) == {"period", "selected", "national"}
+    # When the selection IS the national aggregate, both series coincide.
+    nat = q.unemployment_series(q.NATIONAL)
+    assert all(r["selected"] == r["national"] for r in nat)
+
+
+def test_kpis_are_formatted_strings(sample_db):
+    k = q.kpis()
+    assert set(k) == {"crime", "population", "unemployment", "inflation"}
+    assert k["population"].endswith("M")
+    assert k["unemployment"].endswith("%")
+    assert k["inflation"][0] in "+-"
+
+
+@pytest.fixture
+def offenders_mart(sample_db):
+    """mart_offenders with a citizenship dimension, built like crime_mart."""
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = []
+    for year in ("2022", "2023"):
+        for rc, rn, rtot in [("IT", "Italy", True), ("ITC4", "Lombardia", False)]:
+            for zc, zn, ztot in [
+                ("TOTAL", "total", True),
+                ("ITL", "italian", False),
+                ("FRG", "foreign", False),
+            ]:
+                for cc, cn in [("THEFT", "theft"), ("DRUGS", "drugs")]:
+                    v = 100.0 * (2 if rtot else 1) * (2 if ztot else (1.4 if zc == "ITL" else 0.6))
+                    rows.append(
+                        {
+                            "year": year,
+                            "region_code": rc,
+                            "region_name": rn,
+                            "indicator_code": "AUTH",
+                            "indicator_name": "alleged offenders",
+                            "crime_code": cc,
+                            "crime_name": cn,
+                            "sex_code": "9",
+                            "sex_name": "total",
+                            "age_code": "TOTAL",
+                            "age_name": "total",
+                            "citizenship_code": zc,
+                            "citizenship_name": zn,
+                            "region_is_total": rtot,
+                            "indicator_is_total": False,
+                            "crime_is_total": False,
+                            "sex_is_total": True,
+                            "age_is_total": True,
+                            "citizenship_is_total": ztot,
+                            "value": v,
+                        }
+                    )
+    pl.DataFrame(rows).write_parquet(marts / "mart_offenders.parquet")
+    return marts
+
+
+OFF_SEL = dict.fromkeys(["region", "indicator", "crime", "sex", "age", "citizenship"], q.ALL)
+
+
+def test_offenders_options_include_citizenship(offenders_mart):
+    options = q.mart_options(q.OFFENDERS_MART)
+    assert options["citizenship"] == [q.ALL, "foreign", "italian"]
+
+
+def test_offenders_all_uses_citizenship_total_rows(offenders_mart):
+    rows = q.mart_trend(q.OFFENDERS_MART, OFF_SEL)
+    # IT total x citizenship total: 100*2*2 per crime x 2 crimes = 800
+    assert rows[0]["value"] == 800
+
+
+def test_offenders_split_by_citizenship(offenders_mart):
+    rows, labels = q.mart_trend_pivot(q.OFFENDERS_MART, OFF_SEL, "citizenship")
+    assert labels == ["italian", "foreign"]
+    assert rows[0]["s1"] > rows[0]["s2"]  # italians > foreigners in fixture
+
+
+def test_offenders_citizenship_filter(offenders_mart):
+    rows = q.mart_trend(q.OFFENDERS_MART, {**OFF_SEL, "citizenship": "foreign"})
+    # IT total x foreign share 0.6: 100*2*0.6*2 crimes = 240
+    assert rows[0]["value"] == 240
+
+
+@pytest.fixture
+def offenders_mart_mixed_slices(sample_db):
+    """Mimics real ISTAT publishing: early years only have marginal slices
+    (sex XOR citizenship detail), recent years the full cross-product."""
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+
+    def row(year, rc, rt, sc, st, ac, at, zc, zt, v):
+        return {
+            "year": year,
+            "region_code": rc,
+            "region_name": "Italy" if rt else rc,
+            "indicator_code": "AUTH",
+            "indicator_name": "offenders",
+            "crime_code": "THEFT",
+            "crime_name": "theft",
+            "sex_code": sc,
+            "sex_name": {"1": "males", "2": "females", "9": "total"}[sc],
+            "age_code": ac,
+            "age_name": ac.lower(),
+            "citizenship_code": zc,
+            "citizenship_name": {"ITL": "italian", "FRG": "foreign", "TOTAL": "total"}[zc],
+            "region_is_total": rt,
+            "indicator_is_total": False,
+            "crime_is_total": False,
+            "sex_is_total": st,
+            "age_is_total": at,
+            "citizenship_is_total": zt,
+            "value": float(v),
+        }
+
+    rows = []
+    # 2008: sex-marginal (cit total) and citizenship-marginal (sex total) only
+    rows += [
+        row("2008", "IT", True, "1", False, "TOTAL", True, "TOTAL", True, 60),
+        row("2008", "IT", True, "2", False, "TOTAL", True, "TOTAL", True, 40),
+        row("2008", "IT", True, "9", True, "TOTAL", True, "ITL", False, 70),
+        row("2008", "IT", True, "9", True, "TOTAL", True, "FRG", False, 30),
+    ]
+    # 2023: full cross-product including the all-totals row
+    rows += [
+        row("2023", "IT", True, "9", True, "TOTAL", True, "TOTAL", True, 90),
+        row("2023", "IT", True, "1", False, "TOTAL", True, "TOTAL", True, 55),
+        row("2023", "IT", True, "2", False, "TOTAL", True, "TOTAL", True, 35),
+        row("2023", "IT", True, "9", True, "TOTAL", True, "ITL", False, 60),
+        row("2023", "IT", True, "9", True, "TOTAL", True, "FRG", False, 30),
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_offenders.parquet")
+    return marts
+
+
+def test_all_survives_years_with_only_marginal_slices(offenders_mart_mixed_slices):
+    """Regression: the naive 'all totals' combination only exists in recent
+    years; the slice picker must find a combination covering ALL years."""
+    rows = q.mart_trend(q.OFFENDERS_MART, OFF_SEL)
+    assert [r["period"] for r in rows] == ["2008", "2023"]
+    assert rows[0]["value"] == 100  # sex or citizenship marginal, both sum to 100
+
+
+def test_split_uses_only_years_where_the_dimension_exists(offenders_mart_mixed_slices):
+    rows, labels = q.mart_trend_pivot(q.OFFENDERS_MART, OFF_SEL, "citizenship")
+    assert [r["period"] for r in rows] == ["2008", "2023"]
+    assert set(labels) == {"italian", "foreign"}
+
+
+def test_region_details_never_summed_for_all(offenders_mart_mixed_slices):
+    # "All" region must sit on the IT total row (details mix admin levels).
+    where, _ = q._mart_where(q.OFFENDERS_MART, OFF_SEL)
+    assert "region_is_total" in where and "NOT region_is_total" not in where

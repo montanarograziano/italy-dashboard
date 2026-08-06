@@ -1,0 +1,177 @@
+# Dataset registry: what the dashboard ingests from ISTAT.
+#
+# `columns` maps SDMX components to the normalized schema. Each entry is one
+# component ID or a list of candidates tried in order — ISTAT dataflows
+# disagree on dimension names (older flows use ITTER107/SEXISTAT1, newer ones
+# REF_AREA/SEX). Matching also understands `labels=both` combined headers
+# ("REF_AREA: Territorio") and splits combined cell values ("ITC4: Lombardia")
+# into code + label automatically, so *_name mappings are optional.
+#
+# If a normalized column still comes out NULL, the fetch log prints the full
+# list of raw CSV columns — pick the right one and update the candidates.
+#
+# Confirm dataflow IDs with:  just discover "<keyword>"
+
+# Ordered fastest-first: the snapshot rebuilds after each dataset, so the
+# dashboard becomes usable as soon as the first one lands.
+datasets:
+  labor_unemployment:
+    domain: labor
+    title: "Unemployment rate"
+    dataflow_id: "151_914"
+    search_hint: "disoccupazione"
+    key: "ALL"
+    start_period: "1970"
+    columns:
+      territory: [ITTER107, REF_AREA]
+      category: [SEXISTAT1, SEX]
+      period: TIME_PERIOD
+      value: OBS_VALUE
+    # Keep only the headline series: annual frequency, unemployment rate,
+    # totals for every breakdown. Codes verified against the raw CSV; if a
+    # total code is wrong the fetch log reports 0 rows + the real columns.
+    filters:
+      FREQ: A
+      DATA_TYPE: UNEM_R
+      SEX: ["9", "T", "_T", "TOTAL"]
+      AGE: [Y15-74, TOTAL, _T]
+      EDU_LEV_HIGHEST: ["99", TOTAL, _T]
+      CITIZENSHIP: [TOTAL, _T]
+      DURATION_UNEMPLOYMENT: [TOTAL, _T]
+
+  economy_inflation:
+    domain: economy
+    title: "Consumer price index (NIC, whole nation, base 2015)"
+    dataflow_id: "167_744"
+    search_hint: "prezzi al consumo"
+    # Monthly-only dataflow. Codes verified against the real CSV:
+    # FREQ=M, REF_AREA=IT, MEASURE=4 (index number), E_COICOP=00 (all items).
+    # DATA_TYPE = base-series code (9 = base 2010, 39 = base 2015): kept OPEN
+    # as the category so the query layer can chain rebased series for a
+    # longer history. Annual inflation is derived at query time.
+    key: "M.IT..4.00"
+    start_period: "1970"
+    columns:
+      territory: [REF_AREA, ITTER107]
+      category: [DATA_TYPE]
+      period: TIME_PERIOD
+      value: OBS_VALUE
+    # Same pins as the key, so `just normalize` also works on a raw ALL file.
+    filters:
+      FREQ: M
+      MEASURE: "4"
+      E_COICOP_REV_ISTAT: "00"
+
+
+  crime_reported:
+    domain: crime
+    # NOTE: 73_58 turned out to be "felonies of persons CONVICTED by final
+    # judgement" (courts), not crimes reported to the police. Kept working
+    # until the right dataflow is confirmed via `just discover "delitti"`.
+    title: "Felonies of persons convicted by final judgement (73_58)"
+    dataflow_id: "73_58"
+    search_hint: "delitti"
+    # Dimension order (from `just dims crime_reported`):
+    # FREQ.REF_AREA.DATA_TYPE.TYPE_OFFENCE.NATURE_CRIME.JUDICIAL_OFFICE.
+    # TIME_CRIME_SENTENCE.PRINCIPAL_SECURITY_MEASURES.PREVIOUS_CONVICTIONS_RELAPSE.
+    # DISTRICT_COURT_APPEAL.YEAR_CRIME.AGE_CRIME_COMMITTED.AGE_SERIOUS_CRIMECOMMIT.SEX
+    # Open slots: REF_AREA (regions), TYPE_OFFENCE (categories), SEX (totaled client-side).
+    key: "A..FELONYFJ..ALL.ALL.TOTAL.ALL.ALL.99.ALL..TOTAL."
+    timeout_s: 2400  # age dimension open -> bigger extraction
+    start_period: "1970"
+    columns:
+      territory: [REF_AREA, ITTER107]
+      category: [TYPE_OFFENCE, TIPO_REATO, REATI]
+      period: TIME_PERIOD
+      value: OBS_VALUE
+    # Headline slice only; codes read from the actual raw CSV.
+    filters:
+      FREQ: A
+      DATA_TYPE: FELONYFJ
+      SEX: ["9", TOTAL, _T]
+      NATURE_CRIME: [ALL, TOTAL]
+      JUDICIAL_OFFICE: [ALL, TOTAL]
+      TIME_CRIME_SENTENCE: [TOTAL, ALL]
+      PRINCIPAL_SECURITY_MEASURES: [ALL, TOTAL]
+      PREVIOUS_CONVICTIONS_RELAPSE: [ALL, TOTAL]
+      DISTRICT_COURT_APPEAL: ["99", ALL, TOTAL]
+      YEAR_CRIME: [ALL, TOTAL]
+      AGE_CRIME_COMMITTED: [TOTAL, ALL]
+      AGE_SERIOUS_CRIMECOMMIT: [TOTAL, ALL]
+
+  crime_offenders:
+    domain: crime
+    title: "Alleged offenders reported by police (gender, age, citizenship, prov.)"
+    dataflow_id: "73_230_DF_DCCV_AUTVITTPS_7"
+    search_hint: "alleged offenders"
+    # DSD dims (from `just dims 73_230_DF_DCCV_AUTVITTPS_2`, same family):
+    # FREQ.REF_AREA.DATA_TYPE.TYPE_CRIME.SEX.AGE.CITIZENSHIP.COUNTRY_CITIZEN
+    # Annual only; everything else open (the dataflow is already a slice).
+    key: "A......."
+    start_period: "1970"
+    timeout_s: 2400
+    columns:
+      territory: [REF_AREA, ITTER107]
+      category: [TYPE_CRIME, TIPO_REATO]
+      period: TIME_PERIOD
+      value: OBS_VALUE
+
+  income_regional:
+    domain: economy
+    title: "Household disposable income per capita, by region"
+    # TODO confirm via: just discover "reddito disponibile"  (regional accounts,
+    # household gross disposable income; divide by population downstream or
+    # prefer a per-capita indicator if one exists).
+    dataflow_id: "TODO_DISCOVER_reddito"
+    search_hint: "reddito disponibile"
+    key: "ALL"
+    start_period: "1995"
+    columns:
+      territory: [ITTER107, REF_AREA]
+      category: [DATA_TYPE, CONTO]
+      period: TIME_PERIOD
+      value: OBS_VALUE
+    filters:
+      FREQ: A
+
+  population_foreign:
+    domain: population
+    title: "Foreign resident population"
+    dataflow_id: "29_7"
+    search_hint: "stranieri"
+    # dims: FREQ.REF_AREA.DATA_TYPE.SEX.AGE — ALL includes ~7900 municipalities
+    # and the server drops the connection. Restrict to Italy + NUTS2 regions.
+    key: "A.IT+ITC1+ITC2+ITC3+ITC4+ITH1+ITH2+ITH3+ITH4+ITH5+ITI1+ITI2+ITI3+ITI4+ITF1+ITF2+ITF3+ITF4+ITF5+ITF6+ITG1+ITG2..."
+    start_period: "1970"
+    columns:
+      territory: [REF_AREA, ITTER107]
+      category: [SEX, SEXISTAT1]
+      period: TIME_PERIOD
+      value: OBS_VALUE
+    filters:
+      SEX: ["9", TOTAL, _T]
+      AGE: [TOTAL, _T, TOT, Y_TOT]
+
+
+  population_resident:
+    domain: population
+    title: "Resident population on 1 January"
+    dataflow_id: "22_289"
+    search_hint: "popolazione residente"
+    key: "ALL"
+    start_period: "1970"
+    columns:
+      territory: [ITTER107, REF_AREA]
+      category: [SEXISTAT1, SEX]
+      period: TIME_PERIOD
+      value: OBS_VALUE
+    # Keep only per-territory totals: any hidden breakdown (sex, age, marital
+    # status) would silently inflate sums. Unmatched filters are skipped.
+    filters:
+      FREQ: A
+      SEX: ["9", TOTAL, _T]
+      SEXISTAT1: ["9", TOTAL, _T]
+      AGE: [TOTAL, _T, TOT, Y_TOT]
+      ETA1: [TOTAL, _T, TOT]
+      MARITAL_STATUS: [TOTAL, _T, "99"]
+      STATCIV2: ["99", TOTAL, _T]

@@ -1,0 +1,84 @@
+[project]
+name = "italy-dashboard"
+version = "0.1.0"
+description = "Internal dashboard for Italian statistics (ISTAT): crime, population, labor, economy"
+requires-python = ">=3.11"
+dependencies = [
+    "reflex==0.9.8",
+    "duckdb>=1.5,<2",
+    "polars>=1.40,<2",
+    "httpx2>=2.9,<3",
+    "pyyaml>=6,<7",
+    "pydantic>=2,<3",
+    "dbt-duckdb>=1.9,<2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=1.0",
+    "ruff>=0.13",
+    "pyrefly>=0.30",
+    "marimo>=0.11",
+    "altair>=5.4",
+    "pyarrow>=18",
+    "zensical>=0.0.53",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ingestion", "italy_dashboard"]
+
+# ------------------------------------------------------------------ ruff
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "RUF", # ruff-specific
+]
+ignore = [
+    "E501",  # line length is enforced by the formatter where it matters
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+# Reflex state vars are declared as class attributes with defaults by design.
+"italy_dashboard/state.py" = ["RUF012"]
+# marimo cells end with a bare expression on purpose: that's the cell output.
+"notebooks/*" = ["B018"]
+
+# --------------------------------------------------------------- pyrefly
+
+[tool.pyrefly]
+project-includes = ["ingestion", "italy_dashboard", "tests"]
+project-excludes = ["**/.venv", "**/.web", "**/node_modules"]
+
+[tool.pyrefly.errors]
+# Reflex's descriptor-based state fields (reflex.Field.__get__/__set__) trip
+# this check inside the framework's own typing; not actionable in our code.
+bad-class-definition = false
+
+# ---------------------------------------------------------------- pytest
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: end-to-end pipeline tests (still offline)",
+    "live: tests that hit the real ISTAT API (deselected by default)",
+]
+addopts = "-m 'not live'"

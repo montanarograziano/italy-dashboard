@@ -1,0 +1,20 @@
+name: italy_dashboard
+version: "1.0.0"
+profile: italy_dashboard
+
+# Run from the repo root:  just transform
+# (all relative paths below resolve against the repo root cwd)
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  italy_dashboard:
+    staging:
+      +materialized: view
+    marts:
+      # Marts land as Parquet files the dashboard picks up directly
+      # (italy_dashboard/queries.py builds views from data/marts/*.parquet).
+      +materialized: external

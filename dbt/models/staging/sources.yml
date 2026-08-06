@@ -1,0 +1,43 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Raw SDMX-CSV files downloaded by `just refresh` (ingestion/fetch.py).
+    tables:
+      - name: crime_raw
+        description: >
+          ISTAT dataflow 73_58 — felonies of persons convicted by final
+          judgement. Combined "CODE: Label" headers and cell values.
+          NOTE: no citizenship dimension exists in this dataflow; crimes by
+          citizenship need a separate ISTAT dataflow (pending discovery).
+        meta:
+          external_location: >-
+            read_csv_auto('{{ env_var('ITALY_DATA_DIR', 'data') }}/raw/crime_reported.csv',
+                          header=true, all_varchar=true)
+      - name: offenders_raw
+        description: >
+          ISTAT dataflow 73_230_DF_DCCV_AUTVITTPS_7 — alleged offenders
+          reported/arrested by the police, by province/region, type of crime,
+          sex, age, and citizenship (Italian vs foreign).
+        meta:
+          external_location: >-
+            read_csv_auto('{{ env_var('ITALY_DATA_DIR', 'data') }}/raw/crime_offenders.csv',
+                          header=true, all_varchar=true)
+  - name: snapshots
+    description: Normalized parquet snapshots written by ingestion/fetch.py.
+    tables:
+      - name: population_resident_pq
+        description: Resident population by region and year (sex/age totals).
+        meta:
+          external_location: >-
+            read_parquet('{{ env_var('ITALY_DATA_DIR', 'data') }}/population_resident.parquet')
+      - name: population_foreign_pq
+        description: Foreign residents by region and year (sex/age totals).
+        meta:
+          external_location: >-
+            read_parquet('{{ env_var('ITALY_DATA_DIR', 'data') }}/population_foreign.parquet')
+      - name: income_regional_pq
+        description: Household disposable income per capita by region and year.
+        meta:
+          external_location: >-
+            read_parquet('{{ env_var('ITALY_DATA_DIR', 'data') }}/income_regional.parquet')

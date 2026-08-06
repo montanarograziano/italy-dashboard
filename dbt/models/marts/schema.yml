@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: mart_crime
+    description: >
+      Headline crime series (dataflow 73_58, convictions by final judgement)
+      by year, region, offence type, sex, and age at time of crime.
+      Consumed by the dashboard from data/marts/mart_crime.parquet.
+    columns:
+      - name: year
+        tests: [not_null]
+      - name: region_code
+        tests: [not_null]
+      - name: offence_code
+        tests: [not_null]
+      - name: value
+        tests: [not_null]
+
+  - name: mart_offenders
+    description: >
+      Alleged offenders reported by the police (73_230 family) by year, region,
+      indicator, type of crime, sex, age, and citizenship.
+      Consumed from data/marts/mart_offenders.parquet.
+    columns:
+      - name: year
+        tests: [not_null]
+      - name: region_code
+        tests: [not_null]
+      - name: citizenship_code
+        tests: [not_null]
+      - name: value
+        tests: [not_null]
+
+  - name: mart_population
+    description: Resident, foreign, and italian population by region and year.
+    columns:
+      - name: year
+        tests: [not_null]
+      - name: region_code
+        tests: [not_null]
+
+  - name: mart_offender_rates
+    description: >
+      Alleged offenders per 1,000 residents of the same citizenship group, by
+      year, region, and type of crime. Rates are NULL where population
+      denominators are missing (foreign residents data starts in 2019).
+    columns:
+      - name: year
+        tests: [not_null]
+      - name: citizenship_code
+        tests: [not_null]
+      - name: offenders
+        tests: [not_null]
+
+  - name: mart_crime_income
+    description: >
+      Offender rate per 1,000 by citizenship joined with regional income per
+      capita — the basis for the ecological income/crime correlation view.
+      income_per_capita is NULL until the income dataset is fetched.
+    columns:
+      - name: year
+        tests: [not_null]
+      - name: region_code
+        tests: [not_null]
+      - name: citizenship_code
+        tests: [not_null]
