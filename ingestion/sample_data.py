@@ -270,6 +270,7 @@ RAW_OFFENDERS_HEADER = (
 )
 
 OFFENDER_CRIMES = [
+    ("TOT", "total"),  # regression guard: hidden grand-total row (real ISTAT quirk)
     ("THEFT", "theft"),
     ("ROBBERY", "robbery"),
     ("FRAUD", "fraud and cyber fraud"),
@@ -299,7 +300,14 @@ def generate_raw_offenders_csv(raw_dir: Path, seed: int = 42) -> Path:
     out = raw_dir / "crime_offenders.csv"
 
     territories = [("IT", "Italy"), *[(code, name) for code, name in REGIONS]]
-    base = {"THEFT": 5000, "ROBBERY": 900, "FRAUD": 1600, "INJURIES": 1300, "DRUGS": 1700}
+    base = {
+        "TOT": 10500,  # grand total = sum of the five crime types
+        "THEFT": 5000,
+        "ROBBERY": 900,
+        "FRAUD": 1600,
+        "INJURIES": 1300,
+        "DRUGS": 1700,
+    }
 
     lines = [RAW_OFFENDERS_HEADER]
     for tcode, tname in territories:

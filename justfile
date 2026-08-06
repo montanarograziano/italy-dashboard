@@ -58,6 +58,11 @@ transform:
     mkdir -p data/marts
     uv run dbt build --project-dir dbt --profiles-dir dbt
 
+# Generate and open the dbt documentation (model lineage, columns, tests)
+dbt-docs:
+    uv run dbt docs generate --project-dir dbt --profiles-dir dbt
+    uv run dbt docs serve --project-dir dbt --profiles-dir dbt --port 8080
+
 # dbt with any args, e.g. `just dbt docs generate`
 dbt *args:
     uv run dbt {{args}} --project-dir dbt --profiles-dir dbt

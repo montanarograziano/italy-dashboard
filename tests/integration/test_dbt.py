@@ -69,3 +69,38 @@ def test_dbt_builds_crime_mart_from_raw_csv(tmp_path, monkeypatch):
         p.name: pl.read_parquet(p).height for p in (data_dir / "marts").glob("*.parquet")
     }
     assert counts_after == counts_before
+
+    # --- offenders mart: citizenship dimension, hidden totals, rates ---
+    assert (data_dir / "marts" / "mart_offenders.parquet").exists()
+    off_sel = dict.fromkeys(q.OFFENDERS_MART[1], q.ALL)
+    options = q.mart_options(q.OFFENDERS_MART)
+    assert options["citizenship"] == [q.ALL, "foreign", "italian"]
+    # the hidden 'TOT: total' crime row must be flagged, never listed or summed
+    assert "total" not in options["crime"]
+    _, cit_labels = q.mart_trend_pivot(q.OFFENDERS_MART, off_sel, "citizenship")
+    assert cit_labels == ["italian", "foreign"]
+
+    # summing crime details must EXCLUDE the hidden grand-total row:
+    # trend(all) == sum of the five real crime types, not double it
+    import duckdb
+
+    mart = data_dir / "marts" / "mart_offenders.parquet"
+    con = duckdb.connect()
+    row = con.execute(
+        f"""
+        SELECT SUM(CASE WHEN NOT crime_is_total THEN value END),
+               SUM(value)
+        FROM read_parquet('{mart}')
+        WHERE region_is_total AND sex_is_total AND age_is_total AND citizenship_is_total
+          AND year = '2023'
+        """
+    ).fetchone()
+    assert row is not None
+    real_sum, with_tot = row
+    assert real_sum is not None and with_tot is not None
+    assert real_sum < with_tot  # the TOT row exists but is flagged out
+
+    # rates mart still joins population correctly
+    assert (data_dir / "marts" / "mart_offender_rates.parquet").exists()
+    rates = q.offender_rates(q.ALL, q.ALL)
+    assert rates and any(r["s1"] for r in rates)

@@ -42,11 +42,22 @@ some datasets all ~7,900 municipalities. Summing them overcounts several times
 - The national unemployment reference is the IT row — an unweighted average of
   regions would let Molise weigh as much as Lombardia.
 
-## No unduplicated "all crimes" total
+## Hidden totals and the 2022→2023 "cliff"
 
-The offenders data has no total row across crime types: a person denounced for
-multiple crime types appears once per type. Per-crime views are exact;
-cross-crime sums overstate distinct persons. The UI's methodology note says so.
+The offenders data carried a grand-total crime row under the unexpected code
+`TOT` from 2007 to 2022 — then ISTAT stopped publishing it. Any sum that failed
+to flag it counted every crime **plus** the total, roughly doubling 2007–2022
+and producing a spectacular fake drop into 2023. Total detection is therefore
+by code **and by name** (`total`/`totale`), with a regression test. The
+corrected series is smooth (~560k in 2007, peak ~680k in 2013–14, COVID dip in
+2020, ~584k in 2024).
+
+Independent of that: a person denounced for multiple crime types appears once
+per type, so cross-crime sums still overstate distinct persons. Per-crime views
+are exact. And when comparing 2023+ levels with older years externally, note the
+Cartabia reform (in force 30 Dec 2022) moved many offences to complaint-based
+prosecution, which analysts argue depresses recorded crime counts from 2023
+onward — an upstream definitional change, not a pipeline issue.
 
 ## Rebased index series
 
