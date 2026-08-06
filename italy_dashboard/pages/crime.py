@@ -79,6 +79,13 @@ def _offenders_filter_bar() -> rx.Component:
                 disabled=s.split_by == "Region",
             ),
             _labeled_select(
+                t("province"),
+                s.province_options,
+                s.province,
+                s.set_province_filter,
+                disabled=s.split_by == "Region",
+            ),
+            _labeled_select(
                 t("crime_dim"),
                 s.crime_options,
                 s.crime,
@@ -178,6 +185,19 @@ def _offenders_tab() -> rx.Component:
                 ),
             ),
             card(
+                t("by_region_rate"),
+                t("by_region_rate_sub"),
+                _labeled_select(t("year"), s.year_options, s.breakdown_year, s.set_breakdown_year),
+                h_bar_chart(
+                    s.region_ranking,
+                    data_key="value",
+                    y_key="name",
+                    color=theme.SERIES_2,
+                    height=560,
+                ),
+                data_table(s.region_ranking, [("name", t("region")), ("value", t("rate_axis"))]),
+            ),
+            card(
                 t("share_title"),
                 t("share_sub"),
                 line_chart(
@@ -189,6 +209,7 @@ def _offenders_tab() -> rx.Component:
             card(
                 t("by_crime_type"),
                 t("latest_year_sub"),
+                _labeled_select(t("year"), s.year_options, s.breakdown_year, s.set_breakdown_year),
                 h_bar_chart(
                     s.by_crime,
                     data_key="value",
@@ -241,6 +262,8 @@ def _income_card() -> rx.Component:
                     y_key="rate",
                     x_label=t("income_axis"),
                     y_label=t("rate_axis"),
+                    label_key="region",
+                    label_name=t("region"),
                 ),
                 rx.text(t("income_caveat"), color=theme.INK_MUTED, font_size="0.75em"),
                 spacing="4",
@@ -262,6 +285,13 @@ def _convictions_filter_bar() -> rx.Component:
             s.region_options,
             s.region,
             s.set_region_filter,
+            disabled=s.split_by == "Region",
+        ),
+        _labeled_select(
+            t("province"),
+            s.province_options,
+            s.province,
+            s.set_province_filter,
             disabled=s.split_by == "Region",
         ),
         _labeled_select(
@@ -311,6 +341,7 @@ def _convictions_tab() -> rx.Component:
             card(
                 t("by_offence_type"),
                 t("latest_year_sub"),
+                _labeled_select(t("year"), s.year_options, s.breakdown_year, s.set_breakdown_year),
                 h_bar_chart(
                     s.by_offence,
                     data_key="value",
@@ -321,6 +352,18 @@ def _convictions_tab() -> rx.Component:
                 data_table(
                     s.by_offence, [("name", t("offence_type")), ("value", t("convictions"))]
                 ),
+            ),
+            card(
+                t("by_region"),
+                t("by_region_sub"),
+                h_bar_chart(
+                    s.by_region,
+                    data_key="value",
+                    y_key="name",
+                    color=theme.SERIES_1,
+                    height=460,
+                ),
+                data_table(s.by_region, [("name", t("region")), ("value", t("convictions"))]),
             ),
             spacing="5",
             width="100%",

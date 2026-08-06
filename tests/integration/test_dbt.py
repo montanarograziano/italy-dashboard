@@ -80,6 +80,23 @@ def test_dbt_builds_crime_mart_from_raw_csv(tmp_path, monkeypatch):
     _, cit_labels = q.mart_trend_pivot(q.OFFENDERS_MART, off_sel, "citizenship")
     assert cit_labels == ["italian", "foreign"]
 
+    # region picker lists regions only; provinces live in their own dropdown,
+    # cascading from the selected region by NUTS code prefix
+    assert "Milano" not in options["region"] and "Italy" not in options["region"]
+    assert q.mart_province_options(q.OFFENDERS_MART) == [q.ALL, "Milano", "Varese"]
+    assert q.mart_province_options(q.OFFENDERS_MART, "Lombardia") == [q.ALL, "Milano", "Varese"]
+    assert q.mart_province_options(q.OFFENDERS_MART, "Lazio") == [q.ALL]
+    prov = q.mart_trend(
+        q.OFFENDERS_MART, {**off_sel, "region": "Milano", "_region_scope": "province"}
+    )
+    assert prov and all(r["value"] > 0 for r in prov)
+
+    # breakdown accepts an explicit year
+    years = q.mart_years(q.OFFENDERS_MART)
+    assert len(years) > 1
+    older = q.mart_breakdown(q.OFFENDERS_MART, "crime", off_sel, year=years[-1])
+    assert older and all(r["name"] != "total" for r in older)
+
     # summing crime details must EXCLUDE the hidden grand-total row:
     # trend(all) == sum of the five real crime types, not double it
     import duckdb
@@ -101,6 +118,29 @@ def test_dbt_builds_crime_mart_from_raw_csv(tmp_path, monkeypatch):
     assert real_sum < with_tot  # the TOT row exists but is flagged out
 
     # rates mart still joins population correctly
-    assert (data_dir / "marts" / "mart_offender_rates.parquet").exists()
+    rates_mart = data_dir / "marts" / "mart_offender_rates.parquet"
+    assert rates_mart.exists()
     rates = q.offender_rates(q.ALL, q.ALL)
     assert rates and any(r["s1"] for r in rates)
+
+    # regression: rates must EXCLUDE the hidden TOT crime row. Summing it
+    # together with the detail crimes doubles every year in which ISTAT
+    # published it (2007-2022) and fakes a 2022->2023 cliff in the chart.
+    assert "crime_is_total" in pl.read_parquet(rates_mart).columns
+    year = next(r["period"] for r in rates if r["s1"])
+    row2 = con.execute(
+        f"""
+        SELECT SUM(CASE WHEN NOT crime_is_total THEN offenders END),
+               SUM(offenders),
+               ANY_VALUE(population)
+        FROM read_parquet('{rates_mart}')
+        WHERE citizenship_code = 'ITL' AND region_code = 'IT' AND year = ?
+        """,
+        [year],
+    ).fetchone()
+    assert row2 is not None
+    details_only, with_tot, pop_itl = row2
+    assert details_only is not None and with_tot is not None and pop_itl
+    assert details_only < with_tot  # TOT present in the mart, but flagged
+    shown = next(r["s1"] for r in rates if r["period"] == year)
+    assert shown == round(1000.0 * details_only / pop_itl, 2)

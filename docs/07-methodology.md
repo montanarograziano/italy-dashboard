@@ -52,6 +52,13 @@ by code **and by name** (`total`/`totale`), with a regression test. The
 corrected series is smooth (~560k in 2007, peak ~680k in 2013–14, COVID dip in
 2020, ~584k in 2024).
 
+The same trap resurfaced one mart downstream: the per-1,000 **rates** view
+summed across crime rows without the flag, so pre-2023 rates were doubled
+while the counts chart above them was already correct. Every consumer that
+sums across the crime dimension must exclude `crime_is_total` — the flag now
+flows through `mart_offender_rates` and `mart_crime_income`, with its own
+regression test.
+
 Independent of that: a person denounced for multiple crime types appears once
 per type, so cross-crime sums still overstate distinct persons. Per-crime views
 are exact. And when comparing 2023+ levels with older years externally, note the
@@ -61,21 +68,33 @@ onward — an upstream definitional change, not a pipeline issue.
 
 ## Rebased index series
 
-The consumer price dataflow restarts its index at every rebasing (base 2010,
-base 2015, …). Year-over-year inflation is computed **within** each base series,
-then chained with the newest base winning per year. Comparing raw index *levels*
-across bases is meaningless.
+The consumer price index restarts at every rebasing (base 1995, 2010, 2015,
+2025, …), so raw index *levels* are not comparable across bases, and
+within-base year-over-year computation leaves holes at every base boundary
+(2011, 2016, 2026). The pipeline therefore ingests **ISTAT's own
+year-over-year series** (MEASURE 7 of the all-bases NIC flow 167_745), which
+is continuous across rebasings — verified on the boundary months. Annual
+inflation is the average of the twelve monthly changes; the last point may
+average a partial year.
 
 ## History depth
 
-The SDMX API is shallower than the phenomena: offenders start 2007, convictions
-2000, unemployment 2004, chained inflation ~2012, foreign population 2019.
-Requesting `start_period: 1970` is harmless — the API returns what exists. The
-long series (crimes since 1955, population, prices) live in ISTAT's separate
-[Serie Storiche](https://seriestoriche.istat.it) archive as downloadable tables;
+The SDMX API is shallower than the phenomena: offenders start 2007,
+convictions 2000, unemployment 2004, inflation 1997 (first year-over-year
+point of the all-bases NIC flow, which starts 1996), household income 1995,
+foreign population 2019. Requesting `start_period: 1970` is harmless — the
+API returns what exists. Deeper series (crimes since 1955, FOI prices since
+1947, reconstructed labor since 1977) live in ISTAT's separate
+[Serie Storiche](https://seriestoriche.istat.it) /
+[Rivaluta](https://rivaluta.istat.it) archives as downloadable tables;
 importing them as dbt seeds is a planned option.
 
 ## Income ↔ crime: what it can and cannot say
+
+"Income" is households' gross disposable income (regional accounts, B6G ×
+sector S14, millions of euro) divided by total resident population; the
+dataflow stacks several publication *editions* of the same years, and only
+the latest edition per region × year is kept.
 
 The scatter (income per capita vs offender rate, dots = regions, split by
 citizenship) is an **ecological correlation**: a region-level association, not a

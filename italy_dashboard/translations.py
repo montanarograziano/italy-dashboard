@@ -25,6 +25,7 @@ EN: dict[str, str] = {
     "year": "Year",
     "value": "Value",
     "region": "Region",
+    "province": "Province",
     "no_data": (
         "No data snapshot found. Run  just refresh  (or  just sample  for "
         "synthetic dev data), then reload."
@@ -69,7 +70,14 @@ EN: dict[str, str] = {
     "convictions": "Convictions",
     "by_crime_type": "By type of crime",
     "by_offence_type": "By offence type",
-    "latest_year_sub": "Latest available year, current filters — top 10",
+    "latest_year_sub": "Selected year, current filters — top 10",
+    "by_region_rate": "Regions compared (per 1,000)",
+    "by_region_rate_sub": (
+        "All regions, offenders per 1,000 residents of the selected group, "
+        "selected year. Population-normalized — denominators exist from 2019."
+    ),
+    "by_region": "By region",
+    "by_region_sub": "Totals by region, selected year, current filters",
     "crime_type": "Type of crime",
     "offence_type": "Offence type",
     "rates_title": "Offenders per 1,000 residents, by citizenship",
@@ -148,6 +156,7 @@ IT: dict[str, str] = {
     "economy_title": "Economia e prezzi",
     "view_table": "Vedi come tabella",
     "year": "Anno",
+    "province": "Provincia",
     "value": "Valore",
     "region": "Regione",
     "no_data": (
@@ -192,7 +201,15 @@ IT: dict[str, str] = {
     "convictions": "Condanne",
     "by_crime_type": "Per tipo di reato",
     "by_offence_type": "Per tipo di delitto",
-    "latest_year_sub": "Ultimo anno disponibile, filtri correnti — primi 10",
+    "latest_year_sub": "Anno selezionato, filtri correnti — primi 10",
+    "by_region_rate": "Regioni a confronto (ogni 1.000)",
+    "by_region_rate_sub": (
+        "Tutte le regioni, denunciati ogni 1.000 residenti del gruppo "
+        "selezionato, anno scelto. Normalizzato per popolazione — "
+        "denominatori disponibili dal 2019."
+    ),
+    "by_region": "Per regione",
+    "by_region_sub": "Totali per regione, anno selezionato, filtri correnti",
     "crime_type": "Tipo di reato",
     "offence_type": "Tipo di delitto",
     "rates_title": "Denunciati ogni 1.000 residenti, per cittadinanza",

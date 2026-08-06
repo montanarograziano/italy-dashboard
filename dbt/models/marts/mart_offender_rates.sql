@@ -5,9 +5,12 @@
 -- Denominators: italians -> resident minus foreign; foreigners -> foreign
 -- residents; totals -> whole resident population.
 --
--- Caveat carried from the source: no unduplicated "all crimes" total exists,
--- so crime_is_total is false everywhere and cross-crime sums count a person
--- once per crime type.
+-- crime_is_total is carried through so consumers summing across crimes can
+-- exclude the hidden grand-total row (code TOT, published 2007-2022 only —
+-- summing it together with the detail crimes doubles every pre-2023 figure
+-- and fakes a 2022→2023 cliff; same trap as in mart_offenders).
+-- Caveat: cross-crime sums of the detail rows still count a person once per
+-- crime type; per-crime views are exact.
 
 {{ config(
     materialized='external',
@@ -17,6 +20,7 @@
 
 with offenders as (
     select year, region_code, region_name, crime_code, crime_name,
+           crime_is_total,
            citizenship_code, citizenship_name, citizenship_is_total,
            sum(value) as offenders
     from {{ ref('mart_offenders') }}
@@ -34,6 +38,7 @@ select
     o.region_name,
     o.crime_code,
     o.crime_name,
+    o.crime_is_total,
     o.citizenship_code,
     o.citizenship_name,
     o.citizenship_is_total,

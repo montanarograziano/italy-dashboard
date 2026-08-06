@@ -54,9 +54,11 @@ models:
 
   - name: mart_crime_income
     description: >
-      Offender rate per 1,000 by citizenship joined with regional income per
-      capita — the basis for the ecological income/crime correlation view.
-      income_per_capita is NULL until the income dataset is fetched.
+      Offender rate per 1,000 by citizenship joined with regional household
+      disposable income (B6G totals, millions EUR; per capita = total income
+      / total resident population) — the basis for the ecological
+      income/crime correlation view. income_per_capita is NULL until both
+      the income and population datasets are fetched.
     columns:
       - name: year
         tests: [not_null]

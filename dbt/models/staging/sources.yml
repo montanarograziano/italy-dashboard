@@ -37,7 +37,10 @@ sources:
           external_location: >-
             read_parquet('{{ env_var('ITALY_DATA_DIR', 'data') }}/population_foreign.parquet')
       - name: income_regional_pq
-        description: Household disposable income per capita by region and year.
+        description: >
+          Household gross disposable income (B6G, S14) by region and year,
+          millions of euro; category = publication EDITION (stg_income keeps
+          only the latest edition per region-year).
         meta:
           external_location: >-
             read_parquet('{{ env_var('ITALY_DATA_DIR', 'data') }}/income_regional.parquet')

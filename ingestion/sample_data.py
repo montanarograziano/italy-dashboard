@@ -126,7 +126,7 @@ def _rows_unemployment(rng: random.Random) -> list[dict]:
 
 
 def _rows_inflation(rng: random.Random) -> list[dict]:
-    """Monthly all-items index (like the real NIC dataflow, MEASURE=index)."""
+    """Monthly year-over-year inflation (%), like the real snapshot (MEASURE 7)."""
     profile = {
         2008: 3.3,
         2009: 0.8,
@@ -139,20 +139,20 @@ def _rows_inflation(rng: random.Random) -> list[dict]:
         2024: 1.1,
     }
     rows = []
-    index = 100.0
     for year in YEARS:
         yoy = profile.get(year, rng.uniform(0.5, 2.2))
-        monthly_growth = (1.0 + yoy / 100.0) ** (1.0 / 12.0)
         for month in range(1, 13):
-            index *= monthly_growth
             rows.append(
                 {
                     "territory": "IT",
                     "territory_name": "Italy",
-                    "category": "00",
-                    "category_name": "all items",
+                    "category": "39",
+                    "category_name": (
+                        "consumer price index for the whole nation (base 2015=100)"
+                        " - monthly data"
+                    ),
                     "period": f"{year}-{month:02d}",
-                    "value": round(index, 1),
+                    "value": round(yoy + rng.uniform(-0.3, 0.3), 1),
                 }
             )
     return rows
@@ -299,7 +299,14 @@ def generate_raw_offenders_csv(raw_dir: Path, seed: int = 42) -> Path:
     raw_dir.mkdir(parents=True, exist_ok=True)
     out = raw_dir / "crime_offenders.csv"
 
-    territories = [("IT", "Italy"), *[(code, name) for code, name in REGIONS]]
+    # country + regions + a couple of provinces, mirroring the real mix of
+    # admin levels (province rows exercise the region/province split).
+    territories = [
+        ("IT", "Italy"),
+        *[(code, name) for code, name in REGIONS],
+        ("ITC45", "Milano"),
+        ("ITC41", "Varese"),
+    ]
     base = {
         "TOT": 10500,  # grand total = sum of the five crime types
         "THEFT": 5000,
@@ -335,21 +342,27 @@ def generate_raw_offenders_csv(raw_dir: Path, seed: int = 42) -> Path:
 
 
 def _rows_income(rng: random.Random) -> list[dict]:
-    """Per-capita disposable income (EUR) by region-year; north richer."""
+    """Total household disposable income (millions EUR) by region-year.
+
+    Mirrors the real snapshot: values are regional TOTALS in millions of
+    euro and `category` is a publication edition code (stg_income divides
+    by population downstream and keeps the latest edition).
+    """
     rows = []
     for code, name in REGIONS:
         south = code.startswith(("ITF", "ITG"))
-        base = rng.uniform(13000.0, 16500.0) if south else rng.uniform(19000.0, 24500.0)
+        per_capita = rng.uniform(13000.0, 16500.0) if south else rng.uniform(19000.0, 24500.0)
+        pop = rng.uniform(1.2e6, 9.5e6)  # plausible region size, matches _rows_population range
         for year in YEARS:
             growth = 1.0 + 0.012 * (year - YEARS[0])
             rows.append(
                 {
                     "territory": code,
                     "territory_name": name,
-                    "category": "INC",
-                    "category_name": "disposable income per capita",
+                    "category": "2025M12",
+                    "category_name": "Dec-2025",
                     "period": str(year),
-                    "value": round(base * growth * rng.uniform(0.99, 1.01)),
+                    "value": round(per_capita * pop * growth * rng.uniform(0.99, 1.01) / 1e6, 1),
                 }
             )
     return rows

@@ -12,6 +12,7 @@ select
     year,
     region_code,
     region_name,
+    {{ territory_level('region_code') }} as region_level,
     offence_code,
     offence_name,
     sex_code,

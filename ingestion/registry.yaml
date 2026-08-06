@@ -41,16 +41,20 @@ datasets:
 
   economy_inflation:
     domain: economy
-    title: "Consumer price index (NIC, whole nation, base 2015)"
-    dataflow_id: "167_744"
+    title: "Inflation (NIC all items, monthly year-over-year, since 1996)"
+    # The all-bases NIC flow: monthly data from 1996 (the single-base flow
+    # 167_744 only starts 2016). MEASURE=7 is ISTAT's own year-over-year
+    # percentage change, which — verified against the real CSV — is
+    # continuous ACROSS index rebasings (2011-01, 2016-01, 2026-01 all have
+    # values), so no base chaining is needed anywhere. category keeps the
+    # base-series code purely as provenance.
+    # Dimension order: FREQ.REF_AREA.DATA_TYPE.MEASURE.ECOICOP_2
+    # Codes verified: MEASURE 7 = pct change on same period previous year,
+    # ECOICOP_2 00 = all items.
+    dataflow_id: "167_745_DF_DCSP_NIC1B2025_6"
     search_hint: "prezzi al consumo"
-    # Monthly-only dataflow. Codes verified against the real CSV:
-    # FREQ=M, REF_AREA=IT, MEASURE=4 (index number), E_COICOP=00 (all items).
-    # DATA_TYPE = base-series code (9 = base 2010, 39 = base 2015): kept OPEN
-    # as the category so the query layer can chain rebased series for a
-    # longer history. Annual inflation is derived at query time.
-    key: "M.IT..4.00"
-    start_period: "1970"
+    key: "M.IT..7.00"
+    start_period: "1990"
     columns:
       territory: [REF_AREA, ITTER107]
       category: [DATA_TYPE]
@@ -59,8 +63,8 @@ datasets:
     # Same pins as the key, so `just normalize` also works on a raw ALL file.
     filters:
       FREQ: M
-      MEASURE: "4"
-      E_COICOP_REV_ISTAT: "00"
+      MEASURE: "7"
+      ECOICOP_2: "00"
 
 
   crime_reported:
@@ -118,21 +122,31 @@ datasets:
 
   income_regional:
     domain: economy
-    title: "Household disposable income per capita, by region"
-    # TODO confirm via: just discover "reddito disponibile"  (regional accounts,
-    # household gross disposable income; divide by population downstream or
-    # prefer a per-capita indicator if one exists).
-    dataflow_id: "TODO_DISCOVER_reddito"
+    title: "Household disposable income, by region"
+    # Regional accounts: disposable income of households by region (current
+    # flow, no edition bounds — the dated 396_61 / 737_1093 / 6_1095 flows are
+    # archived editions). Dimension order: FREQ.REF_AREA.DATA_TYPE_AGGR.
+    # INSTITUTIONAL_SECTOR.BRKDW_INDUSTRY_NACE_REV2.NONFIN_ASSETS.VALUATION.
+    # PRICE.ADJUSTMENT.EDITION
+    # The indicator and sector are pinned here (codes verified against the
+    # real CSV: B6G_B_W0 = gross disposable income, S14 = households; values
+    # in MILLIONS of euro). The flow stacks multiple EDITIONs of the same
+    # years (2025M1/M6/M12, ...), so EDITION becomes the snapshot's category
+    # and dbt's stg_income keeps only the latest edition per region × year —
+    # a static edition filter here would silently go stale at the next one.
+    dataflow_id: "93_1095_DF_DCCN_ISTITUZ_TNA1_1"
     search_hint: "reddito disponibile"
-    key: "ALL"
+    key: "A........."
     start_period: "1995"
     columns:
-      territory: [ITTER107, REF_AREA]
-      category: [DATA_TYPE, CONTO]
+      territory: [REF_AREA, ITTER107]
+      category: [EDITION]
       period: TIME_PERIOD
       value: OBS_VALUE
     filters:
       FREQ: A
+      DATA_TYPE_AGGR: B6G_B_W0
+      INSTITUTIONAL_SECTOR: S14
 
   population_foreign:
     domain: population

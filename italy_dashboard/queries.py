@@ -65,9 +65,14 @@ def _query(sql: str, params: list | None = None) -> list[Row]:
 
 
 def region_names(view: str = "labor_unemployment") -> list[str]:
+    """Region-level territories only: snapshots also carry macro-areas
+    (Nord-ovest, Mezzogiorno, ...) and sometimes provinces, which don't
+    belong in a region picker."""
     rows = _query(
         f"SELECT DISTINCT territory_name FROM {view} "
-        "WHERE territory_name IS NOT NULL ORDER BY territory_name"
+        "WHERE territory_name IS NOT NULL "
+        "AND regexp_matches(territory, '^IT[A-Z][0-9]$') "
+        "ORDER BY territory_name"
     )
     return [NATIONAL] + [r["territory_name"] for r in rows]
 
@@ -92,6 +97,10 @@ def _region_filter(region: str, view: str) -> tuple[str, list]:
 # {dim}_is_total flag. "All" for a dimension prefers the precomputed total row
 # when one exists, else aggregates the detail rows — never both.
 
+# Reserved (non-dimension) key in a selections dict: which admin level a
+# pinned region name refers to — 'region' (default) or 'province'.
+_REGION_SCOPE = "_region_scope"
+
 CRIME_MART = ("mart_crime", ["region", "offence", "sex", "age"])
 OFFENDERS_MART = (
     "mart_offenders",
@@ -106,19 +115,59 @@ def mart_ready(mart: Mart) -> bool:
 
 
 def mart_options(mart: Mart) -> dict[str, list[str]]:
-    """Selectable values per dimension, "All" first (backed by total rows)."""
+    """Selectable values per dimension, "All" first (backed by total rows).
+
+    The region dimension lists only the 21 region-level units: territory
+    details mix admin levels, and listing macro-areas (Nord-ovest, ...) or
+    provinces next to regions invites double counting and clutter. Provinces
+    get their own dropdown via mart_province_options.
+    """
     table, dims = mart
     out: dict[str, list[str]] = {}
     for dim in dims:
+        level = "AND region_level = 'region'" if dim == "region" else ""
         rows = _query(
             f"""
             SELECT DISTINCT {dim}_name AS name FROM {table}
-            WHERE NOT {dim}_is_total AND {dim}_name IS NOT NULL
+            WHERE NOT {dim}_is_total AND {dim}_name IS NOT NULL {level}
             ORDER BY name
             """
         )
         out[dim] = [ALL] + [r["name"] for r in rows]
     return out
+
+
+def mart_province_options(mart: Mart, region: str = ALL) -> list[str]:
+    """Province names, optionally narrowed to one region (by NUTS code prefix).
+
+    A few late-born provinces carry non-NUTS codes (IT108 Monza, IT109 Fermo,
+    IT110 BAT) with no region prefix: they appear only when region is "All".
+    """
+    table, _ = mart
+    clauses = ["region_level = 'province'"]
+    params: list = []
+    if region != ALL:
+        clauses.append(
+            f"""starts_with(region_code, (
+                SELECT MIN(region_code) FROM {table}
+                WHERE region_name = ? AND region_level = 'region'
+            ))"""
+        )
+        params.append(region)
+    rows = _query(
+        f"""
+        SELECT DISTINCT region_name AS name FROM {table}
+        WHERE {" AND ".join(clauses)} AND region_name IS NOT NULL
+        ORDER BY name
+        """,
+        params,
+    )
+    return [ALL] + [r["name"] for r in rows]
+
+
+def mart_years(mart: Mart) -> list[str]:
+    rows = _query(f"SELECT DISTINCT year FROM {mart[0]} ORDER BY year DESC")
+    return [str(r["year"]) for r in rows]
 
 
 # Territory detail rows mix admin levels (provinces AND regions), so summing
@@ -136,8 +185,15 @@ def _mart_where(
     exists in the data, maximizing year coverage — ISTAT publishes different
     cross-tab slices in different years, so no fixed rule survives contact
     with the data. Ties prefer precomputed totals (no summing risk).
+
+    Region detail rows mix admin levels, so they always carry a level pin:
+    splitting by region uses region-level rows only (never macro-areas or
+    provinces), and a pinned region name uses the level in selections'
+    reserved "_region_scope" key ('region' or 'province') — names alone are
+    ambiguous (Valle d'Aosta is both a region and a province).
     """
     table, dims = mart
+    scope = selections.get(_REGION_SCOPE) or "region"
     fixed: list[str] = []
     params: list = []
     free: list[str] = []
@@ -145,12 +201,17 @@ def _mart_where(
         selected = selections.get(dim, ALL)
         if dim == skip:
             fixed.append(f"NOT {dim}_is_total")
+            if dim == "region":
+                fixed.append("region_level = 'region'")
         elif selected == ALL:
             free.append(dim)
         else:
             fixed.append(f"NOT {dim}_is_total")
             fixed.append(f"{dim}_name = ?")
             params.append(selected)
+            if dim == "region":
+                fixed.append("region_level = ?")
+                params.append(scope)
 
     if not free:
         return " AND ".join(fixed) or "TRUE", params
@@ -230,21 +291,29 @@ def mart_trend_pivot(
 
 
 def mart_breakdown(
-    mart: Mart, breakdown_dim: str, selections: dict[str, str], top_n: int = 8
+    mart: Mart,
+    breakdown_dim: str,
+    selections: dict[str, str],
+    top_n: int = 8,
+    year: str | None = None,
 ) -> list[Row]:
-    """Latest-year totals per value of one dimension, honoring other filters."""
+    """One year's totals per value of one dimension, honoring other filters.
+
+    `year` defaults to the latest available; passing any published year lets
+    the breakdown chart be explored over time, not just at the newest point.
+    """
     table, _ = mart
     where, params = _mart_where(mart, selections, skip=breakdown_dim)
     return _query(
         f"""
-        WITH latest AS (SELECT MAX(year) AS y FROM {table})
+        WITH chosen AS (SELECT COALESCE(?, (SELECT MAX(year) FROM {table})) AS y)
         SELECT {breakdown_dim}_name AS name, CAST(SUM(value) AS BIGINT) AS value
-        FROM {table}, latest
-        WHERE year = latest.y AND {where}
+        FROM {table}, chosen
+        WHERE year = chosen.y AND {where}
         GROUP BY {breakdown_dim}_name ORDER BY value DESC
         LIMIT {int(top_n)}
         """,
-        params,
+        [year, *params],
     )
 
 
@@ -274,8 +343,10 @@ def crime_trend_pivot(
     return mart_trend_pivot(CRIME_MART, selections, split_by)
 
 
-def crime_offence_breakdown(selections: dict[str, str], top_n: int = 8) -> list[Row]:
-    return mart_breakdown(CRIME_MART, "offence", selections, top_n)
+def crime_offence_breakdown(
+    selections: dict[str, str], top_n: int = 8, year: str | None = None
+) -> list[Row]:
+    return mart_breakdown(CRIME_MART, "offence", selections, top_n, year=year)
 
 
 def crime_latest_year() -> str:
@@ -353,37 +424,21 @@ def unemployment_series(region: str) -> list[Row]:
 
 
 def inflation_series() -> list[Row]:
-    """Annual inflation (%) from the monthly all-items NIC index.
+    """Annual inflation (%): average of ISTAT's monthly year-over-year changes.
 
-    The dataflow rebases the index every few years (category = base-series
-    code, e.g. 9 = base 2010, 39 = base 2015). Year-over-year change is
-    computed WITHIN each base series, then the newest base wins per year —
-    chaining the history without mixing incompatible index levels.
+    The snapshot holds MEASURE 7 of the all-bases NIC dataflow — ISTAT's own
+    "percentage change on the same period of the previous year". Unlike raw
+    index levels, this series is continuous ACROSS index rebasings (verified:
+    2011-01, 2016-01 and 2026-01 all have values), so no base chaining is
+    needed. The last point may average a partial year.
     """
     return _query(
         """
-        WITH annual AS (
-            SELECT category AS base, substr(period, 1, 4) AS y, AVG(value) AS idx
-            FROM economy_inflation
-            WHERE territory = 'IT'
-            GROUP BY 1, 2
-        ),
-        yoy AS (
-            SELECT base, y,
-                   ROUND(100.0 * (idx / LAG(idx) OVER (PARTITION BY base ORDER BY y) - 1), 1)
-                       AS value
-            FROM annual
-        )
-        SELECT y AS period, value
-        FROM (
-            SELECT y, value,
-                   ROW_NUMBER() OVER (
-                       PARTITION BY y ORDER BY TRY_CAST(base AS INT) DESC NULLS LAST
-                   ) AS rn
-            FROM yoy WHERE value IS NOT NULL
-        )
-        WHERE rn = 1
-        ORDER BY y
+        SELECT substr(period, 1, 4) AS period, ROUND(AVG(value), 1) AS value
+        FROM economy_inflation
+        WHERE territory = 'IT'
+        GROUP BY 1
+        ORDER BY 1
         """
     )
 
@@ -419,8 +474,17 @@ def kpis() -> dict[str, str]:
 
 
 def offender_rates(region: str, crime: str) -> list[Row]:
-    """Per-1,000 rates, italian vs foreign, chart-ready (s1/s2 columns)."""
-    clauses = ["NOT citizenship_is_total", "rate_per_1000 IS NOT NULL"]
+    """Per-1,000 rates, italian vs foreign, chart-ready (s1/s2 columns).
+
+    NOT crime_is_total is essential: the hidden grand-total crime row (TOT)
+    exists 2007-2022 only — summing it with the detail crimes doubles every
+    pre-2023 rate and fakes a 2022→2023 cliff.
+    """
+    clauses = [
+        "NOT citizenship_is_total",
+        "NOT crime_is_total",
+        "rate_per_1000 IS NOT NULL",
+    ]
     params: list = []
     if region == ALL:
         clauses.append("region_code = 'IT'")
@@ -460,6 +524,45 @@ def offender_rates(region: str, crime: str) -> list[Row]:
     if all(r["s1"] is None and r["s2"] is None for r in rows):
         return []
     return rows
+
+
+def region_rate_ranking(year: str | None, citizenship: str, crime: str) -> list[Row]:
+    """All regions ranked by offenders per 1,000 residents of the selected
+    group, for one year. Population-normalized, so it compares regions
+    honestly (raw counts would just rank population size). Denominators
+    exist from 2019; earlier years return no rows.
+    """
+    clauses = [
+        "NOT crime_is_total",
+        "population IS NOT NULL",
+        "region_code != 'IT'",
+        "regexp_matches(region_code, '^IT[A-Z][0-9]$')",
+    ]
+    params: list = [year]
+    if citizenship == ALL:
+        clauses.append("citizenship_is_total")
+    else:
+        clauses.append("NOT citizenship_is_total")
+        clauses.append("citizenship_name = ?")
+        params.append(citizenship)
+    if crime != ALL:
+        clauses.append("crime_name = ?")
+        params.append(crime)
+    return _query(
+        f"""
+        WITH chosen AS (
+            SELECT COALESCE(?, (SELECT MAX(year) FROM mart_offender_rates)) AS y
+        )
+        SELECT region_name AS name,
+               ROUND(1000.0 * SUM(offenders) / ANY_VALUE(population), 2) AS value
+        FROM mart_offender_rates, chosen
+        WHERE year = chosen.y AND {" AND ".join(clauses)}
+        GROUP BY region_name
+        HAVING ANY_VALUE(population) > 0
+        ORDER BY value DESC
+        """,
+        params,
+    )
 
 
 def offender_foreign_share(selections: dict[str, str]) -> list[Row]:

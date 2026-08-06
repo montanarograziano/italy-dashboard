@@ -14,7 +14,15 @@ def crime_mart(sample_db, monkeypatch):
     marts = sample_db / "marts"
     marts.mkdir(exist_ok=True)
     rows = []
-    regions = [("IT", "Italy", True), ("ITC4", "Lombardia", False), ("ITI4", "Lazio", False)]
+    # Mixed admin levels, like the real data: country, regions, one macro-area
+    # aggregate, one province. Only the regions belong in the region picker.
+    regions = [
+        ("IT", "Italy", True, "country"),
+        ("ITC4", "Lombardia", False, "region"),
+        ("ITI4", "Lazio", False, "region"),
+        ("ITC", "Nord-ovest", False, "area"),
+        ("ITC45", "Milano", False, "province"),
+    ]
     offences = [("THEFT", "theft"), ("FRAUD", "fraud")]  # no offence total row
     sexes = [("1", "males", False), ("2", "females", False), ("9", "total", True)]
     ages = [
@@ -23,7 +31,7 @@ def crime_mart(sample_db, monkeypatch):
         ("Y25-34", "25-34 years", False),
     ]
     for year in ("2022", "2023"):
-        for rc, rn, rtot in regions:
+        for rc, rn, rtot, rlvl in regions:
             for oc, on in offences:
                 for sc, sn, stot in sexes:
                     for ac, an, atot in ages:
@@ -34,6 +42,7 @@ def crime_mart(sample_db, monkeypatch):
                                 "year": year,
                                 "region_code": rc,
                                 "region_name": rn,
+                                "region_level": rlvl,
                                 "offence_code": oc,
                                 "offence_name": on,
                                 "sex_code": sc,
@@ -83,9 +92,37 @@ def test_region_names_start_with_national_and_are_sorted(sample_db):
 
 def test_crime_options_exclude_totals_and_start_with_all(crime_mart):
     options = q.crime_options()
-    assert options["region"] == [q.ALL, "Lazio", "Lombardia"]  # "Italy" total excluded
+    # regions only: "Italy" (total), "Nord-ovest" (area) and "Milano"
+    # (province) must all stay out of the region picker
+    assert options["region"] == [q.ALL, "Lazio", "Lombardia"]
     assert options["sex"] == [q.ALL, "females", "males"]  # "total" excluded
     assert options["offence"] == [q.ALL, "fraud", "theft"]
+
+
+def test_province_options_cascade_from_region(crime_mart):
+    assert q.mart_province_options(q.CRIME_MART) == [q.ALL, "Milano"]
+    assert q.mart_province_options(q.CRIME_MART, "Lombardia") == [q.ALL, "Milano"]
+    assert q.mart_province_options(q.CRIME_MART, "Lazio") == [q.ALL]
+
+
+def test_province_selection_pins_province_rows(crime_mart):
+    rows = q.crime_trend({**ALL_SEL, "region": "Milano", "_region_scope": "province"})
+    # province detail row: (100 + 40) * sex total 2 * age total 2 = 560
+    assert rows[0]["value"] == 560
+
+
+def test_split_by_region_uses_region_level_rows_only(crime_mart):
+    _, labels = q.crime_trend_pivot(ALL_SEL, "region")
+    # never macro-areas (Nord-ovest) or provinces (Milano) next to regions
+    assert set(labels) == {"Lombardia", "Lazio"}
+
+
+def test_breakdown_accepts_a_year(crime_mart):
+    assert q.mart_years(q.CRIME_MART) == ["2023", "2022"]
+    latest = q.crime_offence_breakdown(ALL_SEL)
+    explicit = q.crime_offence_breakdown(ALL_SEL, year="2022")
+    assert explicit and latest
+    assert [r["name"] for r in explicit] == [r["name"] for r in latest]
 
 
 def test_crime_trend_all_prefers_total_rows(crime_mart):
@@ -179,6 +216,7 @@ def offenders_mart(sample_db):
                             "year": year,
                             "region_code": rc,
                             "region_name": rn,
+                            "region_level": "country" if rc == "IT" else "region",
                             "indicator_code": "AUTH",
                             "indicator_name": "alleged offenders",
                             "crime_code": cc,
@@ -240,6 +278,7 @@ def offenders_mart_mixed_slices(sample_db):
             "year": year,
             "region_code": rc,
             "region_name": "Italy" if rt else rc,
+            "region_level": "country" if rc == "IT" else "region",
             "indicator_code": "AUTH",
             "indicator_name": "offenders",
             "crime_code": "THEFT",
@@ -297,3 +336,60 @@ def test_region_details_never_summed_for_all(offenders_mart_mixed_slices):
     # "All" region must sit on the IT total row (details mix admin levels).
     where, _ = q._mart_where(q.OFFENDERS_MART, OFF_SEL)
     assert "region_is_total" in where and "NOT region_is_total" not in where
+
+
+@pytest.fixture
+def rates_mart(sample_db):
+    """Minimal mart_offender_rates: two years, IT + regions + hidden TOT row."""
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = []
+    for year in ("2023", "2024"):
+        for rc, rn in [("IT", "Italy"), ("ITC4", "Lombardia"), ("ITF3", "Campania")]:
+            for cc, ct in [("THEFT", False), ("TOT", True)]:
+                for zc, zn, zt in [
+                    ("TOTAL", "total", True),
+                    ("ITL", "italian", False),
+                    ("FRG", "foreign", False),
+                ]:
+                    pop = {"TOTAL": 1_000_000, "ITL": 900_000, "FRG": 100_000}[zc]
+                    offenders = (500 if rc == "ITC4" else 300) * (10 if rc == "IT" else 1)
+                    rows.append(
+                        {
+                            "year": year,
+                            "region_code": rc,
+                            "region_name": rn,
+                            "crime_code": cc,
+                            "crime_name": "total" if ct else "theft",
+                            "crime_is_total": ct,
+                            "citizenship_code": zc,
+                            "citizenship_name": zn,
+                            "citizenship_is_total": zt,
+                            "offenders": float(offenders),
+                            "population": float(pop),
+                            "rate_per_1000": 1000.0 * offenders / pop,
+                        }
+                    )
+    pl.DataFrame(rows).write_parquet(marts / "mart_offender_rates.parquet")
+    return marts
+
+
+def test_region_rate_ranking_all_regions_sorted(rates_mart):
+    rows = q.region_rate_ranking("2024", q.ALL, q.ALL)
+    # IT excluded, all regions present, ranked by rate descending
+    assert [r["name"] for r in rows] == ["Lombardia", "Campania"]
+    assert rows[0]["value"] > rows[1]["value"]
+    # hidden TOT crime row flagged out: rate = 500 / 1M * 1000, not doubled
+    assert rows[0]["value"] == 0.5
+
+
+def test_region_rate_ranking_respects_citizenship(rates_mart):
+    rows = q.region_rate_ranking("2024", "foreign", q.ALL)
+    # foreign offenders over the FOREIGN population: 500 / 100k * 1000
+    assert rows[0]["value"] == 5.0
+
+
+def test_region_rate_ranking_defaults_to_latest_year(rates_mart):
+    assert q.region_rate_ranking(None, q.ALL, q.ALL) == q.region_rate_ranking(
+        "2024", q.ALL, q.ALL
+    )

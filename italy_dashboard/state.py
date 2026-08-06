@@ -50,16 +50,20 @@ class CrimeState(AppState):
 
     # filter options (loaded from the mart)
     region_options: list[str] = []
+    province_options: list[str] = []
     offence_options: list[str] = []
     sex_options: list[str] = []
     age_options: list[str] = []
+    year_options: list[str] = []
 
     # current selections
     region: str = q.ALL
+    province: str = q.ALL
     offence: str = q.ALL
     sex: str = q.ALL
     age: str = q.ALL
     split_by: str = "None"
+    breakdown_year: str = ""
 
     # chart data
     trend_rows: list[Row] = []
@@ -68,6 +72,7 @@ class CrimeState(AppState):
     series_label_2: str = ""
     series_label_3: str = ""
     by_offence: list[Row] = []
+    by_region: list[Row] = []
     latest_year: str = "—"
     mart_ready: bool = False
 
@@ -89,15 +94,31 @@ class CrimeState(AppState):
             return
         options = q.crime_options()
         self.region_options = options["region"]
+        self.province_options = q.mart_province_options(q.CRIME_MART, self.region)
         self.offence_options = options["offence"]
         self.sex_options = options["sex"]
         self.age_options = options["age"]
+        self.year_options = q.mart_years(q.CRIME_MART)
         self.latest_year = q.crime_latest_year()
+        if not self.breakdown_year and self.year_options:
+            self.breakdown_year = self.year_options[0]
         self._refresh()
 
     @rx.event
     def set_region_filter(self, value: str):
         self.region = value
+        self.province = q.ALL  # provinces cascade from the region
+        self.province_options = q.mart_province_options(q.CRIME_MART, value)
+        self._refresh()
+
+    @rx.event
+    def set_province_filter(self, value: str):
+        self.province = value
+        self._refresh()
+
+    @rx.event
+    def set_breakdown_year(self, value: str):
+        self.breakdown_year = value
         self._refresh()
 
     @rx.event
@@ -121,8 +142,15 @@ class CrimeState(AppState):
         self._refresh()
 
     def _selections(self) -> dict[str, str]:
+        # A selected province narrows harder than its region, so it wins the
+        # single region dimension; the scope key disambiguates the name level.
+        if self.province != q.ALL:
+            region, scope = self.province, "province"
+        else:
+            region, scope = self.region, "region"
         return {
-            "region": self.region,
+            "region": region,
+            "_region_scope": scope,
             "offence": self.offence,
             "sex": self.sex,
             "age": self.age,
@@ -136,26 +164,36 @@ class CrimeState(AppState):
         self.series_label_1 = labels[0] if len(labels) > 0 else ""
         self.series_label_2 = labels[1] if len(labels) > 1 else ""
         self.series_label_3 = labels[2] if len(labels) > 2 else ""
-        self.by_offence = q.crime_offence_breakdown(self._selections(), top_n=10)
+        self.by_offence = q.crime_offence_breakdown(
+            self._selections(), top_n=10, year=self.breakdown_year or None
+        )
+        self.by_region = q.mart_breakdown(
+            q.CRIME_MART, "region", self._selections(), top_n=25,
+            year=self.breakdown_year or None,
+        )
 
 
 class OffendersState(AppState):
     """Interactive explorer over mart_offenders (police-reported offenders)."""
 
     region_options: list[str] = []
+    province_options: list[str] = []
     indicator_options: list[str] = []
     crime_options: list[str] = []
     sex_options: list[str] = []
     age_options: list[str] = []
     citizenship_options: list[str] = []
+    year_options: list[str] = []
 
     region: str = q.ALL
+    province: str = q.ALL
     indicator: str = q.ALL
     crime: str = q.ALL
     sex: str = q.ALL
     age: str = q.ALL
     citizenship: str = q.ALL
     split_by: str = "None"
+    breakdown_year: str = ""
 
     trend_rows: list[Row] = []
     series_count: int = 0
@@ -171,6 +209,7 @@ class OffendersState(AppState):
     kpi_share: str = "—"
     kpi_ratio: str = "—"
     rates_rows: list[Row] = []
+    region_ranking: list[Row] = []
     share_rows: list[Row] = []
     income_years: list[str] = []
     income_year: str = ""
@@ -200,6 +239,8 @@ class OffendersState(AppState):
     @rx.event
     def reset_filters(self):
         self.region = q.ALL
+        self.province = q.ALL
+        self.province_options = q.mart_province_options(q.OFFENDERS_MART, q.ALL)
         self.crime = q.ALL
         self.sex = q.ALL
         self.age = q.ALL
@@ -219,6 +260,10 @@ class OffendersState(AppState):
             return
         options = q.mart_options(q.OFFENDERS_MART)
         self.region_options = options["region"]
+        self.province_options = q.mart_province_options(q.OFFENDERS_MART, self.region)
+        self.year_options = q.mart_years(q.OFFENDERS_MART)
+        if not self.breakdown_year and self.year_options:
+            self.breakdown_year = self.year_options[0]
         self.indicator_options = options["indicator"]
         self.crime_options = options["crime"]
         self.sex_options = options["sex"]
@@ -235,6 +280,18 @@ class OffendersState(AppState):
     @rx.event
     def set_region_filter(self, value: str):
         self.region = value
+        self.province = q.ALL  # provinces cascade from the region
+        self.province_options = q.mart_province_options(q.OFFENDERS_MART, value)
+        self._refresh()
+
+    @rx.event
+    def set_province_filter(self, value: str):
+        self.province = value
+        self._refresh()
+
+    @rx.event
+    def set_breakdown_year(self, value: str):
+        self.breakdown_year = value
         self._refresh()
 
     @rx.event
@@ -268,8 +325,15 @@ class OffendersState(AppState):
         self._refresh()
 
     def _selections(self) -> dict[str, str]:
+        # A selected province narrows harder than its region, so it wins the
+        # single region dimension; the scope key disambiguates the name level.
+        if self.province != q.ALL:
+            region, scope = self.province, "province"
+        else:
+            region, scope = self.region, "region"
         return {
-            "region": self.region,
+            "region": region,
+            "_region_scope": scope,
             "indicator": self.indicator,
             "crime": self.crime,
             "sex": self.sex,
@@ -285,8 +349,16 @@ class OffendersState(AppState):
         self.series_label_1 = labels[0] if len(labels) > 0 else ""
         self.series_label_2 = labels[1] if len(labels) > 1 else ""
         self.series_label_3 = labels[2] if len(labels) > 2 else ""
-        self.by_crime = q.mart_breakdown(q.OFFENDERS_MART, "crime", self._selections(), top_n=10)
+        self.by_crime = q.mart_breakdown(
+            q.OFFENDERS_MART, "crime", self._selections(), top_n=10,
+            year=self.breakdown_year or None,
+        )
+        # rates use resident-population denominators, which exist per region
+        # (not per province): the rate card follows the region filter only
         self.rates_rows = q.offender_rates(self.region, self.crime)
+        self.region_ranking = q.region_rate_ranking(
+            self.breakdown_year or None, self.citizenship, self.crime
+        )
         self.share_rows = q.offender_foreign_share(self._selections())
         kpis = q.offenders_kpis(self._selections())
         self.kpi_total = kpis["total"]

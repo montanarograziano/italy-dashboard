@@ -265,13 +265,36 @@ def scatter_chart(
     x_label: str | rx.Var = "",
     y_label: str | rx.Var = "",
     height: int = 380,
+    label_key: str | None = None,
+    label_name: str | rx.Var = "",
 ) -> rx.Component:
-    """Scatter with one series per group; tooltip shows the point's fields."""
+    """Scatter with one series per group; tooltip shows the point's fields.
+
+    `label_key` names a categorical field of each point (e.g. the region) to
+    surface in the tooltip — recharts' ZAxis-with-fixed-range idiom, which
+    adds the field to the tooltip without affecting dot size.
+    """
     scatters = [
         rx.recharts.scatter(data=data, name=label, fill=color) for data, label, color in series
     ]
+    extra_axes = (
+        [
+            rx.recharts.z_axis(
+                data_key=label_key,
+                range=[60, 60],
+                name=label_name,
+                # reflex's ZAxis wrapper has no `type` prop; anything else
+                # (like type_=) silently lands in wrapperStyle and the axis
+                # stays numeric, dropping the string field from the tooltip
+                custom_attrs={"type": "category"},
+            )
+        ]
+        if label_key
+        else []
+    )
     return rx.recharts.scatter_chart(
         *scatters,
+        *extra_axes,
         rx.recharts.x_axis(
             data_key=x_key,
             type_="number",
