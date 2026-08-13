@@ -429,7 +429,7 @@ if __name__ == "__main__":
 Run: `uv run pytest tests/unit/test_capitals_seed.py -v`
 Expected: the seven mapping tests PASS; `test_committed_seed_is_complete_and_inside_italy` and `test_seed_coordinates_are_distinct` FAIL with `FileNotFoundError` — the seed does not exist yet. It is generated in Step 7, after the client exists.
 
-Note: `ingestion/capitals.py` imports `ingestion.openmeteo`, which Task 2 creates. Until then the import fails. **Do Task 2 Steps 1-4 now, then return here.** The seed cannot be built without the geocoding client, and the client cannot be tested without a place to put it, so these two tasks interlock at exactly this point.
+Note: `ingestion/capitals.py` imports `ingestion.openmeteo`. **Task 2 is executed before Task 1**, so that module already exists when you start — verify with `ls ingestion/openmeteo.py` before Step 3. If it is missing, stop and report BLOCKED rather than stubbing it: the geocoding client is Task 2's deliverable and duplicating it here would leave two implementations to reconcile.
 
 - [ ] **Step 5: Add seed wiring to `dbt/dbt_project.yml`**
 
@@ -904,8 +904,6 @@ def _reason(resp: httpx2.Response) -> str:
 
 Run: `uv run pytest tests/unit/test_openmeteo.py -v`
 Expected: all 11 PASS.
-
-At this point return to **Task 1 Step 5** and finish the seed, then come back for Step 5 below.
 
 - [ ] **Step 5: Commit**
 
@@ -1909,7 +1907,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Create the violent-crime seed**
 
-The real dataflow publishes 59 offence codes. The chosen set is deliberately narrow: heat-aggression theory predicts interpersonal violence, and ISTAT's homicide sub-types (`MAFIAHOM`, `ROBBHOM`, `TERRORHOM`, `INFANTHOM`, `MASSMURD`) are suspected to nest inside `INTENHOM`, so summing them would double count. `STALK` and `CP612BIS` are both labelled "stalking" and are excluded as suspected duplicates of each other.
+The real dataflow publishes 59 offence codes. The chosen set is deliberately narrow: heat-aggression theory predicts interpersonal violence, and ISTAT's homicide sub-types (`MAFIAHOM`, `ROBBHOM`, `TERRORHOM`, `INFANTHOM`, `MASSMURD`) nest inside `INTENHOM`, so summing them would double count. `STALK` and `CP612BIS` are both labelled "stalking" and are excluded as suspected duplicates of each other.
 
 Create `dbt/seeds/violent_crime_codes.csv`:
 
@@ -1919,34 +1917,36 @@ INTENHOM,intentional homicides
 ATTEMPHOM,attempted homicides
 BLOWS,blows
 RAPE,sexual violence
-CP572,maltreatment in the family or against live-in
 MENACE,menaces
 KIDNAPP,kidnappings
 ```
 
-- [ ] **Step 2: Run the nesting diagnostic against real data**
+Six codes, not seven. `CP572` (maltreatment in the family) is published only from 2022; including it would put a step change in the outcome series at 2022 that region and year fixed effects cannot absorb, because it is a change in *what is counted*, not in the world.
 
-This decides whether the exclusions above are right. Skip it only if `data/marts/mart_offenders.parquet` was built from sample data.
+- [ ] **Step 2: Confirm the two diagnostics (already run, results recorded)**
 
-```bash
-uv run python -c "
-import duckdb
-c = duckdb.connect()
-m = 'data/marts/mart_offenders.parquet'
-print(c.execute(f\"\"\"
-  select year,
-         sum(case when crime_code='INTENHOM' then value end) as intenhom,
-         sum(case when crime_code in
-             ('MAFIAHOM','ROBBHOM','TERRORHOM','INFANTHOM','MASSMURD')
-             then value end) as subtypes
-  from '{m}'
-  where region_code='IT' and sex_is_total and age_is_total and citizenship_is_total
-  group by year order by year
-\"\"\").fetchall())
-"
-```
+Both diagnostics behind the seed above were run during pre-flight against the real `mart_offenders.parquet` in the main checkout, because the worktree's `data/` is gitignored and empty. Their results are recorded here; **do not re-run them and do not change the seed based on sample data**, where the crime codes are synthetic.
 
-If `subtypes <= intenhom` in every year, the sub-types nest inside `INTENHOM` and excluding them is correct — record that in the seed's commit message. If `subtypes > intenhom` in any year they are disjoint categories, so **add** those five codes to the seed. Either way the decision is now evidence-based, and the reasoning belongs in the commit message.
+1. **Homicide sub-types nest inside `INTENHOM`.** At `region_code='IT'`, the five sub-types summed to 225 / 240 / 180 against `INTENHOM` of 758 / 828 / 771 for 2022 / 2023 / 2024. Excluding them is correct.
+2. **All six chosen codes are published in all 18 years** (2007-2024), 6 distinct codes present every year, giving 21 regions × 18 years = **378 region-years**.
+
+- [ ] **Step 2b: Understand why the citizenship filter is inverted (read before writing the model)**
+
+This is the single most important detail in this task, and it is the opposite of what the rest of the codebase does.
+
+At region level, ISTAT publishes only **marginal** slices before 2022, not the full cross-tabulation:
+
+| `sex_is_total` | `age_is_total` | `citizenship_is_total` | years available |
+|---|---|---|---|
+| true | true | **false** | **2007-2024 (18)** |
+| false | true | true | 2008-2024 (17) |
+| true | true | true | **2022-2024 only (3)** |
+
+The triple-total combination — the obvious one to filter on — exists for **three years**. Filtering on `citizenship_is_total` would silently produce a 63-row panel instead of a 378-row one, and nothing would error.
+
+The 18-year slice splits citizenship into `ITL` and `FRG`, so the model sums **across** the citizenship detail rows to reconstruct the total. That reconstruction was verified exact wherever both representations exist: summing `ITL + FRG` gives 67595 / 66454 / 70521 for 2022 / 2023 / 2024, matching the `TOTAL` rows to the unit.
+
+Hence the `violent` CTE below uses `not o.citizenship_is_total` and sums. This is safe **only** because citizenship is the dimension being summed and its two categories partition the total exactly. Do not generalise the pattern to sex or age.
 
 - [ ] **Step 3: Register the seed's column types**
 
@@ -2072,10 +2072,26 @@ climate as (
     join summer_baseline b on s.region_code = b.region_code
 ),
 
--- Violent offenders per region-year. Every non-crime dimension sits on its
--- TOTAL row: summing detail rows across sex, age and citizenship at once would
--- multiply the same people several times over. region_level pins the admin
--- level, because the mart mixes country, macro-area, region and province rows.
+-- Violent offenders per region-year.
+--
+-- NOTE THE INVERTED CITIZENSHIP FILTER -- it is deliberate, and it is the
+-- opposite of what every other model here does.
+--
+-- Before 2022 ISTAT publishes only MARGINAL slices at region level, never the
+-- full cross-tabulation. The triple-total combination (sex_is_total AND
+-- age_is_total AND citizenship_is_total) exists for 2022-2024 ONLY -- three
+-- years. Filtering on it yields a 63-row panel instead of 378, silently.
+--
+-- The slice that spans all 18 years is sex-total x age-total x citizenship
+-- SPLIT, so this sums across the citizenship detail rows to rebuild the total.
+-- Verified exact where both representations coexist: ITL + FRG reproduces the
+-- TOTAL row to the unit (67595 / 66454 / 70521 for 2022 / 2023 / 2024).
+--
+-- Safe ONLY because ITL and FRG partition the total exactly. Do not copy this
+-- pattern onto sex or age, whose categories do not.
+--
+-- region_level pins the admin level: the mart mixes country, macro-area,
+-- region and province rows, and summing across them would multiply everything.
 violent as (
     select
         o.region_code,
@@ -2087,7 +2103,7 @@ violent as (
     where o.region_level = 'region'
       and o.sex_is_total
       and o.age_is_total
-      and o.citizenship_is_total
+      and not o.citizenship_is_total
       and not o.crime_is_total
     group by o.region_code, o.year
 ),
@@ -2187,6 +2203,18 @@ print('slope, r, n:', c.execute(f\"select round(regr_slope(ln_offenders_dm, summ
 ```
 
 Expected against sample data: 8 regions (the NUTS-2006/2013 overlap documented in Task 4) × 19 years, so ~152 rows. Both demeaned means must be within about 1e-3 of zero — this is only exactly zero on a fully balanced panel, and rounding to four decimals in SQL adds a little slack. A larger residual means the window partitions are wrong.
+
+**Year coverage is the thing to check hardest.** Print the distinct years:
+
+```bash
+uv run python -c "
+import duckdb
+c = duckdb.connect()
+print(c.execute(\"select min(year), max(year), count(distinct year) from 'data/marts/mart_crime_climate.parquet'\").fetchone())
+"
+```
+
+Against sample data this must span the full synthetic range (2006-2024, 19 years). **If it returns 3 years, the citizenship filter was written as `citizenship_is_total` instead of `not citizenship_is_total`** — re-read Step 2b. Against real data the same check must return 2007-2024, 18 years, 378 rows.
 
 - [ ] **Step 9: Commit**
 
@@ -3272,6 +3300,10 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 1. The month × year anomaly heatmap is deferred. Recharts, the chart library already in the project, has no heatmap mark, and the anomaly stripes carry the same message. `mart_climate_monthly` is still built, so the view can be added later without rework.
 2. `mart_climate_region` is built but no page reads it yet. It is a dependency-free rollup that the crime panel's logic mirrors, and the roadmap's choropleth work will consume it directly.
 
-**Known ordering constraint.** Tasks 1 and 2 interlock: `ingestion/capitals.py` imports `ingestion/openmeteo.py`, and the seed cannot be generated until the geocoding client exists. Task 1 Step 4 says explicitly to jump to Task 2 Steps 1-4 and return. Anyone executing tasks strictly in order will hit this and the plan tells them what to do.
+**Execution order is 2, 1, 3, 4, 5, 6, 7, 8, 9, 10.** `ingestion/capitals.py` imports `ingestion/openmeteo.py`, so the client is built first and the seed second. Everything after Task 1 runs in numeric order.
+
+**Amended during pre-flight**, after running the plan's own diagnostics against the real `mart_offenders.parquet`:
+- The violent-crime seed dropped to six codes. `CP572` is published only from 2022 and would put a step change in the outcome series that fixed effects cannot absorb.
+- `mart_crime_climate`'s citizenship filter is **inverted** (`not citizenship_is_total`, summing `ITL + FRG`). Before 2022 ISTAT publishes only marginal slices at region level; the triple-total combination exists for three years, so the obvious filter would have silently produced a 63-row panel. The 18-year slice splits citizenship, and `ITL + FRG` was verified to reproduce the `TOTAL` row exactly. See Task 6 Step 2b.
 
 **Type consistency.** `year` is VARCHAR in `stg_weather`, every climate mart and `mart_crime_climate`, matching `mart_offenders`, so the Task 6 join needs no cast. `month` is INTEGER throughout. `province_code` is the join key between the snapshot and the seed; `region_code` is the join key between the climate marts and the crime marts. Query functions return `period` as the x-axis key everywhere, which is why Task 8 Step 6 aliases `bucket` to `period` and fixes the corresponding Task 7 test in the same step.
