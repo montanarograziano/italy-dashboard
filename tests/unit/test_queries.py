@@ -391,3 +391,118 @@ def test_region_rate_ranking_respects_citizenship(rates_mart):
 
 def test_region_rate_ranking_defaults_to_latest_year(rates_mart):
     assert q.region_rate_ranking(None, q.ALL, q.ALL) == q.region_rate_ranking("2024", q.ALL, q.ALL)
+
+
+# ------------------------------------------------------------------ climate
+
+
+def test_climate_not_ready_without_a_snapshot(missing_db):
+    assert q.climate_ready() is False
+    assert q.climate_cities() == []
+    assert q.climate_annual_series("Roma") == []
+    assert q.warming_rate_ranking() == []
+
+
+def test_climate_cities_are_the_sample_capitals(climate_db):
+    cities = q.climate_cities()
+    assert len(cities) == 20
+    assert cities == sorted(cities)
+    assert "Roma" in cities and "Palermo" in cities
+
+
+def test_climate_annual_series_has_min_mean_max_per_year(climate_db):
+    rows = q.climate_annual_series("Roma")
+    assert rows
+    assert {"period", "t_mean", "t_min", "t_max"} == set(rows[0])
+    assert [r["period"] for r in rows] == sorted(r["period"] for r in rows)
+    assert all(r["t_min"] <= r["t_mean"] <= r["t_max"] for r in rows)
+
+
+def test_warming_rate_ranking_is_sorted_descending(climate_db):
+    rows = q.warming_rate_ranking(top_n=5)
+    assert len(rows) == 5
+    values = [r["value"] for r in rows]
+    assert values == sorted(values, reverse=True)
+
+
+def test_threshold_days_are_non_negative_integers(climate_db):
+    rows = q.climate_threshold_days("Palermo")
+    assert rows
+    assert {"period", "hot_days", "tropical_nights", "frost_days"} == set(rows[0])
+    assert all(r["hot_days"] >= 0 and r["frost_days"] >= 0 for r in rows)
+
+
+def test_month_heatmap_has_twelve_month_columns(climate_db):
+    rows = q.climate_month_heatmap("Milano")
+    assert rows
+    assert {"period", *[f"m{i}" for i in range(1, 13)]} == set(rows[0])
+
+
+@pytest.fixture
+def climate_daily_mart(sample_db):
+    """Minimal mart_climate_daily.parquet spanning both distribution windows.
+
+    climate_db's synthetic weather series only covers 2006-2024 (see
+    ingestion.sample_data.WEATHER_YEARS), which has ZERO overlap with
+    EARLY_WINDOW (1951-1980). That makes climate_distribution("Torino")
+    legitimately return [] against climate_db: the same short-series
+    limitation already documented for the anomaly columns, not a bug to
+    paper over. Real ERA5 data starts in 1950 and covers both windows.
+
+    This fixture supplies rows in both windows directly (bypassing dbt, like
+    crime_mart/rates_mart above) so the bucketing/normalization logic itself
+    is still exercised by a real test.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = []
+    # early window (1951-1980): cooler days -> lower buckets
+    for year, t_max in [(1960, 20.0), (1965, 22.0), (1970, 24.0)]:
+        rows.append((year, t_max))
+    # late window (1996-2025): warmer days -> higher buckets
+    for year, t_max in [(2000, 26.0), (2010, 28.0), (2020, 30.0)]:
+        rows.append((year, t_max))
+    pl.DataFrame(
+        [
+            {
+                "province_code": "IT001",
+                "province_name": "Torino",
+                "capital_city": "Torino",
+                "region_code": "ITC1",
+                "region_name": "Piemonte",
+                "obs_date": f"{year}-07-15",
+                "year": str(year),
+                "month": 7,
+                "t_min": t_max - 10.0,
+                "t_mean": t_max - 5.0,
+                "t_max": t_max,
+            }
+            for year, t_max in rows
+        ]
+    ).write_parquet(marts / "mart_climate_daily.parquet")
+    return marts
+
+
+def test_distribution_buckets_are_ordered_and_comparable(climate_daily_mart):
+    rows = q.climate_distribution("Torino")
+    assert rows
+    assert {"period", "early", "late"} == set(rows[0])
+    assert [r["period"] for r in rows] == sorted(r["period"] for r in rows)
+    # early-window days landed in the cooler buckets, late-window in the
+    # warmer ones: each row is 100% one side, 0% the other.
+    assert all((r["early"] > 0) != (r["late"] > 0) for r in rows)
+
+
+def test_crime_climate_scatter_returns_both_views(climate_db):
+    out = q.crime_climate_scatter()
+    assert set(out) == {"raw", "panel"}
+    assert out["panel"]
+    assert {"x", "y", "region", "year"} == set(out["panel"][0])
+
+
+def test_crime_climate_stats_report_n_and_never_a_p_value(climate_db):
+    stats = q.crime_climate_stats()
+    assert set(stats) == {"raw", "panel", "n"}
+    assert stats["n"].isdigit()
+    # No significance claim is made anywhere: 21 clusters cannot support one.
+    assert "p =" not in stats["panel"] and "p<" not in stats["panel"]
