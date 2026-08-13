@@ -2,12 +2,14 @@
 
 import reflex as rx
 
+from italy_dashboard.pages.climate import climate_page
 from italy_dashboard.pages.crime import crime_page
 from italy_dashboard.pages.economy import economy_page
 from italy_dashboard.pages.home import home_page
 from italy_dashboard.pages.labor import labor_page
 from italy_dashboard.pages.population import population_page
 from italy_dashboard.state import (
+    ClimateState,
     CrimeState,
     EconomyState,
     HomeState,
@@ -34,4 +36,7 @@ app.add_page(
 app.add_page(labor_page, route="/labor", title="Labor · Italy Dashboard", on_load=LaborState.load)
 app.add_page(
     economy_page, route="/economy", title="Economy · Italy Dashboard", on_load=EconomyState.load
+)
+app.add_page(
+    climate_page, route="/climate", title="Climate · Italy Dashboard", on_load=ClimateState.load
 )

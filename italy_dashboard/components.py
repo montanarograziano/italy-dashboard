@@ -17,6 +17,7 @@ NAV_LINKS = [
     ("nav_home", "/"),
     ("nav_crime", "/crime"),
     ("nav_population", "/population"),
+    ("nav_climate", "/climate"),
     ("nav_labor", "/labor"),
     ("nav_economy", "/economy"),
 ]

@@ -14,12 +14,14 @@ EN: dict[str, str] = {
     "nav_population": "Population",
     "nav_labor": "Labor",
     "nav_economy": "Economy",
+    "nav_climate": "Climate",
     "home_title": "Italy at a glance",
     "home_subtitle": "Key indicators from ISTAT snapshots. Open a section for detail.",
     "crime_title": "Crime",
     "population_title": "Population & migration",
     "labor_title": "Labor market",
     "economy_title": "Economy & prices",
+    "climate_title": "Climate",
     # shared
     "view_table": "View as table",
     "year": "Year",
@@ -140,6 +142,35 @@ EN: dict[str, str] = {
     "inflation_title": "Inflation (consumer prices)",
     "inflation_sub": "Annual average change of the general index (%)",
     "change_pct": "Change (%)",
+    # climate page
+    "city": "City",
+    "warming_title": "Annual temperature",
+    "warming_sub": (
+        "Mean of daily mean, minimum and maximum, per year. ERA5-Land "
+        "reanalysis sampled at the province capital — not a station record."
+    ),
+    "t_mean": "Mean",
+    "t_min": "Min (mean of daily minima)",
+    "t_max": "Max (mean of daily maxima)",
+    "stripes_title": "Anomaly against the 1981-2010 normal",
+    "stripes_sub": "Degrees Celsius above or below the city's own 1981-2010 average",
+    "ranking_title": "Fastest-warming cities",
+    "ranking_sub": "Degrees Celsius per decade, ordinary least squares over annual means",
+    "thresholds_title": "Hot days, tropical nights and frost days",
+    "thresholds_sub": ("Days per year with max >= 30 C, min >= 20 C and min <= 0 C"),
+    "hot_days": "Hot days",
+    "tropical_nights": "Tropical nights",
+    "frost_days": "Frost days",
+    "distribution_title": "Distribution of daily maxima",
+    "distribution_sub": "Share of days per 2 C bucket, 1951-1980 against 1996-2025",
+    "dist_early": "1951-1980",
+    "dist_late": "1996-2025",
+    "anomaly": "Anomaly (C)",
+    "degrees_per_decade": "C / decade",
+    "no_climate": (
+        "No temperature data yet. Run  just refresh-weather  (or  just sample  "
+        "for synthetic dev data), then reload."
+    ),
 }
 
 IT: dict[str, str] = {
@@ -148,12 +179,14 @@ IT: dict[str, str] = {
     "nav_population": "Popolazione",
     "nav_labor": "Lavoro",
     "nav_economy": "Economia",
+    "nav_climate": "Clima",
     "home_title": "L'Italia in sintesi",
     "home_subtitle": "Indicatori chiave dagli snapshot ISTAT. Apri una sezione per i dettagli.",
     "crime_title": "Criminalità",
     "population_title": "Popolazione e migrazioni",
     "labor_title": "Mercato del lavoro",
     "economy_title": "Economia e prezzi",
+    "climate_title": "Clima",
     "view_table": "Vedi come tabella",
     "year": "Anno",
     "province": "Provincia",
@@ -272,6 +305,34 @@ IT: dict[str, str] = {
     "inflation_title": "Inflazione (prezzi al consumo)",
     "inflation_sub": "Variazione media annua dell'indice generale (%)",
     "change_pct": "Variazione (%)",
+    "city": "Città",
+    "warming_title": "Temperatura annuale",
+    "warming_sub": (
+        "Media delle medie, delle minime e delle massime giornaliere, per anno. "
+        "Rianalisi ERA5-Land campionata nel capoluogo — non è una serie da stazione."
+    ),
+    "t_mean": "Media",
+    "t_min": "Minima (media delle minime giornaliere)",
+    "t_max": "Massima (media delle massime giornaliere)",
+    "stripes_title": "Anomalia rispetto alla norma 1981-2010",
+    "stripes_sub": "Gradi Celsius sopra o sotto la media 1981-2010 della città",
+    "ranking_title": "Città che si scaldano più in fretta",
+    "ranking_sub": "Gradi Celsius per decennio, minimi quadrati sulle medie annuali",
+    "thresholds_title": "Giorni caldi, notti tropicali e giorni di gelo",
+    "thresholds_sub": ("Giorni all'anno con massima >= 30 C, minima >= 20 C e minima <= 0 C"),
+    "hot_days": "Giorni caldi",
+    "tropical_nights": "Notti tropicali",
+    "frost_days": "Giorni di gelo",
+    "distribution_title": "Distribuzione delle massime giornaliere",
+    "distribution_sub": "Quota di giorni per intervallo di 2 C, 1951-1980 contro 1996-2025",
+    "dist_early": "1951-1980",
+    "dist_late": "1996-2025",
+    "anomaly": "Anomalia (C)",
+    "degrees_per_decade": "C / decennio",
+    "no_climate": (
+        "Nessun dato di temperatura. Esegui  just refresh-weather  (oppure  just sample  "
+        "per dati sintetici di sviluppo), poi ricarica."
+    ),
 }
 
 # Split-by choices: canonical keys stored in state, labels shown per language.

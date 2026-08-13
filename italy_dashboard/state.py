@@ -439,3 +439,41 @@ class EconomyState(AppState):
     def load(self):
         self.load_shared()
         self.inflation = q.inflation_series()
+
+
+class ClimateState(AppState):
+    """Climate explorer over the mart_climate_* marts."""
+
+    city_options: list[str] = []
+    city: str = ""
+    annual: list[Row] = []
+    stripes: list[Row] = []
+    ranking: list[Row] = []
+    thresholds: list[Row] = []
+    distribution: list[Row] = []
+    mart_ready: bool = False
+
+    @rx.event
+    def load(self):
+        self.load_shared()
+        self.mart_ready = q.climate_ready()
+        if not self.mart_ready:
+            return
+        self.city_options = q.climate_cities()
+        # Roma is the default when present: a familiar reference point beats an
+        # alphabetically-first city nobody has intuitions about.
+        if self.city not in self.city_options:
+            self.city = "Roma" if "Roma" in self.city_options else self.city_options[0]
+        self.ranking = q.warming_rate_ranking(top_n=20)
+        self._refresh()
+
+    @rx.event
+    def set_city(self, value: str):
+        self.city = value
+        self._refresh()
+
+    def _refresh(self):
+        self.annual = q.climate_annual_series(self.city)
+        self.stripes = q.climate_stripes(self.city)
+        self.thresholds = q.climate_threshold_days(self.city)
+        self.distribution = q.climate_distribution(self.city)
