@@ -37,6 +37,10 @@ discover keyword:
 dims dataset:
     uv run python -m ingestion.fetch dims "{{dataset}}"
 
+# Rebuild the province-capitals seed (geocodes once; REVIEW the CSV before committing)
+build-capitals:
+    uv run python -m ingestion.capitals
+
 # Re-normalize existing raw CSVs (no download), e.g. after a mapping fix
 normalize *dataset:
     uv run python -m ingestion.fetch normalize {{dataset}}

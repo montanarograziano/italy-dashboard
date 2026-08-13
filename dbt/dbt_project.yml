@@ -18,3 +18,18 @@ models:
       # Marts land as Parquet files the dashboard picks up directly
       # (italy_dashboard/queries.py builds views from data/marts/*.parquet).
       +materialized: external
+
+seed-paths: ["seeds"]
+
+seeds:
+  italy_dashboard:
+    +quote_columns: false
+    province_capitals:
+      +column_types:
+        province_code: varchar
+        province_name: varchar
+        capital_city: varchar
+        region_code: varchar
+        region_name: varchar
+        lat: double
+        lon: double
