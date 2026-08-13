@@ -152,3 +152,150 @@ def test_placeholder_never_overwrites_a_real_snapshot(tmp_path):
     weather.write_snapshot(rows, tmp_path)
     weather.ensure_weather_placeholder(tmp_path)
     assert pl.read_parquet(tmp_path / "weather_daily.parquet").height == 1
+
+
+# --------------------------------------------------------------------------
+# cmd_refresh: the null gate and the single-city merge, fully offline.
+#
+# OpenMeteoClient is imported by name into ingestion.weather's module
+# namespace, so it can be swapped for a fake async context manager without
+# touching any production signature. The fake is keyed by (lat, lon) so each
+# capital in the temp seed gets its own canned response regardless of which
+# decade chunk is being requested.
+# --------------------------------------------------------------------------
+
+
+def clean_payload(dates: list[str], t_mean: float = 10.0) -> dict:
+    return {
+        "time": dates,
+        "t_min": [t_mean - 5] * len(dates),
+        "t_mean": [t_mean] * len(dates),
+        "t_max": [t_mean + 5] * len(dates),
+    }
+
+
+def all_null_payload(dates: list[str]) -> dict:
+    return {
+        "time": dates,
+        "t_min": [None] * len(dates),
+        "t_mean": [None] * len(dates),
+        "t_max": [None] * len(dates),
+    }
+
+
+def make_fake_client(responses: dict[tuple[float, float], dict]) -> type:
+    """A class standing in for OpenMeteoClient, returning canned payloads by coordinate."""
+
+    class FakeOpenMeteoClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc_info):
+            return False
+
+        async def daily_temperatures(self, lat, lon, start, end):
+            return responses[(lat, lon)]
+
+    return FakeOpenMeteoClient
+
+
+def patch_capitals_and_client(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, responses: dict[tuple[float, float], dict]
+) -> None:
+    """Point cmd_refresh at the temp seed and a fake client, with no real network delay."""
+    seed = write_seed(tmp_path)
+    real_load_capitals = weather.load_capitals
+    monkeypatch.setattr(weather, "load_capitals", lambda: real_load_capitals(seed))
+    monkeypatch.setattr(weather, "OpenMeteoClient", make_fake_client(responses))
+    monkeypatch.setattr(weather, "REQUEST_DELAY_S", 0)
+
+
+MILANO_COORD = (45.4642, 9.19)
+ROMA_COORD = (41.8933, 12.4829)
+
+
+async def test_cmd_refresh_full_writes_every_city(tmp_path, monkeypatch):
+    responses = {
+        MILANO_COORD: clean_payload(["2020-01-01", "2020-01-02"]),
+        ROMA_COORD: clean_payload(["2020-01-01", "2020-01-02"]),
+    }
+    patch_capitals_and_client(monkeypatch, tmp_path, responses)
+
+    rc = await weather.cmd_refresh(None, data_dir=tmp_path)
+
+    assert rc == 0
+    df = pl.read_parquet(tmp_path / weather.SNAPSHOT_NAME)
+    assert set(df["province_code"].to_list()) == {"ITC45", "ITE43"}
+
+
+async def test_cmd_refresh_blocks_write_when_a_city_exceeds_the_null_limit(tmp_path, monkeypatch):
+    responses = {
+        MILANO_COORD: all_null_payload(["2020-01-01", "2020-01-02"]),  # ITC45: fails the gate
+        ROMA_COORD: clean_payload(["2020-01-01", "2020-01-02"]),  # ITE43: clean
+    }
+    patch_capitals_and_client(monkeypatch, tmp_path, responses)
+
+    rc = await weather.cmd_refresh(None, data_dir=tmp_path)
+
+    assert rc == 1
+    # A tainted city must block the write entirely: no partial/wrong snapshot,
+    # not even for the clean city, since there was nothing on disk before.
+    assert not (tmp_path / weather.SNAPSHOT_NAME).exists()
+
+
+async def test_cmd_refresh_single_city_merges_into_existing_snapshot(tmp_path, monkeypatch):
+    existing_rows = [
+        {
+            "province_code": "ITC45",
+            "date": date(2019, 1, 1),
+            "t_min": 1.0,
+            "t_mean": 2.0,
+            "t_max": 3.0,
+        },
+        {
+            "province_code": "ITE43",
+            "date": date(2019, 1, 1),
+            "t_min": 4.0,
+            "t_mean": 5.0,
+            "t_max": 6.0,
+        },
+    ]
+    weather.write_snapshot(existing_rows, tmp_path)
+
+    # Only ITC45 gets refetched, with a new date and a new value.
+    responses = {MILANO_COORD: clean_payload(["2020-06-01"], t_mean=99.0)}
+    patch_capitals_and_client(monkeypatch, tmp_path, responses)
+
+    rc = await weather.cmd_refresh("ITC45", data_dir=tmp_path)
+
+    assert rc == 0
+    df = pl.read_parquet(tmp_path / weather.SNAPSHOT_NAME)
+
+    # ITE43 must survive untouched: a single-city refresh must not destroy it.
+    roma = df.filter(pl.col("province_code") == "ITE43")
+    assert roma.to_dicts() == [
+        {
+            "province_code": "ITE43",
+            "date": date(2019, 1, 1),
+            "t_min": 4.0,
+            "t_mean": 5.0,
+            "t_max": 6.0,
+        }
+    ]
+
+    # ITC45's stale 2019 row must be gone, replaced by the refetched value.
+    milano = df.filter(pl.col("province_code") == "ITC45")
+    assert date(2019, 1, 1) not in milano["date"].to_list()
+    assert set(milano["date"].to_list()) == {date(2020, 6, 1)}
+    assert milano["t_mean"].to_list()[0] == 99.0
+
+
+async def test_cmd_refresh_single_city_without_existing_snapshot(tmp_path, monkeypatch):
+    responses = {MILANO_COORD: clean_payload(["2020-01-01"])}
+    patch_capitals_and_client(monkeypatch, tmp_path, responses)
+
+    rc = await weather.cmd_refresh("ITC45", data_dir=tmp_path)
+
+    assert rc == 0
+    df = pl.read_parquet(tmp_path / weather.SNAPSHOT_NAME)
+    assert set(df["province_code"].to_list()) == {"ITC45"}
