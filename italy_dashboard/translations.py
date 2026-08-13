@@ -171,6 +171,38 @@ EN: dict[str, str] = {
         "No temperature data yet. Run  just refresh-weather  (or  just sample  "
         "for synthetic dev data), then reload."
     ),
+    "nav_climate_crime": "Climate × Crime",  # noqa: RUF001
+    "climate_crime_title": "Summer heat and violent crime",
+    "cc_raw_title": "Naive view: raw cross-section",
+    "cc_raw_sub": (
+        "Every region-year, untransformed. This mostly recovers that southern "
+        "regions are hotter and report crime differently — a confound, not a finding."
+    ),
+    "cc_panel_title": "Panel view: within-region deviation",
+    "cc_panel_sub": (
+        "Region and year fixed effects removed, so each point is a region's "
+        "deviation from its own norm in a year that was unusual nationally."
+    ),
+    "cc_x": "Summer max-temperature anomaly (C)",
+    "cc_y": "ln(violent offenders)",
+    "cc_stat_raw": "Raw",
+    "cc_stat_panel": "Panel",
+    "cc_stat_n": "Observations",
+    "cc_caveat": (
+        "Association only. This is an ECOLOGICAL comparison: it is region-level "
+        "and says nothing about individuals. It is ANNUAL, while the "
+        "heat-aggression literature works at daily and monthly grain. It is "
+        "UNDERPOWERED, bounded by ISTAT publishing province-level offenders only "
+        "from 2022. The outcome is offender counts, not rates, because population "
+        "denominators start in 2019; region fixed effects absorb the population "
+        "level but not differential regional growth. No p-values or confidence "
+        "intervals are shown: with 21 clusters they would overstate precision."
+    ),
+    "no_climate_crime": (
+        "The crime-climate panel needs both the offenders mart and temperature "
+        "data. Run  just refresh  and  just refresh-weather  (or  just sample), "
+        "then reload."
+    ),
 }
 
 IT: dict[str, str] = {
@@ -332,6 +364,40 @@ IT: dict[str, str] = {
     "no_climate": (
         "Nessun dato di temperatura. Esegui  just refresh-weather  (oppure  just sample  "
         "per dati sintetici di sviluppo), poi ricarica."
+    ),
+    "nav_climate_crime": "Clima × Criminalità",  # noqa: RUF001
+    "climate_crime_title": "Caldo estivo e criminalità violenta",
+    "cc_raw_title": "Vista ingenua: sezione trasversale grezza",
+    "cc_raw_sub": (
+        "Ogni regione-anno, senza trasformazioni. Ritrova soprattutto che le "
+        "regioni del Sud sono più calde e denunciano in modo diverso: un "
+        "fattore confondente, non un risultato."
+    ),
+    "cc_panel_title": "Vista panel: deviazione entro regione",
+    "cc_panel_sub": (
+        "Effetti fissi di regione e anno rimossi: ogni punto è lo scostamento "
+        "di una regione dalla propria norma in un anno anomalo a livello nazionale."
+    ),
+    "cc_x": "Anomalia della massima estiva (C)",
+    "cc_y": "ln(autori di reati violenti)",
+    "cc_stat_raw": "Grezzo",
+    "cc_stat_panel": "Panel",
+    "cc_stat_n": "Osservazioni",
+    "cc_caveat": (
+        "Solo associazione. Confronto ECOLOGICO: è a livello regionale e non "
+        "dice nulla sugli individui. È ANNUALE, mentre la letteratura su caldo "
+        "e aggressività lavora su scala giornaliera e mensile. È POCO POTENTE, "
+        "limitato dal fatto che ISTAT pubblica gli autori a livello provinciale "
+        "solo dal 2022. L'esito è il conteggio degli autori, non un tasso, "
+        "perché i denominatori di popolazione partono dal 2019; gli effetti "
+        "fissi di regione assorbono il livello della popolazione ma non la "
+        "crescita differenziale. Non sono mostrati p-value né intervalli di "
+        "confidenza: con 21 cluster sovrastimerebbero la precisione."
+    ),
+    "no_climate_crime": (
+        "Il panel clima-criminalità richiede sia il mart degli autori sia i dati "
+        "di temperatura. Esegui  just refresh  e  just refresh-weather  (oppure  "
+        "just sample), poi ricarica."
     ),
 }
 

@@ -18,6 +18,7 @@ NAV_LINKS = [
     ("nav_crime", "/crime"),
     ("nav_population", "/population"),
     ("nav_climate", "/climate"),
+    ("nav_climate_crime", "/climate-crime"),
     ("nav_labor", "/labor"),
     ("nav_economy", "/economy"),
 ]

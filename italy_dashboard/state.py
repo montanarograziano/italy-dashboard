@@ -477,3 +477,28 @@ class ClimateState(AppState):
         self.stripes = q.climate_stripes(self.city)
         self.thresholds = q.climate_threshold_days(self.city)
         self.distribution = q.climate_distribution(self.city)
+
+
+class ClimateCrimeState(AppState):
+    """Region x year panel: summer heat against violent offending."""
+
+    raw_points: list[Row] = []
+    panel_points: list[Row] = []
+    stat_raw: str = "—"
+    stat_panel: str = "—"
+    stat_n: str = "0"
+    mart_ready: bool = False
+
+    @rx.event
+    def load(self):
+        self.load_shared()
+        self.mart_ready = q.crime_climate_ready()
+        if not self.mart_ready:
+            return
+        scatter = q.crime_climate_scatter()
+        self.raw_points = scatter["raw"]
+        self.panel_points = scatter["panel"]
+        stats = q.crime_climate_stats()
+        self.stat_raw = stats["raw"]
+        self.stat_panel = stats["panel"]
+        self.stat_n = stats["n"]
