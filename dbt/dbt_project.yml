@@ -33,3 +33,7 @@ seeds:
         region_name: varchar
         lat: double
         lon: double
+    violent_crime_codes:
+      +column_types:
+        crime_code: varchar
+        crime_name: varchar
