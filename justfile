@@ -41,6 +41,12 @@ dims dataset:
 build-capitals:
     uv run python -m ingestion.capitals
 
+# Fetch ERA5-Land daily temperatures for every province capital, then rebuild marts
+# `just refresh-weather ITC45` refetches one city (after a coordinate fix)
+refresh-weather *province:
+    uv run python -m ingestion.weather refresh {{province}}
+    just transform
+
 # Re-normalize existing raw CSVs (no download), e.g. after a mapping fix
 normalize *dataset:
     uv run python -m ingestion.fetch normalize {{dataset}}
