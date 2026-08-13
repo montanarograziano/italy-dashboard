@@ -20,9 +20,9 @@ def climate_crime_page() -> rx.Component:
             ClimateCrimeState.mart_ready,
             rx.vstack(
                 rx.hstack(
-                    stat_tile(t("cc_stat_panel"), ClimateCrimeState.stat_panel, t("cc_y")),
-                    stat_tile(t("cc_stat_raw"), ClimateCrimeState.stat_raw, t("cc_y")),
-                    stat_tile(t("cc_stat_n"), ClimateCrimeState.stat_n, t("cc_x")),
+                    stat_tile(t("cc_stat_panel"), ClimateCrimeState.stat_panel, t("cc_y_panel")),
+                    stat_tile(t("cc_stat_raw"), ClimateCrimeState.stat_raw, t("cc_y_raw")),
+                    stat_tile(t("cc_stat_n"), ClimateCrimeState.stat_n, t("cc_obs_note")),
                     spacing="4",
                     width="100%",
                     wrap="wrap",
@@ -34,8 +34,11 @@ def climate_crime_page() -> rx.Component:
                         [(ClimateCrimeState.panel_points, t("cc_panel_title"), theme.SERIES_1)],
                         x_key="x",
                         y_key="y",
-                        x_label=t("cc_x"),
-                        y_label=t("cc_y"),
+                        # Doubly-demeaned axes get their own labels: +0.3 here
+                        # is not "0.3 C above the 1981-2010 normal", it is what
+                        # is left after region and year effects are removed.
+                        x_label=t("cc_x_panel"),
+                        y_label=t("cc_y_panel"),
                         label_key="region",
                         label_name=t("region"),
                     ),
@@ -47,8 +50,8 @@ def climate_crime_page() -> rx.Component:
                         [(ClimateCrimeState.raw_points, t("cc_raw_title"), theme.SERIES_2)],
                         x_key="x",
                         y_key="y",
-                        x_label=t("cc_x"),
-                        y_label=t("cc_y"),
+                        x_label=t("cc_x_raw"),
+                        y_label=t("cc_y_raw"),
                         label_key="region",
                         label_name=t("region"),
                     ),

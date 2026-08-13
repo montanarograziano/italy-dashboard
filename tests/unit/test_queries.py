@@ -506,3 +506,138 @@ def test_crime_climate_stats_report_n_and_never_a_p_value(climate_db):
     assert stats["n"].isdigit()
     # No significance claim is made anywhere: 21 clusters cannot support one.
     assert "p =" not in stats["panel"] and "p<" not in stats["panel"]
+
+
+@pytest.fixture
+def crime_climate_mart(sample_db):
+    """Two regions whose ABSOLUTE and WITHIN-region temperatures disagree.
+
+    A cool region with high offending and a hot region with low offending, and
+    inside each region the warmer years are the higher-offending ones. So
+    corr(ln_offenders, summer_tmax) is strongly NEGATIVE while
+    corr(ln_offenders, summer_anomaly) is POSITIVE, and the two columns have
+    no overlap in range (28-35 C against -0.5..+0.5). Reading the raw view off
+    the wrong column cannot go unnoticed against this fixture.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = []
+    for region, tmax0, ln0 in (("Cool region", 28.0, 10.0), ("Hot region", 34.0, 9.0)):
+        for i, year in enumerate(("2020", "2021", "2022")):
+            rows.append(
+                {
+                    "region_code": region[:4],
+                    "region_name": region,
+                    "year": year,
+                    "summer_tmax": tmax0 + 0.5 * i,
+                    "summer_anomaly": -0.5 + 0.5 * i,
+                    "offenders": 1000,
+                    "ln_offenders": ln0 + 0.1 * i,
+                    "summer_anomaly_dm": -0.5 + 0.5 * i,
+                    "ln_offenders_dm": 0.1 * i - 0.1,
+                }
+            )
+    pl.DataFrame(rows).write_parquet(marts / "mart_crime_climate.parquet")
+    return marts
+
+
+def test_raw_scatter_plots_absolute_temperature_not_the_anomaly(crime_climate_mart):
+    """The raw view must be a real cross-section.
+
+    summer_anomaly is each region's deviation from its OWN baseline, so it has
+    the between-region variation already removed: plotting it as the "naive
+    cross-section" shows the confound the page exists to expose has vanished.
+    """
+    out = q.crime_climate_scatter()
+
+    raw_x = sorted(p["x"] for p in out["raw"])
+    panel_x = sorted(p["x"] for p in out["panel"])
+    assert raw_x != panel_x  # the two views must not share an x variable
+
+    # Absolute summer temperatures, not anomalies around zero.
+    assert raw_x == [28.0, 28.5, 29.0, 34.0, 34.5, 35.0]
+    assert all(x > 20 for x in raw_x)
+
+    # The panel branch is untouched: it still plots the demeaned columns.
+    assert panel_x == [-0.5, -0.5, 0.0, 0.0, 0.5, 0.5]
+
+
+def test_raw_stats_are_computed_on_absolute_temperature(crime_climate_mart):
+    """Same guard on the numbers under the charts.
+
+    On this fixture the two candidate x variables give opposite signs, so a
+    slope or r taken from summer_anomaly cannot pass as one from summer_tmax.
+    """
+    stats = q.crime_climate_stats()
+
+    assert stats["n"] == "6"
+    # corr(ln_offenders, summer_tmax) is negative here; the anomaly version
+    # would be +1.00 and this assertion is what catches the swap.
+    assert "r = -" in stats["raw"]
+    assert "slope = -" in stats["raw"]
+    # The panel line still reads off the demeaned columns (positive here).
+    assert "r = +" in stats["panel"]
+
+
+@pytest.fixture
+def partial_year_annual_mart(sample_db):
+    """Twelve flat complete years plus one hot, unfinished year.
+
+    The complete years have an identical mean, so the warming rate over them
+    is exactly zero. The partial year is 6 C warmer with 210 days of data,
+    which is what a January-to-August year looks like on the real feed (the
+    fetch always runs to today minus 7 days).
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = [
+        {
+            "province_code": "IT999",
+            "province_name": "Testville",
+            "capital_city": "Testville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": str(year),
+            "t_mean": 15.0,
+            "t_min_mean": 10.0,
+            "t_max_mean": 20.0,
+            "days_observed": 365,
+            "anomaly_1981_2010": 0.0,
+        }
+        for year in range(2010, 2022)
+    ]
+    rows.append(
+        {
+            "province_code": "IT999",
+            "province_name": "Testville",
+            "capital_city": "Testville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": "2022",
+            "t_mean": 21.0,
+            "t_min_mean": 16.0,
+            "t_max_mean": 26.0,
+            "days_observed": 210,
+            "anomaly_1981_2010": 6.0,
+        }
+    )
+    pl.DataFrame(rows).write_parquet(marts / "mart_climate_annual.parquet")
+    return marts
+
+
+def test_partial_years_are_excluded_from_every_climate_series(partial_year_annual_mart):
+    """A year that is not over yet must not be plotted as if it were.
+
+    Without the days_observed gate the unfinished year is a record-warm point
+    on the line and on the stripes, and the last, highest-leverage point of the
+    warming-rate regression.
+    """
+    years = [r["period"] for r in q.climate_annual_series("Testville")]
+    assert "2022" not in years
+    assert len(years) == 12
+
+    stripe_years = [r["period"] for r in q.climate_stripes("Testville")]
+    assert "2022" not in stripe_years
+
+    ranking = q.warming_rate_ranking()
+    assert ranking == [{"name": "Testville", "value": 0.0}]  # flat, not warming

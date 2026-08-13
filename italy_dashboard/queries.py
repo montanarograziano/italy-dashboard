@@ -670,6 +670,15 @@ CLIMATE_ANNUAL = "mart_climate_annual"
 EARLY_WINDOW = (1951, 1980)
 LATE_WINDOW = (1996, 2025)
 
+# The fetch always runs to today minus 7 days, so the current year is a partial
+# year for eleven months out of twelve. Plotted as if complete it reads roughly
+# 1 C warm (a January-to-August year drops the coldest months of the tail) and
+# lands as a phantom record-warm point on the warming line, on the stripes, and
+# on the high-leverage last point of every per-decade trend. mart_climate_annual
+# publishes days_observed exactly so consumers can drop it. 360, not 365: a
+# handful of missing days does not spoil an annual mean, an unfinished year does.
+MIN_DAYS_FOR_A_FULL_YEAR = 360
+
 
 def climate_ready() -> bool:
     return (MARTS_DIR / f"{CLIMATE_ANNUAL}.parquet").exists()
@@ -688,12 +697,15 @@ def climate_annual_series(city: str) -> list[Row]:
 
     Three series, not one: Italian minima have risen faster than maxima, which
     a mean-only chart hides entirely.
+
+    Partial years are excluded (see MIN_DAYS_FOR_A_FULL_YEAR): the running year
+    would otherwise plot about 1 C too warm, as a record that never happened.
     """
     return _query(
         f"""
         SELECT year AS period, t_mean, t_min_mean AS t_min, t_max_mean AS t_max
         FROM {CLIMATE_ANNUAL}
-        WHERE capital_city = ?
+        WHERE capital_city = ? AND days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
         ORDER BY year
         """,
         [city],
@@ -701,12 +713,18 @@ def climate_annual_series(city: str) -> list[Row]:
 
 
 def climate_stripes(city: str) -> list[Row]:
-    """Anomaly against the 1981-2010 normal, per year — the warming-stripes series."""
+    """Anomaly against the 1981-2010 normal, per year — the warming-stripes series.
+
+    Partial years are excluded (see MIN_DAYS_FOR_A_FULL_YEAR): a stripe for a
+    year that is only eight months old is the deepest red on the chart for
+    calendar reasons, not climate ones.
+    """
     return _query(
         f"""
         SELECT year AS period, anomaly_1981_2010 AS anomaly
         FROM {CLIMATE_ANNUAL}
         WHERE capital_city = ? AND anomaly_1981_2010 IS NOT NULL
+          AND days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
         ORDER BY year
         """,
         [city],
@@ -718,13 +736,17 @@ def warming_rate_ranking(top_n: int = 20) -> list[Row]:
 
     regr_slope over (year, t_mean) is degrees per YEAR; x10 makes it per decade,
     which is how climate trends are conventionally quoted.
+
+    Partial years are excluded (see MIN_DAYS_FOR_A_FULL_YEAR). The running year
+    is the last and therefore highest-leverage point of the regression, so an
+    artificially warm one bends every city's quoted warming rate upwards.
     """
     return _query(
         f"""
         SELECT capital_city AS name,
                ROUND(10.0 * regr_slope(t_mean, CAST(year AS INTEGER)), 2) AS value
         FROM {CLIMATE_ANNUAL}
-        WHERE t_mean IS NOT NULL
+        WHERE t_mean IS NOT NULL AND days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
         GROUP BY capital_city
         HAVING COUNT(*) >= 10  -- a slope from a handful of years is noise
         ORDER BY value DESC
@@ -817,11 +839,19 @@ def crime_climate_scatter() -> dict[str, list[Row]]:
     The raw view is shown deliberately. It largely recovers "the South is hot
     and reports crime differently" — showing it beside the panel makes the
     confound the lesson of the page rather than a footnote nobody reads.
+
+    THE RAW VIEW MUST USE summer_tmax, THE ABSOLUTE TEMPERATURE, NOT THE
+    ANOMALY. summer_anomaly is each region's deviation from its OWN 1981-2010
+    baseline, so it has already had the between-region differences taken out of
+    it — plotting it here would show a cross-section with no cross-section
+    left in it and demonstrate the opposite of the page's point. With absolute
+    summer temperature on x, the hot southern regions sit on the right, which
+    is the confound this chart exists to make visible.
     """
     rows = _query(
         """
         SELECT region_name, year,
-               summer_anomaly, ln_offenders,
+               summer_tmax, ln_offenders,
                summer_anomaly_dm, ln_offenders_dm
         FROM mart_crime_climate
         WHERE summer_anomaly IS NOT NULL AND ln_offenders IS NOT NULL
@@ -831,7 +861,7 @@ def crime_climate_scatter() -> dict[str, list[Row]]:
     return {
         "raw": [
             {
-                "x": r["summer_anomaly"],
+                "x": r["summer_tmax"],
                 "y": r["ln_offenders"],
                 "region": r["region_name"],
                 "year": r["year"],
@@ -857,13 +887,18 @@ def crime_climate_stats() -> dict[str, str]:
     unclustered standard errors would overstate precision and correct clustered
     ones need machinery this project does not have. A bare slope with an
     explicit "association only" caveat is the honest presentation.
+
+    The raw pair is computed on summer_tmax, matching the raw scatter: the
+    anomaly is already within-region, so a slope on it is not a cross-section.
+    The row filter stays on summer_anomaly so both views describe exactly the
+    same observations and share one n.
     """
     out = {"raw": "—", "panel": "—", "n": "0"}
     rows = _query(
         """
         SELECT COUNT(*) AS n,
-               ROUND(regr_slope(ln_offenders, summer_anomaly), 4) AS raw_slope,
-               ROUND(corr(ln_offenders, summer_anomaly), 3) AS raw_r,
+               ROUND(regr_slope(ln_offenders, summer_tmax), 4) AS raw_slope,
+               ROUND(corr(ln_offenders, summer_tmax), 3) AS raw_r,
                ROUND(regr_slope(ln_offenders_dm, summer_anomaly_dm), 4) AS dm_slope,
                ROUND(corr(ln_offenders_dm, summer_anomaly_dm), 3) AS dm_r
         FROM mart_crime_climate

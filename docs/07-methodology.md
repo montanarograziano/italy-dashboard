@@ -141,6 +141,15 @@ number quietly built from a handful of years. The threshold is 25, not 30,
 because a genuine climate normal tolerates a few missing years, and a single
 upstream gap should not void the whole normal.
 
+**The running year is not plotted.** The fetch always ends at today minus 7
+days, so the current year is incomplete for eleven months out of twelve, and a
+January-to-August year averages roughly 1 C warmer than the same year finished.
+`mart_climate_annual` publishes `days_observed`; the annual line, the warming
+stripes and the per-decade warming ranking all require at least 360 of them, so
+the current year appears only once it is over. Without that gate the unfinished
+year is a record-warm point on two charts and the last, highest-leverage point
+of every trend regression.
+
 **Non-commercial licence.** Open-Meteo's free tier, which this pipeline uses,
 is non-commercial use only. If the dashboard is ever offered commercially, the
 source must move to Copernicus CDS ERA5-Land or Open-Meteo's paid tier first;
@@ -186,6 +195,16 @@ it destroys the panel.
 A two-way within transformation removes fixed regional characteristics and
 shared national shocks. The naive cross-section is shown beside it deliberately,
 because it largely recovers "the South is hot and reports crime differently".
+
+**The naive chart plots `summer_tmax`, the absolute summer mean of daily
+maxima, not `summer_anomaly`.** That is the whole point of showing it: with
+absolute temperature on the x axis the hot southern regions sit on the right
+and the confound is visible on the chart. `summer_anomaly` is each region's
+deviation from its *own* 1981-2010 baseline, so the between-region differences
+have already been taken out of it; a "cross-section" drawn from the anomaly is
+not a cross-section at all and shows the opposite of the intended lesson. The
+two charts also carry separate axis labels, because a point at x = +0.3 on the
+panel chart is a doubly-demeaned residual, not "0.3 C above the normal".
 
 Slope, Pearson r and n are reported. **No p-values, no confidence intervals.**
 With 21 clusters, unclustered standard errors overstate precision, and correct

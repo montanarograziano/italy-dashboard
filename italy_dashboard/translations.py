@@ -175,19 +175,24 @@ EN: dict[str, str] = {
     "climate_crime_title": "Summer heat and violent crime",
     "cc_raw_title": "Naive view: raw cross-section",
     "cc_raw_sub": (
-        "Every region-year, untransformed. This mostly recovers that southern "
-        "regions are hotter and report crime differently — a confound, not a finding."
+        "Every region-year, untransformed: absolute summer temperature against "
+        "offender counts. The hotter southern regions sit on the right, so this "
+        "mostly recovers that the South is warmer and reports crime differently "
+        "— a confound, not a finding."
     ),
     "cc_panel_title": "Panel view: within-region deviation",
     "cc_panel_sub": (
         "Region and year fixed effects removed, so each point is a region's "
         "deviation from its own norm in a year that was unusual nationally."
     ),
-    "cc_x": "Summer max-temperature anomaly (C)",
-    "cc_y": "ln(violent offenders)",
+    "cc_x_raw": "Summer mean daily max (C)",
+    "cc_y_raw": "ln(violent offenders)",
+    "cc_x_panel": "Summer max, region and year effects removed (C)",
+    "cc_y_panel": "ln(violent offenders), region and year effects removed",
     "cc_stat_raw": "Raw",
     "cc_stat_panel": "Panel",
     "cc_stat_n": "Observations",
+    "cc_obs_note": "region-years, shared by both views",
     "cc_caveat": (
         "Association only. This is an ECOLOGICAL comparison: it is region-level "
         "and says nothing about individuals. It is ANNUAL, while the "
@@ -369,25 +374,30 @@ IT: dict[str, str] = {
     "climate_crime_title": "Caldo estivo e criminalità violenta",
     "cc_raw_title": "Vista ingenua: sezione trasversale grezza",
     "cc_raw_sub": (
-        "Ogni regione-anno, senza trasformazioni. Ritrova soprattutto che le "
-        "regioni del Sud sono più calde e denunciano in modo diverso: un "
-        "fattore confondente, non un risultato."
+        "Ogni regione-anno, senza trasformazioni: temperatura estiva assoluta "
+        "contro il numero di autori. Le regioni del Sud, più calde, stanno a "
+        "destra: ritrova soprattutto che il Sud è più caldo e denuncia in modo "
+        "diverso, un fattore confondente, non un risultato."
     ),
     "cc_panel_title": "Vista panel: deviazione entro regione",
     "cc_panel_sub": (
         "Effetti fissi di regione e anno rimossi: ogni punto è lo scostamento "
         "di una regione dalla propria norma in un anno anomalo a livello nazionale."
     ),
-    "cc_x": "Anomalia della massima estiva (C)",
-    "cc_y": "ln(autori di reati violenti)",
+    "cc_x_raw": "Media estiva delle massime giornaliere (C)",
+    "cc_y_raw": "ln(autori di reati violenti)",
+    "cc_x_panel": "Massima estiva, al netto degli effetti di regione e anno (C)",
+    "cc_y_panel": "ln(autori di reati violenti), al netto degli effetti di regione e anno",
     "cc_stat_raw": "Grezzo",
     "cc_stat_panel": "Panel",
     "cc_stat_n": "Osservazioni",
+    "cc_obs_note": "regione-anno, comuni a entrambe le viste",
     "cc_caveat": (
         "Solo associazione. Confronto ECOLOGICO: è a livello regionale e non "
         "dice nulla sugli individui. È ANNUALE, mentre la letteratura su caldo "
-        "e aggressività lavora su scala giornaliera e mensile. È POCO POTENTE, "
-        "limitato dal fatto che ISTAT pubblica gli autori a livello provinciale "
+        "e aggressività lavora su scala giornaliera e mensile. Ha SCARSA "
+        "POTENZA STATISTICA, "
+        "limitata dal fatto che ISTAT pubblica gli autori a livello provinciale "
         "solo dal 2022. L'esito è il conteggio degli autori, non un tasso, "
         "perché i denominatori di popolazione partono dal 2019; gli effetti "
         "fissi di regione assorbono il livello della popolazione ma non la "
