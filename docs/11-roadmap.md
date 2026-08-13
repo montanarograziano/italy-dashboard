@@ -29,3 +29,13 @@ design reference; wiring it through the theme is mechanical.
 
 **Refresh delta reports** — snapshot row counts per dataset per refresh and log
 diffs, making upstream ISTAT revisions visible instead of silent.
+
+**Precipitation:** the Open-Meteo fetcher already exists; adding
+`precipitation_sum` to `DAILY_VARS` and one mart column is most of the work.
+
+**Monthly inflation × temperature:** statistically the strongest available
+cross-phenomenon analysis, because inflation is the one monthly series. Needs
+an ISTAT re-fetch with the food ECOICOP subgroup instead of all-items.
+
+**Month × year anomaly heatmap:** deferred from the climate page because
+Recharts has no heatmap mark. `mart_climate_monthly` already holds the data.

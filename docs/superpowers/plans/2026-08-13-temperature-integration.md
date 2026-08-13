@@ -975,6 +975,7 @@ from __future__ import annotations
 
 import csv
 from datetime import date
+from itertools import pairwise
 from pathlib import Path
 
 import polars as pl
@@ -1015,7 +1016,7 @@ def test_decade_chunks_cover_the_range_without_gaps_or_overlap():
     assert chunks[0] == (date(1950, 1, 1), date(1959, 12, 31))
     assert chunks[1] == (date(1960, 1, 1), date(1969, 12, 31))
     assert chunks[-1] == (date(1970, 1, 1), date(1971, 6, 15))
-    for (_, prev_end), (next_start, _) in zip(chunks, chunks[1:], strict=True):
+    for (_, prev_end), (next_start, _) in pairwise(chunks):
         assert (next_start - prev_end).days == 1
 
 

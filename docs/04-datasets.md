@@ -1,8 +1,10 @@
 # Datasets
 
-All from ISTAT's SDMX API (`esploradati.istat.it/SDMXWS/rest`), free and keyless.
-Coverage below reflects what the API actually returns — often shallower than the
-phenomenon itself (see [Methodology](07-methodology.md#history-depth)).
+Everything except temperature comes from ISTAT's SDMX API
+(`esploradati.istat.it/SDMXWS/rest`), free and keyless. Coverage below reflects
+what the API actually returns, often shallower than the phenomenon itself (see
+[Methodology](07-methodology.md#history-depth)). Temperature comes from a
+different, non-ISTAT source: see below.
 
 ## crime_offenders — the primary dataset
 
@@ -47,6 +49,35 @@ year. Coverage **~2012–2025** after chaining.
 Placeholder for household disposable income per capita by region, needed by the
 income↔crime view. Find the dataflow with `just discover "reddito disponibile"`,
 set `dataflow_id` in the registry, then `just refresh income_regional`.
+
+## weather_daily: temperature (non-ISTAT)
+
+**Source** [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api),
+ERA5-Land reanalysis, 0.1° (≈11 km), **1950 to present**. Free, no API key,
+**non-commercial licence**: if this dashboard ever becomes commercial, switch
+to Copernicus CDS ERA5-Land or Open-Meteo's paid tier.
+
+One point per province capital city (106 capitals, `dbt/seeds/province_capitals.csv`),
+daily `temperature_2m_max/min/mean`. `models=era5_land` is pinned explicitly:
+Open-Meteo's default "best match" switches models across a long series and
+would inject discontinuities indistinguishable from real climate signal.
+
+Fetch with `just refresh-weather`, or `just refresh-weather ITC45` for one city.
+Raw JSON is cached per city per decade under `data/raw/weather/`, so an
+interrupted run resumes. As of this writing the real fetch has not been run in
+any development environment; only synthetic sample data exists (see
+`ingestion/sample_data.py`), so no chart or number driven by this dataset should
+be read as an observed climate result yet.
+
+Feeds `mart_climate_daily`, `mart_climate_monthly`, `mart_climate_annual`,
+`mart_climate_region` and `mart_crime_climate`.
+
+### Why not ISTAT
+
+ISTAT publishes *Temperatura e precipitazione dei comuni capoluogo di provincia*,
+but the machine-readable series for all capitals covers 2006 onwards only; the
+1971-2022 series exists for about 27 regional capitals and is published as PDF
+and Excel, not through the SDMX API. Neither reaches 1950 at province grain.
 
 ## Adding a dataset
 
