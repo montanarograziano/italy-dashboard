@@ -166,6 +166,17 @@ async def test_api_error_body_is_raised_with_its_reason():
             await client.daily_temperatures(41.9, 12.5, date(1950, 1, 1), date(1950, 1, 2))
 
 
+async def test_error_body_on_a_200_response_is_still_raised():
+    """Open-Meteo signals some failures with HTTP 200 and an error body."""
+
+    async def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json={"error": True, "reason": "No data for this location"})
+
+    async with make_client(handler) as client:
+        with pytest.raises(OpenMeteoError, match="No data for this location"):
+            await client.daily_temperatures(41.9, 12.5, date(1950, 1, 1), date(1950, 1, 2))
+
+
 async def test_rate_limit_is_retried_then_succeeds(monkeypatch):
     monkeypatch.setattr(openmeteo, "RETRY_BACKOFF_S", 0.0)
     calls = {"n": 0}
