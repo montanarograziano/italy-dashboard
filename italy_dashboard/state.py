@@ -168,7 +168,10 @@ class CrimeState(AppState):
             self._selections(), top_n=10, year=self.breakdown_year or None
         )
         self.by_region = q.mart_breakdown(
-            q.CRIME_MART, "region", self._selections(), top_n=25,
+            q.CRIME_MART,
+            "region",
+            self._selections(),
+            top_n=25,
             year=self.breakdown_year or None,
         )
 
@@ -350,7 +353,10 @@ class OffendersState(AppState):
         self.series_label_2 = labels[1] if len(labels) > 1 else ""
         self.series_label_3 = labels[2] if len(labels) > 2 else ""
         self.by_crime = q.mart_breakdown(
-            q.OFFENDERS_MART, "crime", self._selections(), top_n=10,
+            q.OFFENDERS_MART,
+            "crime",
+            self._selections(),
+            top_n=10,
             year=self.breakdown_year or None,
         )
         # rates use resident-population denominators, which exist per region

@@ -148,8 +148,7 @@ def _rows_inflation(rng: random.Random) -> list[dict]:
                     "territory_name": "Italy",
                     "category": "39",
                     "category_name": (
-                        "consumer price index for the whole nation (base 2015=100)"
-                        " - monthly data"
+                        "consumer price index for the whole nation (base 2015=100) - monthly data"
                     ),
                     "period": f"{year}-{month:02d}",
                     "value": round(yoy + rng.uniform(-0.3, 0.3), 1),

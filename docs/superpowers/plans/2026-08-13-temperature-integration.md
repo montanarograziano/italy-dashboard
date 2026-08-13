@@ -542,12 +542,27 @@ def make_client(handler) -> OpenMeteoClient:
 
 GEO_MULTI = {
     "results": [
-        {"name": "Roma", "country_code": "US", "latitude": 43.2, "longitude": -75.4,
-         "population": 32000},
-        {"name": "Roma", "country_code": "IT", "latitude": 41.8933, "longitude": 12.4829,
-         "population": 2748109},
-        {"name": "Roma", "country_code": "IT", "latitude": 44.0, "longitude": 11.0,
-         "population": 900},
+        {
+            "name": "Roma",
+            "country_code": "US",
+            "latitude": 43.2,
+            "longitude": -75.4,
+            "population": 32000,
+        },
+        {
+            "name": "Roma",
+            "country_code": "IT",
+            "latitude": 41.8933,
+            "longitude": 12.4829,
+            "population": 2748109,
+        },
+        {
+            "name": "Roma",
+            "country_code": "IT",
+            "latitude": 44.0,
+            "longitude": 11.0,
+            "population": 900,
+        },
     ]
 }
 
@@ -577,10 +592,20 @@ async def test_geocode_picks_the_most_populous_italian_match():
 
 async def test_geocode_raises_when_no_italian_match():
     async def handler(request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(200, json={"results": [
-            {"name": "Nowhere", "country_code": "FR", "latitude": 1.0, "longitude": 2.0,
-             "population": 10}
-        ]})
+        return httpx2.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "name": "Nowhere",
+                        "country_code": "FR",
+                        "latitude": 1.0,
+                        "longitude": 2.0,
+                        "population": 10,
+                    }
+                ]
+            },
+        )
 
     async with make_client(handler) as client:
         with pytest.raises(OpenMeteoError, match="No Italian match"):
@@ -883,9 +908,7 @@ class OpenMeteoClient:
             if values is None:
                 values = daily.get(f"{var}_{MODEL}")
             if values is None:
-                raise OpenMeteoError(
-                    f"Response is missing {var!r}; keys present: {sorted(daily)}"
-                )
+                raise OpenMeteoError(f"Response is missing {var!r}; keys present: {sorted(daily)}")
             out[column] = list(values)
         return out
 
@@ -966,8 +989,15 @@ def write_seed(tmp_path: Path) -> Path:
     with path.open("w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(
-            ["province_code", "province_name", "capital_city",
-             "region_code", "region_name", "lat", "lon"]
+            [
+                "province_code",
+                "province_name",
+                "capital_city",
+                "region_code",
+                "region_name",
+                "lat",
+                "lon",
+            ]
         )
         w.writerow(["ITC45", "Milano", "Milano", "ITC4", "Lombardia", "45.4642", "9.19"])
         w.writerow(["ITE43", "Roma", "Roma", "ITE4", "Lazio", "41.8933", "12.4829"])
@@ -1014,18 +1044,26 @@ def test_payload_to_rows_pairs_dates_with_values():
 
 
 def test_payload_to_rows_rejects_ragged_arrays():
-    payload = {"time": ["1950-01-01", "1950-01-02"], "t_max": [1.0],
-               "t_min": [0.0], "t_mean": [0.5]}
+    payload = {
+        "time": ["1950-01-01", "1950-01-02"],
+        "t_max": [1.0],
+        "t_min": [0.0],
+        "t_mean": [0.5],
+    }
     with pytest.raises(WeatherError, match="length mismatch"):
         weather.payload_to_rows("ITE43", payload)
 
 
 def test_null_rate_counts_days_with_a_missing_mean():
     rows = [
-        {"province_code": "X", "date": date(1950, 1, 1), "t_min": 1.0,
-         "t_mean": 2.0, "t_max": 3.0},
-        {"province_code": "X", "date": date(1950, 1, 2), "t_min": None,
-         "t_mean": None, "t_max": None},
+        {"province_code": "X", "date": date(1950, 1, 1), "t_min": 1.0, "t_mean": 2.0, "t_max": 3.0},
+        {
+            "province_code": "X",
+            "date": date(1950, 1, 2),
+            "t_min": None,
+            "t_mean": None,
+            "t_max": None,
+        },
     ]
     assert weather.null_rate(rows) == 0.5
     assert weather.null_rate([]) == 1.0
@@ -1033,8 +1071,13 @@ def test_null_rate_counts_days_with_a_missing_mean():
 
 def test_write_snapshot_produces_the_expected_schema(tmp_path):
     rows = [
-        {"province_code": "ITE43", "date": date(1950, 1, 1), "t_min": 2.1,
-         "t_mean": 6.5, "t_max": 11.4}
+        {
+            "province_code": "ITE43",
+            "date": date(1950, 1, 1),
+            "t_min": 2.1,
+            "t_mean": 6.5,
+            "t_max": 11.4,
+        }
     ]
     out = weather.write_snapshot(rows, tmp_path)
     assert out == tmp_path / "weather_daily.parquet"
@@ -1047,8 +1090,13 @@ def test_write_snapshot_produces_the_expected_schema(tmp_path):
 
 def test_write_snapshot_is_atomic_and_leaves_no_tmp_file(tmp_path):
     rows = [
-        {"province_code": "ITE43", "date": date(1950, 1, 1), "t_min": 2.1,
-         "t_mean": 6.5, "t_max": 11.4}
+        {
+            "province_code": "ITE43",
+            "date": date(1950, 1, 1),
+            "t_min": 2.1,
+            "t_mean": 6.5,
+            "t_max": 11.4,
+        }
     ]
     weather.write_snapshot(rows, tmp_path)
     assert not list(tmp_path.glob("*.tmp"))
@@ -1063,8 +1111,13 @@ def test_placeholder_snapshot_has_the_same_schema_and_no_rows(tmp_path):
 
 def test_placeholder_never_overwrites_a_real_snapshot(tmp_path):
     rows = [
-        {"province_code": "ITE43", "date": date(1950, 1, 1), "t_min": 2.1,
-         "t_mean": 6.5, "t_max": 11.4}
+        {
+            "province_code": "ITE43",
+            "date": date(1950, 1, 1),
+            "t_min": 2.1,
+            "t_mean": 6.5,
+            "t_max": 11.4,
+        }
     ]
     weather.write_snapshot(rows, tmp_path)
     weather.ensure_weather_placeholder(tmp_path)
@@ -1270,8 +1323,9 @@ async def cmd_refresh(only: str | None = None, data_dir: Path = DATA_DIR) -> int
     bad: list[tuple[str, float]] = []
     async with OpenMeteoClient() as client:
         for i, cap in enumerate(capitals, start=1):
-            logger.info("=== [%d/%d] %s (%s) ===", i, len(capitals), cap.capital_city,
-                        cap.province_code)
+            logger.info(
+                "=== [%d/%d] %s (%s) ===", i, len(capitals), cap.capital_city, cap.province_code
+            )
             try:
                 rows = await _fetch_capital(client, cap, end, raw_dir)
             except OpenMeteoError as exc:
@@ -1285,8 +1339,11 @@ async def cmd_refresh(only: str | None = None, data_dir: Path = DATA_DIR) -> int
                     "cell is probably ocean — nudge lat/lon inland in "
                     "dbt/seeds/province_capitals.csv and rerun "
                     "`just refresh-weather %s`.",
-                    cap.province_code, cap.capital_city, 100 * rate,
-                    100 * MAX_NULL_RATE, cap.province_code,
+                    cap.province_code,
+                    cap.capital_city,
+                    100 * rate,
+                    100 * MAX_NULL_RATE,
+                    cap.province_code,
                 )
             all_rows.extend(r for r in rows if r["t_mean"] is not None)
 
@@ -2500,8 +2557,7 @@ def climate_distribution(city: str) -> list[Row]:
         HAVING ANY_VALUE(tot.n_early) > 0 AND ANY_VALUE(tot.n_late) > 0
         ORDER BY d.bucket
         """,
-        [city, early_lo, early_hi, late_lo, late_hi,
-         early_lo, early_hi, late_lo, late_hi],
+        [city, early_lo, early_hi, late_lo, late_hi, early_lo, early_hi, late_lo, late_hi],
     )
 
 
@@ -2744,7 +2800,7 @@ class ClimateState(AppState):
 In `italy_dashboard/components.py`, add to `NAV_LINKS` after the population entry:
 
 ```python
-    ("nav_climate", "/climate"),
+(("nav_climate", "/climate"),)
 ```
 
 - [ ] **Step 6: Write `italy_dashboard/pages/climate.py`**
@@ -2819,9 +2875,7 @@ def climate_page() -> rx.Component:
                 card(
                     t("stripes_title"),
                     t("stripes_sub"),
-                    bar_chart(
-                        ClimateState.stripes, "anomaly", "period", theme.SERIES_2
-                    ),
+                    bar_chart(ClimateState.stripes, "anomaly", "period", theme.SERIES_2),
                 ),
                 card(
                     t("ranking_title"),
@@ -2858,9 +2912,7 @@ def climate_page() -> rx.Component:
                 spacing="5",
                 width="100%",
             ),
-            rx.callout(
-                t("no_climate"), icon="triangle_alert", color_scheme="orange", width="100%"
-            ),
+            rx.callout(t("no_climate"), icon="triangle_alert", color_scheme="orange", width="100%"),
         ),
     )
 ```
@@ -3038,7 +3090,7 @@ class ClimateCrimeState(AppState):
 In `italy_dashboard/components.py`, add to `NAV_LINKS` after the climate entry:
 
 ```python
-    ("nav_climate_crime", "/climate-crime"),
+(("nav_climate_crime", "/climate-crime"),)
 ```
 
 - [ ] **Step 6: Write `italy_dashboard/pages/climate_crime.py`**
@@ -3099,14 +3151,14 @@ def climate_crime_page() -> rx.Component:
                         label_name=t("region"),
                     ),
                 ),
-                rx.callout(
-                    t("cc_caveat"), icon="info", color_scheme="gray", width="100%"
-                ),
+                rx.callout(t("cc_caveat"), icon="info", color_scheme="gray", width="100%"),
                 spacing="5",
                 width="100%",
             ),
             rx.callout(
-                t("no_climate_crime"), icon="triangle_alert", color_scheme="orange",
+                t("no_climate_crime"),
+                icon="triangle_alert",
+                color_scheme="orange",
                 width="100%",
             ),
         ),

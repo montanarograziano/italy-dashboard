@@ -390,6 +390,4 @@ def test_region_rate_ranking_respects_citizenship(rates_mart):
 
 
 def test_region_rate_ranking_defaults_to_latest_year(rates_mart):
-    assert q.region_rate_ranking(None, q.ALL, q.ALL) == q.region_rate_ranking(
-        "2024", q.ALL, q.ALL
-    )
+    assert q.region_rate_ranking(None, q.ALL, q.ALL) == q.region_rate_ranking("2024", q.ALL, q.ALL)
