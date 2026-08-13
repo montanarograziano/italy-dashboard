@@ -7,6 +7,13 @@
 --
 -- `days_observed` is exposed so a partial first or last year is visible rather
 -- than plotting as a spurious dip.
+--
+-- A baseline requires at least 25 years of data within its 30-year window;
+-- otherwise it (and its anomaly) is NULL. 25 of 30, not 30 of 30: a genuine
+-- climate normal tolerates a few missing years, and demanding every single
+-- year would make the mart brittle against a single upstream gap. Below the
+-- threshold, a handful of years would produce a confident-looking anomaly
+-- that is really just noise dressed up as a 30-year normal.
 
 {{ config(
     materialized='external',
@@ -38,10 +45,18 @@ with annual as (
 clino as (
     select
         province_code,
-        avg(case when cast(year as integer) between 1971 and 2000 then t_mean end)
-            as base_1971_2000,
-        avg(case when cast(year as integer) between 1981 and 2010 then t_mean end)
-            as base_1981_2010
+        case when count(*) filter (
+                 where cast(year as integer) between 1971 and 2000
+             ) >= 25
+             then avg(case when cast(year as integer)
+                      between 1971 and 2000 then t_mean end)
+        end as base_1971_2000,
+        case when count(*) filter (
+                 where cast(year as integer) between 1981 and 2010
+             ) >= 25
+             then avg(case when cast(year as integer)
+                      between 1981 and 2010 then t_mean end)
+        end as base_1981_2010
     from annual
     group by province_code
 )
