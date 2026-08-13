@@ -442,7 +442,7 @@ def test_month_heatmap_has_twelve_month_columns(climate_db):
 def climate_daily_mart(sample_db):
     """Minimal mart_climate_daily.parquet spanning both distribution windows.
 
-    climate_db's synthetic weather series only covers 2006-2024 (see
+    climate_db's synthetic weather series only covers 1981-2024 (see
     ingestion.sample_data.WEATHER_YEARS), which has ZERO overlap with
     EARLY_WINDOW (1951-1980). That makes climate_distribution("Torino")
     legitimately return [] against climate_db: the same short-series

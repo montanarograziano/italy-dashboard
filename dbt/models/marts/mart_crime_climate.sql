@@ -40,11 +40,22 @@ summer_region as (
     group by region_code, year
 ),
 
+-- A baseline requires at least 25 years of data within its 30-year window;
+-- otherwise it (and its anomaly) is NULL, exactly as in mart_climate_annual
+-- and mart_climate_monthly. 25 of 30, not 30 of 30: a genuine climate normal
+-- tolerates a few missing years, and demanding every single year would make
+-- the mart brittle against a single upstream gap. Below the threshold, a
+-- handful of years would produce a confident-looking anomaly that is really
+-- just noise dressed up as a 30-year normal.
 summer_baseline as (
     select
         region_code,
-        avg(case when cast(year as integer) between 1981 and 2010 then summer_tmax end)
-            as base_summer_tmax
+        case when count(*) filter (
+                 where cast(year as integer) between 1981 and 2010
+             ) >= 25
+             then avg(case when cast(year as integer)
+                      between 1981 and 2010 then summer_tmax end)
+        end as base_summer_tmax
     from summer_region
     group by region_code
 ),

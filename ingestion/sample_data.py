@@ -19,10 +19,15 @@ REGIONS: list[tuple[str, str]] = [
     ("ITC1", "Piemonte"),
     ("ITC3", "Liguria"),
     ("ITC4", "Lombardia"),
-    ("ITH3", "Veneto"),
-    ("ITH5", "Emilia-Romagna"),
-    ("ITI1", "Toscana"),
-    ("ITI4", "Lazio"),
+    # NUTS-2006 spellings on purpose: ISTAT's real offenders dataflow and
+    # dbt/seeds/province_capitals.csv both use them (ITD3/ITD5/ITE1/ITE4, not
+    # the NUTS-2021 ITH3/ITH5/ITI1/ITI4). A mismatch here does not error, it
+    # silently drops these four regions from every join keyed on region_code,
+    # the crime-climate panel included.
+    ("ITD3", "Veneto"),
+    ("ITD5", "Emilia-Romagna"),
+    ("ITE1", "Toscana"),
+    ("ITE4", "Lazio"),
     ("ITF1", "Abruzzo"),
     ("ITF3", "Campania"),
     ("ITF4", "Puglia"),
@@ -377,7 +382,7 @@ def _rows_income(rng: random.Random) -> list[dict]:
 # schema so the climate marts build offline.
 #
 # Twenty capitals rather than all 106: generate_all runs in the sample_db
-# fixture on many tests, and 106 cities would add ~735k rows per test.
+# fixture on many tests, and 106 cities would multiply every row count by five.
 # Latitudes are approximate on purpose — the values are FAKE.
 
 SAMPLE_CAPITALS: list[tuple[str, float]] = [
@@ -403,7 +408,14 @@ SAMPLE_CAPITALS: list[tuple[str, float]] = [
     ("ITG27", 39.22),  # Cagliari
 ]
 
-WEATHER_YEARS = list(range(2006, 2025))
+# Starts in 1981, not in the crime years, so the synthetic series covers the
+# whole 1981-2010 climate normal. Every CLINO baseline in the project needs 25
+# of its 30 years before it emits anything; a 2006-2024 series has only five
+# years inside that window, so every anomaly (annual, monthly and the summer
+# anomaly behind the crime panel) would be NULL and the sample data would
+# exercise none of the anomaly code paths. The 1971-2000 normal stays
+# uncovered on purpose: it keeps a live example of the guard returning NULL.
+WEATHER_YEARS = list(range(1981, 2025))
 
 
 def generate_weather_parquet(data_dir: Path, seed: int = 42) -> Path:

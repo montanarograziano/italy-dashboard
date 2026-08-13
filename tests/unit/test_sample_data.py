@@ -78,6 +78,29 @@ def test_generate_all_writes_the_weather_snapshot(tmp_path):
     assert (tmp_path / weather.SNAPSHOT_NAME).exists()
 
 
+def test_sample_regions_use_the_same_codes_as_the_capitals_seed():
+    """The sample crime regions must speak the seed's code vocabulary.
+
+    The seed (and the real ISTAT offenders dataflow) uses NUTS-2006 codes.
+    Sample regions written in NUTS-2021 (ITH3, ITI4, ...) join to nothing:
+    those regions vanish from the crime-climate panel with no error anywhere.
+    """
+    from ingestion.capitals import SEED_PATH
+    from ingestion.sample_data import REGIONS
+
+    seed_regions = set(pl.read_csv(SEED_PATH)["region_code"].to_list())
+    assert {code for code, _ in REGIONS} <= seed_regions
+
+
+def test_sample_weather_covers_the_1981_2010_climate_normal():
+    """Every CLINO baseline needs 25 of its 30 years, so the sample series
+    must span the 1981-2010 window or every anomaly in every mart is NULL."""
+    from ingestion.sample_data import WEATHER_YEARS
+
+    in_window = [y for y in WEATHER_YEARS if 1981 <= y <= 2010]
+    assert len(in_window) >= 25
+
+
 def test_sample_offenders_include_violent_crime_codes(tmp_path):
     from ingestion import sample_data
 
