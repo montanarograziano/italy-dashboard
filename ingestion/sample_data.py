@@ -170,6 +170,7 @@ def generate_all(data_dir: Path, seed: int = 42) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     generate_raw_crime_csv(data_dir / "raw", seed=seed)
     generate_raw_offenders_csv(data_dir / "raw", seed=seed)
+    generate_weather_parquet(data_dir, seed=seed)
     for name, rows in datasets.items():
         df = pl.DataFrame(rows).with_columns(pl.col("value").cast(pl.Float64))
         out = data_dir / f"{name}.parquet"
@@ -275,6 +276,8 @@ OFFENDER_CRIMES = [
     ("FRAUD", "fraud and cyber fraud"),
     ("INJURIES", "voluntary injuries"),
     ("DRUGS", "drug-related crimes"),
+    ("INTENHOM", "intentional homicides"),
+    ("BLOWS", "blows"),
 ]
 
 OFFENDER_AGES = [
@@ -307,12 +310,14 @@ def generate_raw_offenders_csv(raw_dir: Path, seed: int = 42) -> Path:
         ("ITC41", "Varese"),
     ]
     base = {
-        "TOT": 10500,  # grand total = sum of the five crime types
+        "TOT": 10500,  # grand total = sum of the five original crime types
         "THEFT": 5000,
         "ROBBERY": 900,
         "FRAUD": 1600,
         "INJURIES": 1300,
         "DRUGS": 1700,
+        "INTENHOM": 45,
+        "BLOWS": 800,
     }
 
     lines = [RAW_OFFENDERS_HEADER]
@@ -365,3 +370,85 @@ def _rows_income(rng: random.Random) -> list[dict]:
                 }
             )
     return rows
+
+
+# ------------------------------------------------------------------
+# Synthetic daily temperatures, mirroring the real weather_daily.parquet
+# schema so the climate marts build offline.
+#
+# Twenty capitals rather than all 106: generate_all runs in the sample_db
+# fixture on many tests, and 106 cities would add ~735k rows per test.
+# Latitudes are approximate on purpose — the values are FAKE.
+
+SAMPLE_CAPITALS: list[tuple[str, float]] = [
+    ("ITC11", 45.07),  # Torino
+    ("ITC16", 44.39),  # Cuneo
+    ("ITC33", 44.41),  # Genova
+    ("ITC34", 44.11),  # La Spezia
+    ("ITC45", 45.46),  # Milano
+    ("ITC47", 45.54),  # Brescia
+    ("ITD35", 45.44),  # Venezia
+    ("ITD55", 44.49),  # Bologna
+    ("ITE14", 43.77),  # Firenze
+    ("ITE43", 41.89),  # Roma
+    ("ITF11", 42.35),  # L'Aquila
+    ("ITF13", 42.46),  # Pescara
+    ("ITF33", 40.85),  # Napoli
+    ("ITF35", 40.68),  # Salerno
+    ("ITF42", 41.12),  # Bari
+    ("ITF45", 40.35),  # Lecce
+    ("ITG12", 38.12),  # Palermo
+    ("ITG17", 37.51),  # Catania
+    ("ITG25", 40.73),  # Sassari
+    ("ITG27", 39.22),  # Cagliari
+]
+
+WEATHER_YEARS = list(range(2006, 2025))
+
+
+def generate_weather_parquet(data_dir: Path, seed: int = 42) -> Path:
+    """Daily min/mean/max for 20 capitals: latitude gradient + seasonal cycle
+    + a warming trend, so the climate marts have something to aggregate."""
+    import math
+    from datetime import date, timedelta
+
+    from ingestion.weather import SNAPSHOT_NAME, WEATHER_COLUMNS
+
+    rng = random.Random(seed)
+    rows: list[dict] = []
+    for code, lat in SAMPLE_CAPITALS:
+        # Warmer towards the south; roughly 0.7 C per degree of latitude.
+        annual_mean = 26.0 - 0.7 * (lat - 36.0)
+        for year in WEATHER_YEARS:
+            warming = 0.035 * (year - WEATHER_YEARS[0])
+            day = date(year, 1, 1)
+            while day.year == year:
+                doy = day.timetuple().tm_yday
+                seasonal = 9.0 * math.sin(2 * math.pi * (doy - 105) / 365.25)
+                mean = annual_mean + warming + seasonal + rng.uniform(-2.5, 2.5)
+                spread = rng.uniform(4.0, 9.0)
+                rows.append(
+                    {
+                        "province_code": code,
+                        "date": day,
+                        "t_min": round(mean - spread / 2, 1),
+                        "t_mean": round(mean, 1),
+                        "t_max": round(mean + spread / 2, 1),
+                    }
+                )
+                day += timedelta(days=1)
+
+    df = pl.DataFrame(
+        rows,
+        schema={
+            "province_code": pl.Utf8,
+            "date": pl.Date,
+            "t_min": pl.Float64,
+            "t_mean": pl.Float64,
+            "t_max": pl.Float64,
+        },
+    ).select(WEATHER_COLUMNS)
+    out = data_dir / SNAPSHOT_NAME
+    df.write_parquet(out)
+    logger.info("[sample] weather: %d rows -> %s", df.height, out.name)
+    return out

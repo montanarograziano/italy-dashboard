@@ -8,6 +8,7 @@ import polars as pl
 
 from ingestion.fetch import NORMALIZED_COLUMNS
 from ingestion.sample_data import generate_all
+from ingestion.weather import SNAPSHOT_NAME
 
 EXPECTED_DATASETS = {
     "crime_reported",
@@ -21,9 +22,13 @@ EXPECTED_DATASETS = {
 
 def test_generates_all_datasets_with_normalized_schema(tmp_path: Path):
     generate_all(tmp_path, seed=7)
-    files = {p.stem for p in tmp_path.glob("*.parquet")}
+    # weather_daily.parquet is generated alongside the six normalized
+    # datasets but has its own (deliberately different) schema — excluded
+    # here and covered separately by the weather-specific tests below.
+    parquet_files = [p for p in tmp_path.glob("*.parquet") if p.name != SNAPSHOT_NAME]
+    files = {p.stem for p in parquet_files}
     assert files == EXPECTED_DATASETS
-    for p in tmp_path.glob("*.parquet"):
+    for p in parquet_files:
         df = pl.read_parquet(p)
         assert df.columns == NORMALIZED_COLUMNS, p.name
         assert df.height > 0, p.name
@@ -44,3 +49,39 @@ def test_counts_are_non_negative(tmp_path: Path):
     for name in ("crime_reported", "population_resident", "population_foreign"):
         df = pl.read_parquet(tmp_path / f"{name}.parquet")
         assert (df["value"] >= 0).all(), name
+
+
+def test_sample_weather_covers_20_capitals_with_a_north_south_gradient(tmp_path):
+    from ingestion import sample_data, weather
+
+    out = sample_data.generate_weather_parquet(tmp_path, seed=99)
+    df = pl.read_parquet(out)
+
+    assert out.name == weather.SNAPSHOT_NAME
+    assert df.columns == weather.WEATHER_COLUMNS
+    assert df["province_code"].n_unique() == 20
+    assert df["t_mean"].null_count() == 0
+    # min <= mean <= max must hold on every day, or the marts are meaningless
+    assert (df["t_min"] <= df["t_mean"]).all()
+    assert (df["t_mean"] <= df["t_max"]).all()
+
+    # Palermo must be warmer on average than Torino.
+    means = df.group_by("province_code").agg(pl.col("t_mean").mean().alias("m"))
+    by_code = dict(zip(means["province_code"], means["m"], strict=True))
+    assert by_code["ITG12"] > by_code["ITC11"]
+
+
+def test_generate_all_writes_the_weather_snapshot(tmp_path):
+    from ingestion import sample_data, weather
+
+    sample_data.generate_all(tmp_path, seed=99)
+    assert (tmp_path / weather.SNAPSHOT_NAME).exists()
+
+
+def test_sample_offenders_include_violent_crime_codes(tmp_path):
+    from ingestion import sample_data
+
+    out = sample_data.generate_raw_offenders_csv(tmp_path, seed=99)
+    text = out.read_text()
+    assert "INTENHOM: intentional homicides" in text
+    assert "BLOWS: blows" in text
