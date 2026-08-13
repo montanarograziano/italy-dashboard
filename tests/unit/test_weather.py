@@ -11,6 +11,7 @@ import polars as pl
 import pytest
 
 from ingestion import weather
+from ingestion.openmeteo import OpenMeteoClient, OpenMeteoError
 from ingestion.weather import Capital, WeatherError
 
 
@@ -299,3 +300,114 @@ async def test_cmd_refresh_single_city_without_existing_snapshot(tmp_path, monke
     assert rc == 0
     df = pl.read_parquet(tmp_path / weather.SNAPSHOT_NAME)
     assert set(df["province_code"].to_list()) == {"ITC45"}
+
+
+# --------------------------------------------------------------------------
+# The raw cache: keyed by coordinate, and safe to resume from.
+# --------------------------------------------------------------------------
+
+
+class RecordingClient(OpenMeteoClient):
+    """Fake client recording every chunk it is asked to download.
+
+    Subclasses the real client (and never opens a connection) so it is a
+    genuine stand-in wherever an OpenMeteoClient is expected. Returns the
+    latitude as the temperature, so a value in the output identifies which
+    coordinate produced it.
+    """
+
+    def __init__(self, fail_after: int | None = None):
+        super().__init__()
+        self.calls: list[tuple[float, float, int]] = []
+        self._fail_after = fail_after
+
+    async def __aenter__(self) -> RecordingClient:
+        return self
+
+    async def __aexit__(self, *exc_info) -> None:
+        return None
+
+    async def daily_temperatures(
+        self, lat: float, lon: float, start: date, end: date
+    ) -> dict[str, list]:
+        if self._fail_after is not None and len(self.calls) >= self._fail_after:
+            raise OpenMeteoError("HTTP 429: Daily API request limit exceeded")
+        self.calls.append((lat, lon, start.year))
+        return clean_payload([f"{start.year}-01-01"], t_mean=lat)
+
+
+def test_cache_path_is_keyed_by_coordinates(tmp_path):
+    """Two coordinates for the same province must not share a cache entry."""
+    here = weather._cache_path(tmp_path, "ITC45", 45.4642, 9.19, date(1950, 1, 1))
+    moved = weather._cache_path(tmp_path, "ITC45", 45.5000, 9.19, date(1950, 1, 1))
+    assert here != moved
+    assert here.name == "ITC45_45.4642_9.1900_1950.json"
+
+
+async def test_moving_a_city_refetches_instead_of_replaying_the_old_point(tmp_path, monkeypatch):
+    """The null gate tells operators to nudge a city inland and refetch it.
+
+    If the cache ignored coordinates, that refetch would replay the OLD point's
+    decades and download only the current one at the NEW point, splicing two
+    locations into one series and faking a step change in the trend.
+    """
+    monkeypatch.setattr(weather, "REQUEST_DELAY_S", 0)
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    end = date(1965, 6, 30)  # two decade chunks: 1950s, plus a clipped 1960s
+    original = Capital("ITC45", "Milano", 45.4642, 9.19)
+    moved = Capital("ITC45", "Milano", 45.5000, 9.19)
+
+    first = RecordingClient()
+    await weather._fetch_capital(first, original, end, raw_dir)
+
+    after_move = RecordingClient()
+    rows = await weather._fetch_capital(after_move, moved, end, raw_dir)
+
+    # Every decade came from the new coordinate: no cache hit on the old one.
+    assert len(after_move.calls) == len(first.calls) == 2
+    assert {r["t_mean"] for r in rows} == {45.5}
+
+    # And the new coordinate's own cache IS reused on a re-run: only the
+    # current (still-growing) decade is fetched again.
+    resumed = RecordingClient()
+    await weather._fetch_capital(resumed, moved, end, raw_dir)
+    assert [c[2] for c in resumed.calls] == [1960]
+
+
+async def test_an_aborted_run_keeps_its_cache_and_resumes(tmp_path, monkeypatch):
+    """A rate limit mid-backfill must cost nothing but the current chunk.
+
+    A full backfill exceeds the free tier's daily quota, so stopping partway is
+    the normal path. Discarding the decades already downloaded would make a
+    multi-day job impossible.
+    """
+    seed = write_seed(tmp_path)
+    real_load_capitals = weather.load_capitals
+    monkeypatch.setattr(weather, "load_capitals", lambda: real_load_capitals(seed))
+    monkeypatch.setattr(weather, "REQUEST_DELAY_S", 0)
+
+    aborted = RecordingClient(fail_after=3)
+    monkeypatch.setattr(weather, "OpenMeteoClient", lambda: aborted)
+    rc = await weather.cmd_refresh(None, data_dir=tmp_path)
+
+    assert rc == 1
+    # Nothing was published, but the three downloaded decades are on disk.
+    assert not (tmp_path / weather.SNAPSHOT_NAME).exists()
+    cached = sorted(p.name for p in (tmp_path / "raw" / "weather").glob("*.json"))
+    assert len(cached) == 3
+    assert not list((tmp_path / "raw" / "weather").glob("*.tmp"))
+
+    resumed = RecordingClient()
+    monkeypatch.setattr(weather, "OpenMeteoClient", lambda: resumed)
+    rc = await weather.cmd_refresh(None, data_dir=tmp_path)
+
+    assert rc == 0
+    # The cached decades were not downloaded a second time.
+    milano_decades = [year for lat, _, year in resumed.calls if lat == 45.4642]
+    assert [c[2] for c in aborted.calls] == [1950, 1960, 1970]
+    assert 1950 not in milano_decades and 1960 not in milano_decades
+    assert set(pl.read_parquet(tmp_path / weather.SNAPSHOT_NAME)["province_code"]) == {
+        "ITC45",
+        "ITE43",
+    }

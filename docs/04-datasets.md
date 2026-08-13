@@ -63,11 +63,35 @@ Open-Meteo's default "best match" switches models across a long series and
 would inject discontinuities indistinguishable from real climate signal.
 
 Fetch with `just refresh-weather`, or `just refresh-weather ITC45` for one city.
-Raw JSON is cached per city per decade under `data/raw/weather/`, so an
-interrupted run resumes. As of this writing the real fetch has not been run in
-any development environment; only synthetic sample data exists (see
-`ingestion/sample_data.py`), so no chart or number driven by this dataset should
-be read as an observed climate result yet.
+As of this writing the real fetch has not been run in any development
+environment; only synthetic sample data exists (see `ingestion/sample_data.py`),
+so no chart or number driven by this dataset should be read as an observed
+climate result yet.
+
+### A full backfill takes several days, on purpose
+
+The first backfill is **106 cities × 8 decade chunks = 848 requests**, each one
+asking for roughly 3,650 days × 3 daily variables. Open-Meteo's free tier
+allows about **10,000 weighted calls per day**, and it weights a call by how
+much data it returns, so those 848 requests are worth far more than 848 against
+that budget. **One run will not finish it.** The expected workflow is:
+
+1. Run `just refresh-weather`.
+2. It stops with `HTTP 429` and logs how many cities it got through.
+3. Run exactly the same command the next day. Repeat until it completes.
+
+This is safe because **raw JSON is cached per city, per coordinate, per decade**
+under `data/raw/weather/`, written the moment each chunk arrives. A resumed run
+re-reads those files and downloads only the chunks that are still missing, so
+no day's work is repeated and no request is spent twice. Nothing is written to
+`data/weather_daily.parquet` until every city is complete, so a half-finished
+backfill cannot reach the marts.
+
+The coordinate is part of the cache key deliberately. When the null gate tells
+you to nudge a city inland and refetch it, the cache must not replay the old
+coordinate's decades next to the new coordinate's: that would splice two
+locations into one series and fake a step change in the trend. Moving a city
+simply misses the cache and refetches it whole.
 
 Feeds `mart_climate_daily`, `mart_climate_monthly`, `mart_climate_annual`,
 `mart_climate_region` and `mart_crime_climate`.

@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date
+from datetime import UTC, date, datetime
+from email.utils import parsedate_to_datetime
 
 import httpx2
 
@@ -39,6 +40,16 @@ VAR_TO_COLUMN = {
 DEFAULT_TIMEOUT = httpx2.Timeout(180.0, connect=30.0, read=120.0)
 MAX_RETRIES = 3
 RETRY_BACKOFF_S = 3.0
+# A rate limit is not a transient blip: Open-Meteo's free quotas are per minute,
+# per hour and per day, so the shortest window that can possibly have reopened
+# is a minute. Retrying a 429 after 3s then 6s is guaranteed to hit the same
+# closed door and burn the attempt budget for nothing.
+RATE_LIMIT_BACKOFF_S = 60.0
+# Longest we will sit blocked on a Retry-After. Beyond this the hourly or daily
+# quota is gone, and the right move is to stop and resume later: every decade
+# chunk already fetched is on disk, so re-running the same command costs
+# nothing but the chunks that are actually missing.
+MAX_RETRY_WAIT_S = 300.0
 # Polite spacing between requests; the free tier is generous but not unlimited.
 REQUEST_DELAY_S = 0.4
 
@@ -83,12 +94,32 @@ class OpenMeteoClient:
         carrying {"error": true, "reason": ...}. Both are surfaced as
         OpenMeteoError with the reason text, because a silently-empty result
         would look like "this city has no data" rather than "the query is wrong".
+
+        Rate limits (429) are backed off differently from server errors: at
+        least RATE_LIMIT_BACKOFF_S, or whatever Retry-After asks for. A wait
+        longer than MAX_RETRY_WAIT_S ends the run immediately instead, with the
+        server's own reason attached, since the caller's raw cache makes
+        resuming later cheap.
         """
         last_error: Exception | None = None
         for attempt in range(1, MAX_RETRIES + 1):
+            retry_after: float | None = None
+            rate_limited = False
             try:
                 resp = await self.client.get(url, params=params)
-                if resp.status_code == 429 or resp.status_code >= 500:
+                if resp.status_code == 429:
+                    # Keep the body's reason: it says WHICH quota was hit
+                    # (minutely, hourly, daily), which is what decides between
+                    # waiting a minute and resuming tomorrow.
+                    rate_limited = True
+                    retry_after = _retry_after_seconds(resp)
+                    last_error = OpenMeteoError(f"HTTP 429 from {url}: {_reason(resp)}")
+                    if retry_after is not None and retry_after > MAX_RETRY_WAIT_S:
+                        raise OpenMeteoError(
+                            f"Rate limited for {retry_after:.0f}s by {url}: {_reason(resp)}. "
+                            "Stopping; re-run the same command to resume from the cache."
+                        )
+                elif resp.status_code >= 500:
                     last_error = OpenMeteoError(f"HTTP {resp.status_code} from {url}")
                 elif resp.status_code >= 400:
                     raise OpenMeteoError(f"HTTP {resp.status_code} from {url}: {_reason(resp)}")
@@ -102,7 +133,10 @@ class OpenMeteoClient:
             except (httpx2.TransportError, httpx2.TimeoutException) as exc:
                 last_error = exc
             if attempt < MAX_RETRIES:
-                wait = RETRY_BACKOFF_S * attempt
+                if rate_limited:
+                    wait = retry_after if retry_after is not None else RATE_LIMIT_BACKOFF_S
+                else:
+                    wait = RETRY_BACKOFF_S * attempt
                 logger.warning(
                     "Attempt %d/%d failed for %s (%s); retrying in %.1fs",
                     attempt,
@@ -112,7 +146,9 @@ class OpenMeteoClient:
                     wait,
                 )
                 await asyncio.sleep(wait)
-        raise OpenMeteoError(f"Failed after {MAX_RETRIES} attempts: {url}") from last_error
+        raise OpenMeteoError(
+            f"Failed after {MAX_RETRIES} attempts: {url} ({last_error})"
+        ) from last_error
 
     async def geocode_italian_city(self, city: str) -> tuple[float, float]:
         """Coordinates of an Italian city, preferring the most populous match.
@@ -167,6 +203,29 @@ class OpenMeteoClient:
                 raise OpenMeteoError(f"Response is missing {var!r}; keys present: {sorted(daily)}")
             out[column] = list(values)
         return out
+
+
+def _retry_after_seconds(resp: httpx2.Response) -> float | None:
+    """Retry-After as seconds, accepting both forms the RFC allows.
+
+    Returns None when the header is absent or unparseable, in which case the
+    caller falls back to RATE_LIMIT_BACKOFF_S. A header in the past clamps to
+    zero rather than going negative.
+    """
+    raw = resp.headers.get("Retry-After")
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        pass
+    try:
+        when = parsedate_to_datetime(raw)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return max(0.0, (when - datetime.now(UTC)).total_seconds())
 
 
 def _reason(resp: httpx2.Response) -> str:

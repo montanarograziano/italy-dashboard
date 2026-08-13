@@ -4,8 +4,16 @@ Usage:
     python -m ingestion.weather refresh          # every province capital
     python -m ingestion.weather refresh ITC45    # one province (after a coord fix)
 
-Raw JSON is cached under data/raw/weather/, so an interrupted run resumes
-instead of re-downloading 76 years for every city.
+Raw JSON is cached per city, per COORDINATE, per decade under
+data/raw/weather/, so an interrupted run resumes instead of re-downloading 76
+years for every city.
+
+A full backfill is 106 cities x 8 decade chunks = 848 requests, each covering
+about 3,650 days x 3 variables. Open-Meteo weights a call by how much data it
+returns, so those 848 requests are worth far more than 848 against the free
+tier's daily budget and a first backfill spans several days. That is expected:
+run the command, let it stop on the rate limit, run it again the next day. See
+docs/04-datasets.md.
 """
 
 from __future__ import annotations
@@ -148,17 +156,34 @@ def ensure_weather_placeholder(data_dir: Path = DATA_DIR) -> Path:
     return out
 
 
-def _cache_path(raw_dir: Path, province_code: str, start: date) -> Path:
-    return raw_dir / f"{province_code}_{start.year}.json"
+def _cache_path(raw_dir: Path, province_code: str, lat: float, lon: float, start: date) -> Path:
+    """Cache filename for one city-decade, KEYED BY COORDINATE.
+
+    The coordinates are part of the key because the null gate tells the
+    operator to nudge a city's lat/lon inland and refetch that city. Keyed on
+    the province code alone, that refetch would replay the OLD coordinate's
+    cached decades and download only the current one at the NEW coordinate,
+    splicing two locations into a single series: a step change in exactly the
+    trend this pipeline exists to measure, invisible in every chart.
+
+    Same 4-decimal rounding the request itself uses, so a cache hit means the
+    identical query was made.
+    """
+    return raw_dir / f"{province_code}_{lat:.4f}_{lon:.4f}_{start.year}.json"
 
 
 async def _fetch_capital(
     client: OpenMeteoClient, cap: Capital, end: date, raw_dir: Path
 ) -> list[dict]:
-    """All decades for one city, using the raw cache where it already exists."""
+    """All decades for one city, using the raw cache where it already exists.
+
+    Each chunk is written to the cache the moment it arrives, so an aborted run
+    (rate limit, Ctrl-C, crash) keeps every decade it already paid for and
+    re-running the same command re-fetches only what is missing.
+    """
     rows: list[dict] = []
     for start, chunk_end in decade_chunks(START_DATE, end):
-        cache = _cache_path(raw_dir, cap.province_code, start)
+        cache = _cache_path(raw_dir, cap.province_code, cap.lat, cap.lon, start)
         # The current decade is still growing, so its cache is always stale.
         is_current_decade = chunk_end == end
         if cache.exists() and not is_current_decade:
@@ -195,7 +220,20 @@ async def cmd_refresh(only: str | None = None, data_dir: Path = DATA_DIR) -> int
             try:
                 rows = await _fetch_capital(client, cap, end, raw_dir)
             except OpenMeteoError as exc:
+                # Nothing is lost: every decade chunk fetched so far, for this
+                # city and every city before it, is already on disk under
+                # raw_dir. A full backfill exceeds the free tier's daily quota,
+                # so stopping here and resuming later is the NORMAL path, not
+                # an exceptional one.
                 logger.error("[%s] fetch failed: %s", cap.province_code, exc)
+                logger.error(
+                    "Stopping after %d/%d cities. Progress is cached in %s: re-run the "
+                    "same command (tomorrow, if this was the daily quota) and it will "
+                    "download only the chunks that are still missing.",
+                    i - 1,
+                    len(capitals),
+                    raw_dir,
+                )
                 return 1
             rate = null_rate(rows)
             if rate > MAX_NULL_RATE:
