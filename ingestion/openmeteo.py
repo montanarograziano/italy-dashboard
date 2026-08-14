@@ -134,7 +134,15 @@ class OpenMeteoClient:
                 last_error = exc
             if attempt < MAX_RETRIES:
                 if rate_limited:
-                    wait = retry_after if retry_after is not None else RATE_LIMIT_BACKOFF_S
+                    # Servers can send Retry-After: 0, a small value, or a date already in
+                    # the past. Never retry a rate limit faster than the limit window, or
+                    # all three attempts burn instantly and the run dies on a limit that
+                    # would have cleared.
+                    wait = (
+                        max(retry_after, RATE_LIMIT_BACKOFF_S)
+                        if retry_after is not None
+                        else RATE_LIMIT_BACKOFF_S
+                    )
                 else:
                     wait = RETRY_BACKOFF_S * attempt
                 logger.warning(

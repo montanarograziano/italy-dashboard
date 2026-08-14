@@ -254,6 +254,64 @@ async def test_retry_after_header_is_honoured(recorded_sleeps):
     assert out["t_mean"] == [6.5, 7.2]
 
 
+async def test_retry_after_zero_is_floored_to_the_rate_limit_backoff(recorded_sleeps):
+    """Retry-After: 0 must not be taken literally: it would burn all retries
+    instantly against a quota window measured in minutes."""
+    calls = {"n": 0}
+
+    async def handler(request: httpx2.Request) -> httpx2.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx2.Response(429, text="slow down", headers={"Retry-After": "0"})
+        return httpx2.Response(200, json=ARCHIVE_OK)
+
+    async with make_client(handler) as client:
+        out = await client.daily_temperatures(41.9, 12.5, date(1950, 1, 1), date(1950, 1, 2))
+
+    assert recorded_sleeps == [openmeteo.RATE_LIMIT_BACKOFF_S]
+    assert out["t_mean"] == [6.5, 7.2]
+
+
+async def test_retry_after_past_http_date_is_floored_to_the_rate_limit_backoff(recorded_sleeps):
+    """A Retry-After HTTP-date already in the past clamps to 0.0s upstream in
+    _retry_after_seconds; that 0.0 must still be floored here, not honoured."""
+    calls = {"n": 0}
+
+    async def handler(request: httpx2.Request) -> httpx2.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx2.Response(
+                429,
+                text="slow down",
+                headers={"Retry-After": "Sun, 06 Nov 1994 08:49:37 GMT"},
+            )
+        return httpx2.Response(200, json=ARCHIVE_OK)
+
+    async with make_client(handler) as client:
+        out = await client.daily_temperatures(41.9, 12.5, date(1950, 1, 1), date(1950, 1, 2))
+
+    assert recorded_sleeps == [openmeteo.RATE_LIMIT_BACKOFF_S]
+    assert out["t_mean"] == [6.5, 7.2]
+
+
+async def test_retry_after_above_the_floor_is_honoured_as_is(recorded_sleeps):
+    """A Retry-After between the floor and the ceiling is a real, larger wait
+    from the server and must not be flattened down to the floor."""
+    calls = {"n": 0}
+
+    async def handler(request: httpx2.Request) -> httpx2.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx2.Response(429, text="slow down", headers={"Retry-After": "90"})
+        return httpx2.Response(200, json=ARCHIVE_OK)
+
+    async with make_client(handler) as client:
+        out = await client.daily_temperatures(41.9, 12.5, date(1950, 1, 1), date(1950, 1, 2))
+
+    assert recorded_sleeps == [90.0]
+    assert out["t_mean"] == [6.5, 7.2]
+
+
 async def test_rate_limit_reason_is_preserved_in_the_error(recorded_sleeps):
     """A daily limit and a minutely limit call for different operator
     responses, so the body's reason must survive into the message."""
