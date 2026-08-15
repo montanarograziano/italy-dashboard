@@ -24,9 +24,6 @@ GeoJSON); the province-level data is already in `mart_offenders`.
 **Italian data labels** — re-fetch with Italian `Accept-Language` so crime and
 region names localize with the UI.
 
-**Dark mode** — the palette's dark-mode steps are already specified in the
-design reference; wiring it through the theme is mechanical.
-
 **Refresh delta reports** — snapshot row counts per dataset per refresh and log
 diffs, making upstream ISTAT revisions visible instead of silent.
 
@@ -38,4 +35,7 @@ cross-phenomenon analysis, because inflation is the one monthly series. Needs
 an ISTAT re-fetch with the food ECOICOP subgroup instead of all-items.
 
 **Month × year anomaly heatmap:** deferred from the climate page because
-Recharts has no heatmap mark. `mart_climate_monthly` already holds the data.
+Recharts has no heatmap mark at all, in any version currently in use; this is
+a library gap, not a styling one, so it needs a different charting library
+rather than more work inside Recharts. `mart_climate_monthly` already holds
+the data.
