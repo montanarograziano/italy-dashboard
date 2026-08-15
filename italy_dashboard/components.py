@@ -201,6 +201,51 @@ def line_chart(
     )
 
 
+def area_compare_chart(
+    data: ChartData,
+    series: list[tuple[str, str | rx.Var, str]],  # (data_key, label, color)
+    height: int = 300,
+) -> rx.Component:
+    """Two or more overlapping distributions as translucent areas.
+
+    Areas beat lines for comparing distributions: the eye reads the shift in
+    mass, not two thin squiggles. Fills stay translucent so the overlap region
+    is visible rather than one series hiding another, and each area keeps a 2px
+    stroke so its edge is legible where the fills coincide.
+
+    Opacity is set via `custom_attrs={"fillOpacity": ...}`, not a `fill_opacity=`
+    kwarg: `Area` (reflex_components_recharts.cartesian.Area) has no such field,
+    so an unrecognized `fill_opacity` kwarg is silently swept into Reflex's
+    generic style fallback (`Recharts._get_style` renders it as
+    `wrapperStyle={"fillOpacity": ...}`), a prop the real recharts `<Area>`
+    does not read. That version renders, and even reads back a "0.28" in the
+    output, while shipping fully opaque areas in the browser.
+    """
+    areas = [
+        rx.recharts.area(
+            data_key=key,
+            name=label,
+            stroke=color,
+            stroke_width=2,
+            fill=color,
+            custom_attrs={"fillOpacity": 0.28},
+            type_="monotone",
+            is_animation_active=False,
+        )
+        for key, label, color in series
+    ]
+    children = [*areas, _x_axis(), _y_axis(), _grid(), rx.recharts.graphing_tooltip()]
+    if len(series) >= 2:
+        children.append(rx.recharts.legend())
+    return rx.recharts.area_chart(
+        *children,
+        data=data,
+        width="100%",
+        height=height,
+        margin={"top": 8, "right": 8, "bottom": 4, "left": 8},
+    )
+
+
 def bar_chart(
     data: ChartData,
     data_key: str,

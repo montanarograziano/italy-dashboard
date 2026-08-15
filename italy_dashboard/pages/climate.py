@@ -4,6 +4,7 @@ import reflex as rx
 
 from italy_dashboard import theme
 from italy_dashboard.components import (
+    area_compare_chart,
     card,
     data_table,
     h_bar_chart,
@@ -95,7 +96,7 @@ def climate_page() -> rx.Component:
                 card(
                     t("distribution_title"),
                     t("distribution_sub"),
-                    line_chart(
+                    area_compare_chart(
                         ClimateState.distribution,
                         [
                             ("early", t("dist_early"), theme.SERIES_1),

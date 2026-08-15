@@ -103,3 +103,49 @@ def test_climate_crime_panel_scatter_has_zero_lines_but_raw_scatter_does_not():
 
     rendered = str(climate_crime_page().render())
     assert rendered.count("RechartsReferenceLine") == 2
+
+
+# ------------------------------------------------ area_compare_chart / composed_bar_line_chart
+#
+# A generic row fixture shared by both new chart helpers: "period" for the
+# default x-axis, "value" as a plain count (the composed chart's bar), and
+# "early"/"late" as two comparable series (the area chart's pair, and doubling
+# as the composed chart's line since both must share ONE y-axis).
+
+ROWS = [
+    {"period": "1951", "value": 3, "early": 12.1, "late": 13.4},
+    {"period": "1990", "value": 5, "early": 12.6, "late": 13.9},
+    {"period": "2025", "value": 8, "early": 13.0, "late": 14.2},
+]
+
+
+def test_area_compare_chart_builds_and_has_a_legend():
+    comp = c.area_compare_chart(
+        ROWS,
+        [("early", "1951-1980", theme.SERIES_1), ("late", "1996-2025", theme.SERIES_2)],
+    )
+    rendered = str(comp.render())
+    assert rendered
+    assert "Legend" in rendered
+
+
+def test_area_compare_chart_fills_stay_translucent_not_opaque():
+    """The legend test above only guards "a second series is present"; it says
+    nothing about the property the helper actually exists for. An opaque fill
+    on either area would hide the overlap region entirely while still
+    rendering fine and still showing a legend, so this pins `fillOpacity`
+    directly for BOTH areas.
+
+    Asserts the literal `fillOpacity:0.28` prop form, not `fill_opacity=`: the
+    `Area` component has no `fill_opacity` field, so that kwarg is silently
+    swept into Reflex's generic style fallback and rendered as
+    `wrapperStyle={"fillOpacity": ...}` instead, a prop the real recharts
+    `<Area>` does not read. `custom_attrs={"fillOpacity": ...}` is the form
+    that actually reaches the component as a real prop.
+    """
+    comp = c.area_compare_chart(
+        ROWS,
+        [("early", "1951-1980", theme.SERIES_1), ("late", "1996-2025", theme.SERIES_2)],
+    )
+    rendered = str(comp.render())
+    assert rendered.count("fillOpacity:0.28") == 2
