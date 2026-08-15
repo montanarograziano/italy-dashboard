@@ -151,7 +151,45 @@ def region_select(value: rx.Var | str, on_change: Any) -> rx.Component:
 
 
 def _grid() -> rx.Component:
-    return rx.recharts.cartesian_grid(stroke=theme.GRIDLINE, vertical=False, stroke_width=1)
+    # `CartesianGrid` has no `stroke_width` field (verified empirically via
+    # `"stroke_width" in cartesian.CartesianGrid.get_fields()` -> False), so a
+    # `stroke_width=` kwarg is silently swept into Reflex's generic
+    # `wrapperStyle` fallback, a prop the real recharts `<CartesianGrid>` never
+    # reads. It happened to be harmless because SVG's own default stroke width
+    # is also 1, but it is inert: `custom_attrs={"strokeWidth": ...}` is the
+    # form that actually reaches the component.
+    return rx.recharts.cartesian_grid(
+        stroke=theme.GRIDLINE, vertical=False, custom_attrs={"strokeWidth": 1}
+    )
+
+
+def _tooltip() -> rx.Component:
+    """Tooltip wearing the surface and ink tokens.
+
+    The default is a white box with a light border, which disappears against a
+    dark surface. Styling it here means every chart inherits a correct one.
+
+    `content_style` and `cursor` ARE declared fields on `GraphingTooltip`
+    (verified empirically: `"content_style" in GraphingTooltip.get_fields()` is
+    True, likewise `cursor`), so they reach recharts as real props directly —
+    no `custom_attrs` fallback needed here, unlike `fill_opacity` on `Area` or
+    `stroke_width` on `CartesianGrid` above.
+
+    Uses the mode-aware accessors (`theme.surface()`, `theme.gridline()`,
+    `theme.ink_primary()`, `theme.axis()`), not the bare light-mode constants:
+    those accessors compile to `rx.color_mode_cond`, so the tooltip actually
+    reacts to dark mode instead of staying pinned to light-mode colours.
+    """
+    return rx.recharts.graphing_tooltip(
+        content_style={
+            "background": theme.surface(),
+            "border": f"1px solid {theme.gridline()}",
+            "borderRadius": "8px",
+            "fontSize": "12px",
+            "color": theme.ink_primary(),
+        },
+        cursor={"stroke": theme.axis(), "strokeWidth": 1},
+    )
 
 
 def _x_axis(data_key: str = "period") -> rx.Component:
@@ -176,8 +214,13 @@ def line_chart(
     data: ChartData,
     series: list[tuple[str, str | rx.Var, str]],  # (data_key, label, color)
     height: int = 300,
+    brush: bool = False,
 ) -> rx.Component:
-    """Line chart; legend shown only when there are >= 2 series."""
+    """Line chart; legend shown only when there are >= 2 series.
+
+    `brush` is opt-in and off by default: it is a scrubber for long series and
+    would be visual noise on the short ones most callers pass.
+    """
     lines = [
         rx.recharts.line(
             data_key=key,
@@ -189,9 +232,18 @@ def line_chart(
         )
         for key, label, color in series
     ]
-    children = [*lines, _x_axis(), _y_axis(), _grid(), rx.recharts.graphing_tooltip()]
+    children = [*lines, _x_axis(), _y_axis(), _grid(), _tooltip()]
     if len(series) >= 2:
         children.append(rx.recharts.legend())
+    if brush:
+        children.append(
+            rx.recharts.brush(
+                data_key="period",
+                height=24,
+                stroke=theme.axis(),
+                fill=theme.surface(),
+            )
+        )
     return rx.recharts.line_chart(
         *children,
         data=data,
@@ -234,7 +286,7 @@ def area_compare_chart(
         )
         for key, label, color in series
     ]
-    children = [*areas, _x_axis(), _y_axis(), _grid(), rx.recharts.graphing_tooltip()]
+    children = [*areas, _x_axis(), _y_axis(), _grid(), _tooltip()]
     if len(series) >= 2:
         children.append(rx.recharts.legend())
     return rx.recharts.area_chart(
@@ -262,7 +314,7 @@ def bar_chart(
         _x_axis(x_key),
         _y_axis(),
         _grid(),
-        rx.recharts.graphing_tooltip(),
+        _tooltip(),
         data=data,
         bar_category_gap="25%",
         width="100%",
@@ -300,7 +352,7 @@ def composed_bar_line_chart(
         _x_axis(),
         _y_axis(),
         _grid(),
-        rx.recharts.graphing_tooltip(),
+        _tooltip(),
         rx.recharts.legend(),
         data=data,
         width="100%",
@@ -330,7 +382,7 @@ def stripe_chart(data: ChartData, height: int = 140) -> rx.Component:
             is_animation_active=False,
         ),
         _x_axis(),
-        rx.recharts.graphing_tooltip(),
+        _tooltip(),
         data=data,
         bar_category_gap=0,
         width="100%",
@@ -364,8 +416,11 @@ def h_bar_chart(
             tick_line=False,
             custom_attrs={"fontSize": "12px", "fill": theme.INK_MUTED},
         ),
-        rx.recharts.cartesian_grid(stroke=theme.GRIDLINE, horizontal=False, stroke_width=1),
-        rx.recharts.graphing_tooltip(),
+        # `stroke_width` is not a declared `CartesianGrid` field; see `_grid()`.
+        rx.recharts.cartesian_grid(
+            stroke=theme.GRIDLINE, horizontal=False, custom_attrs={"strokeWidth": 1}
+        ),
+        _tooltip(),
         data=data,
         layout="vertical",
         bar_category_gap="25%",
@@ -449,8 +504,9 @@ def scatter_chart(
             domain=["auto", "auto"],
             custom_attrs={"fontSize": "12px", "fill": theme.INK_MUTED},
         ),
-        rx.recharts.cartesian_grid(stroke=theme.GRIDLINE, stroke_width=1),
-        rx.recharts.graphing_tooltip(),
+        # `stroke_width` is not a declared `CartesianGrid` field; see `_grid()`.
+        rx.recharts.cartesian_grid(stroke=theme.GRIDLINE, custom_attrs={"strokeWidth": 1}),
+        _tooltip(),
         rx.recharts.legend(),
         width="100%",
         height=height,

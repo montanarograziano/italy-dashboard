@@ -160,3 +160,61 @@ def test_composed_bar_line_chart_builds_with_one_axis():
     assert "Legend" in rendered
     # One y-axis only: a dual-axis chart is the single most common chart mistake.
     assert rendered.count("YAxis") == 1
+
+
+# ------------------------------------------------ tooltip styling / brush
+
+
+def _content_style_segment(rendered: str) -> str:
+    """Isolate just the `contentStyle:(...)` prop from a rendered tree.
+
+    `str(component.render())` is a Python repr of a dict whose `props` list has
+    one string per prop, e.g. `['contentStyle:(...)', 'cursor:(...)', ...]`.
+    Slicing out only the `contentStyle` element (up to the closing `', '` that
+    starts the next list item) means a check against it cannot be satisfied by
+    styling that leaked into a DIFFERENT prop, such as `wrapperStyle`.
+    """
+    start = rendered.index("contentStyle:")
+    end = rendered.index("', '", start)
+    return rendered[start:end]
+
+
+def test_tooltip_is_styled_with_surface_tokens():
+    """A default tooltip ignores the theme and breaks in dark mode.
+
+    Checks the `contentStyle` prop SEGMENT specifically (see
+    `_content_style_segment`), not just whether "contentStyle" or
+    "resolvedColorMode" appears anywhere in the render. That distinction is
+    the whole point: Reflex accepts an unrecognised kwarg silently and sweeps
+    it into `wrapperStyle`, a prop recharts never reads (the exact bug
+    `area_compare_chart`'s docstring documents for `fill_opacity`). A tooltip
+    "styled" via a typo'd kwarg would still show `resolvedColorMode` and
+    `wrapperStyle` in the full render, but NOT inside `contentStyle`, and this
+    test's segment-scoped assertions would catch that where a bare substring
+    search on the whole render would not.
+    """
+    rendered = str(c.line_chart(ROWS, [("value", "V", theme.SERIES_1)]).render())
+    segment = _content_style_segment(rendered)
+    # Mode-aware: theme.surface()/theme.gridline()/theme.ink_primary() compile
+    # to rx.color_mode_cond, which emits a `resolvedColorMode` check. A bare
+    # light-mode constant (theme.SURFACE etc.) would never produce this.
+    assert "resolvedColorMode" in segment
+    # A value only our helper sets; absent from the recharts/Reflex default.
+    assert "fontSize" in segment
+    # If styling had landed in the generic style fallback instead of the real
+    # `contentStyle` prop, `wrapperStyle` would appear in the render at all.
+    assert "wrapperStyle" not in rendered
+
+
+def test_line_chart_with_brush_builds():
+    assert c.line_chart(ROWS, [("value", "V", theme.SERIES_1)], brush=True).render()
+
+
+def test_line_chart_brush_is_off_by_default():
+    rendered = str(c.line_chart(ROWS, [("value", "V", theme.SERIES_1)]).render())
+    assert "RechartsBrush" not in rendered
+
+
+def test_line_chart_brush_true_adds_a_brush():
+    rendered = str(c.line_chart(ROWS, [("value", "V", theme.SERIES_1)], brush=True).render())
+    assert "RechartsBrush" in rendered
