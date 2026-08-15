@@ -367,13 +367,13 @@ app.add_page(...)  # existing pages unchanged
 Reflex has no direct "raw CSS string" app argument in 0.9.8, so inject the block through a `rx.el.style` element in the shell instead. In `italy_dashboard/components.py`, inside `shell(...)`, add as the first child:
 
 ```python
-(rx.el.style(palette.diverging_css_vars()),)
+        rx.el.style(palette.diverging_css_vars()),
 ```
 
 Then add the mode toggle beside the language chips. In `components.py`, extend `navbar()` by inserting before `_lang_toggle()`:
 
 ```python
-(rx.color_mode.button(size="1"),)
+        rx.color_mode.button(size="1"),
 ```
 
 - [ ] **Step 7: Verify the mechanism actually works**
@@ -549,18 +549,16 @@ If `rx.recharts.bar` rejects a `children=` keyword in this Reflex version, pass 
 In `italy_dashboard/pages/climate.py`, replace the stripes card's `bar_chart(...)` call with:
 
 ```python
-(stripe_chart(ClimateState.stripes),)
+                    stripe_chart(ClimateState.stripes),
 ```
 
 and add `stripe_chart` to the import from `italy_dashboard.components`. Add a `data_table` beneath it so the exact anomalies remain readable:
 
 ```python
-(
-    data_table(
-        ClimateState.stripes,
-        [("period", t("year")), ("anomaly", t("anomaly"))],
-    ),
-)
+                    data_table(
+                        ClimateState.stripes,
+                        [("period", t("year")), ("anomaly", t("anomaly"))],
+                    ),
 ```
 
 - [ ] **Step 7: Run the tests**
@@ -1096,13 +1094,11 @@ and inside `load`, after `self.ranking = ...`:
 In `italy_dashboard/pages/climate.py`, add a card after the stripes card:
 
 ```python
-(
-    card(
-        t("grid_title"),
-        t("grid_sub"),
-        small_multiples(ClimateState.stripes_grid),
-    ),
-)
+                card(
+                    t("grid_title"),
+                    t("grid_sub"),
+                    small_multiples(ClimateState.stripes_grid),
+                ),
 ```
 
 Add `small_multiples` to the imports. Add to `translations.py`, EN:

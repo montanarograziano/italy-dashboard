@@ -48,6 +48,10 @@ packages = ["ingestion", "italy_dashboard"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Plan and spec docs hold code FRAGMENTS, not modules: formatting them wraps
+# isolated snippets in tuple parens, so an implementer pasting a fence gets a
+# tuple literal instead of the call argument the step meant.
+exclude = ["docs/superpowers/**"]
 
 [tool.ruff.lint]
 select = [
