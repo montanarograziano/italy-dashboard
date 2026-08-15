@@ -63,10 +63,12 @@ Open-Meteo's default "best match" switches models across a long series and
 would inject discontinuities indistinguishable from real climate signal.
 
 Fetch with `just refresh-weather`, or `just refresh-weather ITC45` for one city.
-As of this writing the real fetch has not been run in any development
-environment; only synthetic sample data exists (see `ingestion/sample_data.py`),
-so no chart or number driven by this dataset should be read as an observed
-climate result yet.
+As of this writing no full backfill has completed in any development
+environment — only a single-city check against the real API, used to
+cross-validate the CDS path (Torino; the two sources agree within 0.07 C).
+Development environments still carry synthetic sample data (see
+`ingestion/sample_data.py`), so no chart or number driven by this dataset
+should be read as an observed climate result yet.
 
 ### A full backfill takes several days, on purpose
 
@@ -116,7 +118,7 @@ Prerequisites, one-time:
    `uv sync` stays light: `uv sync --extra cds` (pulls in `cdsapi`, `xarray`,
    `netcdf4`).
 
-Fetch with `just refresh-weather-cds` (1950 to this year) or
+Fetch with `just refresh-weather-cds` (1950 up to the last fully published month) or
 `just refresh-weather-cds 1950 1979` for one year range. Downloads bulk
 NetCDF from the `derived-era5-land-daily-statistics` dataset, one request per
 (year, daily statistic) — mean, minimum, maximum — cached under
@@ -126,12 +128,31 @@ extraction (nearest ERA5-Land grid cell to each capital) happens locally with
 xarray after download; a capital whose nearest cell is more than 0.15 degrees
 away fails the run loudly rather than silently sampling the wrong place. The
 same `MAX_NULL_RATE` gate as the Open-Meteo path applies before the snapshot
-is written.
+is written, extended to all three temperature columns: the three statistics
+are three separate downloads here, so `t_min` can come back empty while
+`t_mean` is perfect, and each column is gated on its own. The three chunks of
+a year must also cover exactly the same dates, otherwise the run stops: pairing
+them positionally when they do not would attach each day's minimum and maximum
+to another day's mean.
 
-As with the Open-Meteo path, **the real CDS download has not been exercised
-in any environment**: no CDS credentials exist here and the licence has not
-been accepted, so only the offline point-extraction logic is tested (a
-synthetic NetCDF fixture), never a live request.
+**Where the CDS path stops.** ERA5-Land is published with a lag (the same
+`PUBLICATION_LAG_DAYS` the Open-Meteo path uses). A CDS request is a
+year x month x day cross product, so it cannot stop mid-month; the fetcher
+therefore requests only calendar months that have entirely ended on or before
+that boundary, and leaves the remaining tail (at most ~37 days) to
+`just refresh-weather`. A partially covered year is cached under a filename
+that names its last day (`2026_daily_mean_through_20260731.nc`), so a rerun
+next month downloads a longer chunk instead of replaying a truncated year, and
+a rerun this month costs no queued requests at all.
+
+**Status.** The request shape and the point extraction **have** been validated
+against a real CDS response (one data variable `t2m`, dims
+`(valid_time, latitude, longitude)`, Kelvin) and cross-checked against the
+Open-Meteo path for Torino, where the two agree within 0.07 C. A **full
+backfill has not completed yet**, so the queueing, timeout and resume
+behaviour of a 228-chunk run is still unexercised at scale. Every test in
+`tests/unit/test_cds.py` is offline, against synthetic NetCDF fixtures and a
+fake client; no test makes a real request.
 
 ### Why not ISTAT
 

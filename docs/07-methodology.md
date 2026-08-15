@@ -155,13 +155,19 @@ is non-commercial use only. If the dashboard is ever offered commercially, the
 source must move to Copernicus CDS ERA5-Land or Open-Meteo's paid tier first;
 see [Datasets](04-datasets.md#weather_daily-temperature-non-istat).
 
-**Real data has not been fetched yet.** Only synthetic sample temperatures
-exist in development environments so far (`ingestion/sample_data.py`); no
-number in this section or the next describes an observed result, only what the
-pipeline computes once real data lands. This applies equally to both
-fetchers: the per-point Open-Meteo path (`ingestion/weather.py`) and the bulk
-Copernicus CDS path (`ingestion/cds.py`, see
-[Datasets](04-datasets.md#bulk-backfill-via-copernicus-cds)). Both write the
+**No full backfill has completed yet.** Development environments still carry
+synthetic sample temperatures (`ingestion/sample_data.py`), and no number in
+this section or the next describes an observed result — only what the pipeline
+computes once a real backfill lands. Both fetchers have, however, now been
+exercised against their real APIs at single-point scale: the bulk Copernicus
+CDS path (`ingestion/cds.py`, see
+[Datasets](04-datasets.md#bulk-backfill-via-copernicus-cds)) has been validated
+against a real ERA5-Land response — Roma's nearest grid cell lands 0.0184
+degrees from the seed coordinate, and its 2020-07-01 maximum is 30.24 C — and
+cross-checked against the per-point Open-Meteo path (`ingestion/weather.py`)
+for Torino, where the two agree within 0.07 C. That is a check on the request
+shape, the unit conversion and the cell selection, not evidence about any
+published trend. Both write the
 same `data/weather_daily.parquet` snapshot through the same null-rate gate, so
 neither is more or less trustworthy once real data lands; the CDS path adds
 one more check the Open-Meteo path does not need, since it samples a bulk grid

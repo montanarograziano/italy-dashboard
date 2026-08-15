@@ -50,7 +50,8 @@ refresh-weather *province:
 # Bulk ERA5-Land backfill from Copernicus CDS, then rebuild marts. Requires the
 # `cds` extra (`uv sync --extra cds`) and a CDS account with the ERA5-Land
 # licence accepted (credentials in ~/.cdsapirc). `just refresh-weather-cds 1950 1979`
-# backfills one year range; with no args it covers 1950 to this year.
+# backfills one year range; with no args it covers 1950 up to the last fully
+# published month (ERA5-Land lags reality, see docs/04-datasets.md).
 refresh-weather-cds *years:
     uv run python -m ingestion.cds refresh {{years}}
     just transform
