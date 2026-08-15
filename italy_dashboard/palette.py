@@ -44,7 +44,9 @@ DIVERGING_DARK = (
     "#c34f1e",
 )
 
-# Sequential: one hue, pale -> deep.
+# Sequential: one hue, pale -> deep. Validated and covered by test_palette.py,
+# but nothing consumes it yet: it is reserved for a future magnitude encoding
+# (e.g. a choropleth), where a diverging ramp would falsely imply a midpoint.
 SEQUENTIAL_LIGHT = ("#71b2ff", "#5090e2", "#2e6ebd", "#054e9a", "#002d77")
 SEQUENTIAL_DARK = ("#8ed1ff", "#6eafff", "#4e8ee0", "#2e6ebd", "#074f9b")
 

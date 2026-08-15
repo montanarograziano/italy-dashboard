@@ -51,8 +51,9 @@ one series starts later.
 `italy_dashboard/palette.py` holds four colour roles as plain data, in light
 and dark: categorical (three fixed slots, never cycled, so a series keeps its
 identity across the mode toggle), diverging (7 steps, cool to warm, with a
-true neutral gray at the midpoint), sequential (one hue, pale to deep), and
-surfaces. Every value was derived by machine search against a colour
+true neutral gray at the midpoint), sequential (one hue, pale to deep,
+validated and covered by tests but not yet consumed by any chart: it is
+reserved for a future magnitude encoding), and surfaces. Every value was derived by machine search against a colour
 validator, not chosen by eye, and dark steps are selected against the dark
 surface rather than mechanically inverted from light (an inversion fails the
 dark lightness band outright).
@@ -114,7 +115,7 @@ current one.
 
 ### Hazards for future chart work
 
-Two things cost real implementation time and are not obvious from reading the
+Three things cost real implementation time and are not obvious from reading the
 component code:
 
 - **Reflex silently swallows unrecognized component props.** A kwarg that is
@@ -134,6 +135,19 @@ component code:
   for argument 'children'`. This is why `stripe_chart` passes its
   `rx.recharts.cell` foreach as a bare positional argument to
   `rx.recharts.bar(...)`.
+- **Axis tick labels take their colour from the `tick` prop, not `fill`.**
+  A `fill` reaching the axis by any route (declared prop or `custom_attrs`)
+  is inert on the labels: recharts builds each label's props as
+  `{...axisProps, textAnchor, stroke: 'none', fill: stroke}`, so the axis's
+  own `stroke` overwrites it and every tick renders in the axis-line colour.
+  That shipped the labels at 1.75:1 in light mode and 1.60:1 in dark, against
+  a 3:1 floor, while the code read as if it had set the muted ink. The `tick`
+  prop is the one recharts spreads last and therefore the only one that wins;
+  `_tick_style()` in `components.py` is the single place it is built, and
+  `tests/unit/test_components.py` asserts the `fill` lands inside `tick:`
+  specifically for every axis of every chart helper. This is a different bug
+  from the swallowed-prop hazard above: the prop arrived intact and was
+  overwritten downstream, so no `wrapperStyle` ever appeared.
 
 Verification to date is render-tree tests and a frontend compile; nobody has
 opened these pages in a browser yet.
