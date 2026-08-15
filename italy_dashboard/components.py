@@ -391,6 +391,33 @@ def stripe_chart(data: ChartData, height: int = 140) -> rx.Component:
     )
 
 
+def small_multiples(items: rx.Var | list, height: int = 90) -> rx.Component:
+    """A grid of stripe charts, one per city, on a shared colour scale.
+
+    Small multiples work because every panel shares the scale: the reader
+    compares panels, not axes. Panels are deliberately small and label-light;
+    the card's table view carries exact values.
+    """
+    return rx.grid(
+        rx.foreach(
+            items,
+            lambda item: rx.vstack(
+                rx.text(item["city"], font_size="0.75em", color=theme.ink_secondary()),
+                # `item["rows"]` is typed `Any` (the outer `Row = dict[str, Any]`
+                # loses precision once you index into it inside a foreach arg),
+                # so `stripe_chart`'s own internal `rx.foreach` over it raises
+                # `ForeachVarError: ... of type Any` without this explicit cast.
+                stripe_chart(item["rows"].to(list[dict[str, Any]]), height=height),
+                spacing="1",
+                width="100%",
+            ),
+        ),
+        columns="3",
+        spacing="4",
+        width="100%",
+    )
+
+
 def h_bar_chart(
     data: ChartData,
     data_key: str,

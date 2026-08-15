@@ -40,6 +40,49 @@ def test_stripe_chart_binds_fill_per_cell_not_once_for_the_whole_bar():
     assert 'fill:row_rx_state_?.["fill"]' in rendered
 
 
+# ------------------------------------------------------- small_multiples
+#
+# `small_multiples` is a grid built by iterating a *list of cities*, each
+# carrying its own stripe rows. A guard that only re-tests `stripe_chart`
+# would pass just as happily if the grid quietly rendered one panel, or the
+# same city N times, as it does for a real per-city grid: the failure mode
+# lives in the OUTER iteration, not in the stripe rendering `stripe_chart`
+# already covers above. So this uses a concrete two-city literal (not a
+# state Var) precisely so the two cities' names and fills land as literal
+# text in the rendered tree and can be told apart.
+
+GRID_ITEMS = [
+    {"city": "Roma", "rows": [{"period": "2020", "anomaly": 0.5, "fill": "var(--div-5)"}]},
+    {"city": "Milano", "rows": [{"period": "2020", "anomaly": -0.2, "fill": "var(--div-3)"}]},
+]
+
+
+def test_small_multiples_renders_a_distinct_panel_per_city():
+    """Both cities' names and both cities' distinct fills must appear.
+
+    If the grid rendered zero panels, neither city name would appear. If it
+    rendered every panel with the first item's data (e.g. `items[0]` instead
+    of iterating), "Milano" and `var(--div-3)` would be missing even though
+    the chart still builds successfully.
+    """
+    rendered = str(c.small_multiples(GRID_ITEMS).render())
+    assert "Roma" in rendered
+    assert "Milano" in rendered
+    assert "var(--div-5)" in rendered
+    assert "var(--div-3)" in rendered
+
+
+def test_small_multiples_builds_against_the_real_state_var():
+    """`ClimateState.stripes_grid` is `list[Row]` (`Row = dict[str, Any]`), so
+    indexing `item["rows"]` inside the foreach arg loses its list type and
+    Reflex's own `rx.foreach` inside `stripe_chart` raises `ForeachVarError:
+    ... of type Any` without an explicit `.to(list[dict[str, Any]])` cast.
+    This is the same class of prop-typing trap as `wrapperStyle`: it looks
+    fine against a hand-rolled literal and only breaks against the real Var.
+    """
+    assert c.small_multiples(ClimateState.stripes_grid).render()
+
+
 # ------------------------------------------------ scatter_chart zero_lines
 #
 # The climate-crime PANEL scatter plots two-way demeaned values that centre on

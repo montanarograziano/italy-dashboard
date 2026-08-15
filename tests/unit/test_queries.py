@@ -655,3 +655,12 @@ def test_climate_stripes_carry_a_diverging_fill(climate_db):
     coldest = min(rows, key=lambda r: r["anomaly"])
     if warmest["anomaly"] > coldest["anomaly"]:
         assert warmest["fill"] != coldest["fill"]
+
+
+def test_climate_stripes_grid_returns_one_entry_per_city(climate_db):
+    grid = q.climate_stripes_grid(limit=6)
+    if not grid:
+        pytest.skip("no anomalies in this fixture: the CLINO guard nulls them")
+    assert len(grid) <= 6
+    assert {"city", "rows"} == set(grid[0])
+    assert all(r["fill"].startswith("var(--div-") for r in grid[0]["rows"])

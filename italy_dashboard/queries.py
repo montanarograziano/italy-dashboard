@@ -765,6 +765,21 @@ def warming_rate_ranking(top_n: int = 20) -> list[Row]:
     )
 
 
+def climate_stripes_grid(limit: int = 12) -> list[Row]:
+    """Stripes for several cities at once, for a small-multiples grid.
+
+    Ordered by warming rate, fastest first, so the grid leads with the cities
+    where the signal is strongest rather than with whatever sorts first
+    alphabetically. Capped because a 106-panel grid is a wall, not a chart.
+    """
+    ranked = warming_rate_ranking(top_n=limit)
+    return [
+        {"city": r["name"], "rows": climate_stripes(r["name"])}
+        for r in ranked
+        if climate_stripes(r["name"])
+    ]
+
+
 def climate_threshold_days(city: str) -> list[Row]:
     return _query(
         f"""

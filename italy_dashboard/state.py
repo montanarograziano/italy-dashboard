@@ -449,6 +449,7 @@ class ClimateState(AppState):
     annual: list[Row] = []
     stripes: list[Row] = []
     ranking: list[Row] = []
+    stripes_grid: list[Row] = []
     thresholds: list[Row] = []
     distribution: list[Row] = []
     mart_ready: bool = False
@@ -465,6 +466,7 @@ class ClimateState(AppState):
         if self.city not in self.city_options:
             self.city = "Roma" if "Roma" in self.city_options else self.city_options[0]
         self.ranking = q.warming_rate_ranking(top_n=20)
+        self.stripes_grid = q.climate_stripes_grid(limit=12)
         self._refresh()
 
     @rx.event

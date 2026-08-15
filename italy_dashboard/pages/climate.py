@@ -10,6 +10,7 @@ from italy_dashboard.components import (
     h_bar_chart,
     line_chart,
     shell,
+    small_multiples,
     stripe_chart,
 )
 from italy_dashboard.i18n import t
@@ -71,6 +72,11 @@ def climate_page() -> rx.Component:
                         ClimateState.stripes,
                         [("period", t("year")), ("anomaly", t("anomaly"))],
                     ),
+                ),
+                card(
+                    t("grid_title"),
+                    t("grid_sub"),
+                    small_multiples(ClimateState.stripes_grid),
                 ),
                 card(
                     t("ranking_title"),
