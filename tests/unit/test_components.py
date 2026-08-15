@@ -281,9 +281,8 @@ def test_tooltip_is_styled_with_surface_tokens():
     assert '"border"] : ((resolvedColorMode' in segment
     # A value only our helper sets; absent from the recharts/Reflex default.
     assert "fontSize" in segment
-    # If styling had landed in the generic style fallback instead of the real
-    # `contentStyle` prop, `wrapperStyle` would appear in the render at all.
-    assert "wrapperStyle" not in rendered
+    # The `wrapperStyle` check that used to live here now runs against EVERY
+    # chart helper, see `test_no_chart_helper_swallows_a_prop_into_wrapper_style`.
 
 
 # ------------------------------------------------ dark-mode chrome (chart chrome
@@ -399,6 +398,22 @@ def test_axis_tick_labels_carry_their_own_fill_not_the_axis_line_colour(name: st
             # The label colour must follow the mode toggle like the rest of the
             # chrome, i.e. `theme.ink_muted()`, never a bare hex.
             assert "resolvedColorMode" in tick, f"{name}: {tag} tick fill is not mode-aware"
+
+
+@pytest.mark.parametrize("name", sorted(CHART_CHROME_HELPERS))
+def test_no_chart_helper_swallows_a_prop_into_wrapper_style(name: str):
+    """A universal detector for the bug class that cost this plan four rounds.
+
+    Reflex accepts an undeclared kwarg silently and sweeps it into its generic
+    style fallback, rendered as `wrapperStyle:(...)` — a prop no recharts
+    component reads. That is how an inert `fill_opacity=` on `Area`, an inert
+    `stroke_width=` on `CartesianGrid` and an inert `type_=` on `ZAxis` all
+    shipped looking correct in the rendered output. No helper here emits a
+    `wrapperStyle` legitimately, so its mere presence anywhere in a chart's
+    render means a kwarg was swallowed, whatever the kwarg happens to be.
+    """
+    rendered = str(CHART_CHROME_HELPERS[name]().render())
+    assert "wrapperStyle" not in rendered, f"{name}: a kwarg was swallowed into wrapperStyle"
 
 
 def test_line_chart_with_brush_builds():
