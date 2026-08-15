@@ -41,6 +41,7 @@ def climate_crime_page() -> rx.Component:
                         y_label=t("cc_y_panel"),
                         label_key="region",
                         label_name=t("region"),
+                        zero_lines=True,
                     ),
                 ),
                 card(

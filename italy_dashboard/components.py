@@ -301,16 +301,33 @@ def scatter_chart(
     height: int = 380,
     label_key: str | None = None,
     label_name: str | rx.Var = "",
+    zero_lines: bool = False,
 ) -> rx.Component:
     """Scatter with one series per group; tooltip shows the point's fields.
 
     `label_key` names a categorical field of each point (e.g. the region) to
     surface in the tooltip — recharts' ZAxis-with-fixed-range idiom, which
     adds the field to the tooltip without affecting dot size.
+
+    `zero_lines` draws reference lines at x=0 and y=0. Only meaningful for a
+    scatter whose axes are centred on zero by construction (e.g. two-way
+    demeaned panel data), where the cross-hairs let the reader see which
+    quadrant a point falls in without tracing the axes. A scatter of absolute
+    values has no such natural origin, so it should leave this off. These are
+    chrome, not data: `theme.axis()`, never a series colour, and added before
+    the scatters so they render beneath the points.
     """
     scatters = [
         rx.recharts.scatter(data=data, name=label, fill=color) for data, label, color in series
     ]
+    zero_ref_lines = (
+        [
+            rx.recharts.reference_line(x=0, stroke=theme.axis(), stroke_width=1),
+            rx.recharts.reference_line(y=0, stroke=theme.axis(), stroke_width=1),
+        ]
+        if zero_lines
+        else []
+    )
     extra_axes = (
         [
             rx.recharts.z_axis(
@@ -327,6 +344,7 @@ def scatter_chart(
         else []
     )
     return rx.recharts.scatter_chart(
+        *zero_ref_lines,
         *scatters,
         *extra_axes,
         rx.recharts.x_axis(
