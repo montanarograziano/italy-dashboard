@@ -328,14 +328,29 @@ CHART_CHROME_HELPERS: dict[str, Callable[[], rx.Component]] = {
 }
 
 
-def _chrome_segments(rendered: str, tag: str, window: int = 300) -> list[str]:
-    """Every occurrence of `tag` in `rendered`, each with its trailing props."""
+def _chrome_segments(rendered: str, tag: str) -> list[str]:
+    """Every occurrence of `tag` in `rendered`, sliced to its OWN props list.
+
+    `str(component.render())` is a Python repr of nested dicts shaped
+    `{'name': 'RechartsXAxis', 'props': [...], 'children': [...]}`. Cutting each
+    segment at that component's `'children'` key, rather than at a fixed
+    character window, means an assertion about one axis can never be satisfied
+    by a prop that belongs to the NEXT component in the tree.
+    """
     segments = []
     start = 0
     while (idx := rendered.find(tag, start)) != -1:
-        segments.append(rendered[idx : idx + window])
+        end = rendered.find("'children'", idx)
+        segments.append(rendered[idx:end] if end != -1 else rendered[idx:])
         start = idx + len(tag)
     return segments
+
+
+def _prop(segment: str, prop: str) -> str:
+    """The single `<prop>:...` element of a rendered props list."""
+    start = segment.index(f"{prop}:")
+    end = segment.find("', '", start)
+    return segment[start:end] if end != -1 else segment[start:]
 
 
 @pytest.mark.parametrize("name", sorted(CHART_CHROME_HELPERS))
@@ -353,6 +368,37 @@ def test_chart_chrome_resolves_through_color_mode_cond_not_a_hardcoded_hex(name:
     # equivalent) would produce.
     assert 'stroke:"#e1e0d9"' not in rendered, f"{name}: hardcoded gridline hex"
     assert 'stroke:"#c3c2b7"' not in rendered, f"{name}: hardcoded axis hex"
+
+
+@pytest.mark.parametrize("name", sorted(CHART_CHROME_HELPERS))
+def test_axis_tick_labels_carry_their_own_fill_not_the_axis_line_colour(name: str):
+    """Tick LABELS need their own colour; the check above cannot see them.
+
+    The mode-awareness assertion above is satisfied by the axis's `stroke`
+    alone, so it passed for the entire life of a real defect: every axis passed
+    `custom_attrs={"fill": theme.ink_muted()}`, and that `fill` never reached a
+    single label. Recharts builds label props as
+    `{...axisProps, textAnchor, stroke: 'none', fill: stroke}`, so the axis's
+    own `stroke` overwrites any supplied `fill` and the labels rendered at the
+    axis line's contrast: 1.75:1 in light mode, 1.60:1 in dark, against a 3:1
+    floor. The declared `tick` prop is the one recharts spreads LAST
+    (`{...tickProps, ...customTickProps}`), so it is the only form that wins.
+
+    Scoped to the `tick:` prop specifically, not the whole axis segment: a
+    revert to the `custom_attrs` form still emits `fill:` somewhere in the
+    render (as an axis-level prop), and a whole-segment substring search would
+    happily accept it.
+    """
+    rendered = str(CHART_CHROME_HELPERS[name]().render())
+
+    for tag in ("RechartsXAxis", "RechartsYAxis"):
+        for segment in _chrome_segments(rendered, tag):
+            assert "tick:" in segment, f"{name}: {tag} sets no tick label style"
+            tick = _prop(segment, "tick")
+            assert "fill" in tick, f"{name}: {tag} tick labels inherit the axis-line colour"
+            # The label colour must follow the mode toggle like the rest of the
+            # chrome, i.e. `theme.ink_muted()`, never a bare hex.
+            assert "resolvedColorMode" in tick, f"{name}: {tag} tick fill is not mode-aware"
 
 
 def test_line_chart_with_brush_builds():

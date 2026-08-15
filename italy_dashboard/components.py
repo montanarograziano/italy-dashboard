@@ -192,12 +192,39 @@ def _tooltip() -> rx.Component:
     )
 
 
+def _tick_style() -> dict[str, Any]:
+    """Tick LABEL styling, delivered via the axis's declared `tick` prop.
+
+    A `fill` smuggled through `custom_attrs` never reaches the labels. Recharts'
+    `CartesianAxis` builds each label's props as
+    `{...axisProps, textAnchor, stroke: 'none', fill: stroke}` — the literal
+    `fill: stroke` lands AFTER the spread of the axis's own props, so the axis
+    `stroke` always overwrites any supplied `fill` and the labels render in the
+    axis-line colour. That shipped the muted ink at the axis's contrast: 1.75:1
+    in light mode and 1.60:1 in dark, both under the 3:1 floor for non-text UI,
+    and effectively invisible in dark mode.
+
+    The `tick` prop is the one that wins: recharts derives `customTickProps`
+    from it and spreads it LAST (`{...tickProps, ...customTickProps}`), after
+    the `fill: stroke` assignment. `tick` is a declared field on both `XAxis`
+    and `YAxis` (verified: `"tick" in cartesian.XAxis.get_fields()` is True,
+    typed `Var[bool | dict]`), so a dict reaches recharts as a real prop rather
+    than being swept into the `wrapperStyle` fallback. Both `fill` and
+    `fontSize` survive recharts' SVG-prop filter (`svgPropertiesNoEvents`).
+
+    `fontSize` stays duplicated in `custom_attrs` on each axis because the AXIS
+    also uses it to size its own tick layout, independently of the label props.
+    """
+    return {"fill": theme.ink_muted(), "fontSize": 12}
+
+
 def _x_axis(data_key: str = "period") -> rx.Component:
     return rx.recharts.x_axis(
         data_key=data_key,
         stroke=theme.axis(),
         tick_line=False,
-        custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
+        tick=_tick_style(),
+        custom_attrs={"fontSize": "12px"},
     )
 
 
@@ -206,7 +233,8 @@ def _y_axis() -> rx.Component:
         stroke=theme.axis(),
         axis_line=False,
         tick_line=False,
-        custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
+        tick=_tick_style(),
+        custom_attrs={"fontSize": "12px"},
     )
 
 
@@ -429,7 +457,8 @@ def h_bar_chart(
             stroke=theme.axis(),
             axis_line=False,
             tick_line=False,
-            custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
+            tick=_tick_style(),
+            custom_attrs={"fontSize": "12px"},
         ),
         rx.recharts.y_axis(
             data_key=y_key,
@@ -437,7 +466,8 @@ def h_bar_chart(
             width=220,
             stroke=theme.axis(),
             tick_line=False,
-            custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
+            tick=_tick_style(),
+            custom_attrs={"fontSize": "12px"},
         ),
         # `stroke_width` is not a declared `CartesianGrid` field; see `_grid()`.
         rx.recharts.cartesian_grid(
@@ -515,7 +545,8 @@ def scatter_chart(
             stroke=theme.axis(),
             tick_line=False,
             domain=["auto", "auto"],
-            custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
+            tick=_tick_style(),
+            custom_attrs={"fontSize": "12px"},
         ),
         rx.recharts.y_axis(
             data_key=y_key,
@@ -525,7 +556,8 @@ def scatter_chart(
             axis_line=False,
             tick_line=False,
             domain=["auto", "auto"],
-            custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
+            tick=_tick_style(),
+            custom_attrs={"fontSize": "12px"},
         ),
         # `stroke_width` is not a declared `CartesianGrid` field; see `_grid()`.
         rx.recharts.cartesian_grid(stroke=theme.gridline(), custom_attrs={"strokeWidth": 1}),
