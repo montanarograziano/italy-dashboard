@@ -149,3 +149,14 @@ def test_area_compare_chart_fills_stay_translucent_not_opaque():
     )
     rendered = str(comp.render())
     assert rendered.count("fillOpacity:0.28") == 2
+
+
+def test_composed_bar_line_chart_builds_with_one_axis():
+    comp = c.composed_bar_line_chart(
+        ROWS, bar_key="value", bar_label="Hot days", line_key="early", line_label="Trend"
+    )
+    rendered = str(comp.render())
+    assert rendered
+    assert "Legend" in rendered
+    # One y-axis only: a dual-axis chart is the single most common chart mistake.
+    assert rendered.count("YAxis") == 1

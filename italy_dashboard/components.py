@@ -271,6 +271,44 @@ def bar_chart(
     )
 
 
+def composed_bar_line_chart(
+    data: ChartData,
+    bar_key: str,
+    bar_label: str | rx.Var,
+    line_key: str,
+    line_label: str | rx.Var,
+    height: int = 300,
+) -> rx.Component:
+    """Counts as bars with a trend line over them, sharing ONE y-axis.
+
+    Both measures must be on the same scale for this to be honest. A second
+    y-scale is never the answer: it lets the author choose the story by choosing
+    the scaling, which is why this helper does not offer one.
+    """
+    return rx.recharts.composed_chart(
+        rx.recharts.bar(
+            data_key=bar_key, name=bar_label, fill=theme.series(1), radius=[4, 4, 0, 0]
+        ),
+        rx.recharts.line(
+            data_key=line_key,
+            name=line_label,
+            stroke=theme.series(2),
+            stroke_width=2,
+            dot=False,
+            type_="monotone",
+        ),
+        _x_axis(),
+        _y_axis(),
+        _grid(),
+        rx.recharts.graphing_tooltip(),
+        rx.recharts.legend(),
+        data=data,
+        width="100%",
+        height=height,
+        margin={"top": 8, "right": 8, "bottom": 4, "left": 8},
+    )
+
+
 def stripe_chart(data: ChartData, height: int = 140) -> rx.Component:
     """Warming stripes: one bar per year, coloured by its own anomaly.
 
