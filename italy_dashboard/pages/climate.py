@@ -5,6 +5,7 @@ import reflex as rx
 from italy_dashboard import theme
 from italy_dashboard.components import (
     area_compare_chart,
+    band_trend_chart,
     card,
     data_table,
     h_bar_chart,
@@ -46,13 +47,15 @@ def climate_page() -> rx.Component:
                 card(
                     t("warming_title"),
                     t("warming_sub"),
-                    line_chart(
+                    band_trend_chart(
                         ClimateState.annual,
-                        [
-                            ("t_max", t("t_max"), theme.series(2)),
-                            ("t_mean", t("t_mean"), theme.series(1)),
-                            ("t_min", t("t_min"), theme.series(3)),
-                        ],
+                        band_key="t_band",
+                        mean_key="t_mean",
+                        rolling_key="t_rolling",
+                        band_label=t("t_band"),
+                        mean_label=t("t_mean"),
+                        rolling_label=t("t_rolling"),
+                        color=theme.series(1),
                     ),
                     data_table(
                         ClimateState.annual,

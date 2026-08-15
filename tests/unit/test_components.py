@@ -215,6 +215,24 @@ def _nodes(tree, name: str) -> list[dict]:
     return found
 
 
+def test_climate_page_warming_card_uses_the_band_trend_chart():
+    """Pins the REAL page wiring, not just the helper in isolation: the
+    warming card must actually build with a band, both lines and a legend,
+    and must not leak anything into `wrapperStyle`.
+    """
+    from italy_dashboard.pages.climate import climate_page
+
+    tree = climate_page().render()
+    composed = _nodes(tree, "RechartsComposedChart")
+    assert composed, "warming card must use the band+line composed chart"
+
+    warming = composed[0]
+    assert len(_nodes(warming, "RechartsArea")) == 1
+    assert len(_nodes(warming, "RechartsLine")) == 2
+    assert _nodes(warming, "RechartsLegend")
+    assert "wrapperStyle" not in str(warming)
+
+
 def test_climate_crime_scatters_render_and_carry_no_legend():
     """Pins the real page, not just the helper: both cards hold a single-series
     scatter whose series name IS the card heading, so a legend there is pure
@@ -319,6 +337,103 @@ def test_composed_bar_line_chart_builds_with_one_axis():
     assert rendered.count("YAxis") == 1
 
 
+# ------------------------------------------------------------ band_trend_chart
+#
+# One entity (annual temperature) shown three ways: a min/max band, its thin
+# annual-mean line, and a heavier 10-year rolling-mean trend line, ALL in one
+# hue. `t_rolling` is None at the series edges (see queries.climate_annual_
+# series), which the chart must simply not draw a line through, not bridge.
+
+BAND_ROWS = [
+    {"period": "2000", "t_band": [10.0, 20.0], "t_mean": 15.0, "t_rolling": None},
+    {"period": "2005", "t_band": [11.0, 21.0], "t_mean": 16.0, "t_rolling": 15.5},
+    {"period": "2010", "t_band": [12.0, 22.0], "t_mean": 17.0, "t_rolling": 16.5},
+    {"period": "2015", "t_band": [13.0, 23.0], "t_mean": 18.0, "t_rolling": None},
+]
+
+
+def _band_chart() -> rx.Component:
+    return c.band_trend_chart(
+        BAND_ROWS,
+        band_key="t_band",
+        mean_key="t_mean",
+        rolling_key="t_rolling",
+        band_label="Range",
+        mean_label="Mean",
+        rolling_label="10-yr average",
+        color=theme.series(1),
+    )
+
+
+def _node_prop(node: dict, prop: str) -> str | None:
+    """The raw `<prop>:<value>` string from a rendered node's props list."""
+    for p in node.get("props", []):
+        if p.startswith(f"{prop}:"):
+            return p
+    return None
+
+
+def test_band_trend_chart_has_one_band_two_lines_and_a_legend():
+    tree = _band_chart().render()
+    assert len(_nodes(tree, "RechartsArea")) == 1
+    assert len(_nodes(tree, "RechartsLine")) == 2
+    assert _nodes(tree, "RechartsLegend")
+
+
+def test_band_trend_chart_band_has_no_stroke_and_a_low_opacity_fill():
+    """Verified mechanism (see `queries.climate_annual_series` / task spec):
+    `stroke="none"` plus a translucent fill via `custom_attrs`, matching the
+    `fill_opacity` pitfall already documented on `area_compare_chart` — `Area`
+    has no `fill_opacity` field, so anything else here would silently land in
+    `wrapperStyle` instead of actually reaching recharts.
+    """
+    tree = _band_chart().render()
+    areas = _nodes(tree, "RechartsArea")
+    assert len(areas) == 1
+    assert _node_prop(areas[0], "stroke") == 'stroke:"none"'
+    # fillOpacity must be a real prop on the Area itself, not swallowed.
+    fill_opacity = next(p for p in areas[0]["props"] if p.startswith("fillOpacity"))
+    value = float(fill_opacity.split(":", 1)[1])
+    assert 0 < value < 0.5, "the band must stay translucent, not opaque"
+
+
+def test_band_trend_chart_rolling_line_is_visually_heavier_than_the_mean_line():
+    tree = _band_chart().render()
+    lines = _nodes(tree, "RechartsLine")
+    assert len(lines) == 2
+    widths = []
+    for node in lines:
+        prop = _node_prop(node, "strokeWidth")
+        assert prop is not None, "every line must set an explicit strokeWidth"
+        widths.append(float(prop.split(":", 1)[1]))
+    assert max(widths) > min(widths), "the rolling mean must outweigh the annual mean line"
+
+
+def test_band_trend_chart_band_and_both_lines_share_one_hue():
+    """One entity shown three ways: distinguished by mark weight, not colour."""
+    tree = _band_chart().render()
+    areas = _nodes(tree, "RechartsArea")
+    lines = _nodes(tree, "RechartsLine")
+    fill_prop = _node_prop(areas[0], "fill")
+    assert fill_prop is not None
+    fill = fill_prop.split(":", 1)[1]
+    strokes = set()
+    for line in lines:
+        stroke_prop = _node_prop(line, "stroke")
+        assert stroke_prop is not None
+        strokes.add(stroke_prop.split(":", 1)[1])
+    assert strokes == {fill}, "band fill and both line strokes must be the same colour"
+
+
+def test_band_trend_chart_renders_band_both_lines_legend_no_wrapper_style():
+    """The chart-renders acceptance test from the task spec, verbatim."""
+    rendered = str(_band_chart().render())
+    assert rendered.count("RechartsArea") >= 1
+    assert rendered.count("RechartsLine") == 2
+    assert "RechartsLegend" in rendered
+    assert "wrapperStyle" not in rendered
+
+
 # ------------------------------------------------ tooltip styling / brush
 
 
@@ -406,6 +521,16 @@ CHART_CHROME_HELPERS: dict[str, Callable[[], rx.Component]] = {
     "area_compare_chart": lambda: c.area_compare_chart(
         ROWS,
         [("early", "1951-1980", theme.series(1)), ("late", "1996-2025", theme.series(2))],
+    ),
+    "band_trend_chart": lambda: c.band_trend_chart(
+        BAND_ROWS,
+        band_key="t_band",
+        mean_key="t_mean",
+        rolling_key="t_rolling",
+        band_label="Range",
+        mean_label="Mean",
+        rolling_label="10-yr average",
+        color=theme.series(1),
     ),
 }
 

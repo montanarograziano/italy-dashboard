@@ -694,21 +694,65 @@ def climate_cities() -> list[str]:
     return [r["name"] for r in rows]
 
 
+ROLLING_YEARS_BEFORE = 4
+ROLLING_YEARS_AFTER = 5
+ROLLING_WINDOW_SIZE = ROLLING_YEARS_BEFORE + 1 + ROLLING_YEARS_AFTER  # 10
+
+
 def climate_annual_series(city: str) -> list[Row]:
     """Annual mean of daily mean, of daily minima and of daily maxima.
 
     Three series, not one: Italian minima have risen faster than maxima, which
-    a mean-only chart hides entirely.
+    a mean-only chart hides entirely. `t_min`/`t_max`/`t_mean` stay in the
+    output for the card's exact-numbers table.
+
+    Two more columns feed the redesigned warming chart, which shows this as
+    ONE entity (one hue), not three:
+
+    - `t_band`: the `[t_min, t_max]` pair for a single Area whose fill sits
+      BETWEEN the two values (recharts' "range area" idiom, triggered by a
+      two-element array data key) — the band a reader actually wants, as
+      opposed to two areas each shaded down to the axis baseline.
+    - `t_rolling`: a 10-year CENTRED rolling mean of `t_mean` (4 years before,
+      the year itself, 5 after), so the trend reads through year-to-year
+      noise. NULL wherever that window is not fully covered: a trend line
+      that quietly narrows its own window at the series' edges would misstate
+      exactly the years where it is least reliable. The `n = 10 AND span = 9`
+      guard checks BOTH the row count and the YEAR span of the window, not
+      row count alone — `ROWS BETWEEN` counts rows, not years, so it would
+      silently bridge a gap left by an excluded partial year (see
+      MIN_DAYS_FOR_A_FULL_YEAR) and average across a hole in the series.
 
     Partial years are excluded (see MIN_DAYS_FOR_A_FULL_YEAR): the running year
     would otherwise plot about 1 C too warm, as a record that never happened.
     """
     return _query(
         f"""
-        SELECT year AS period, t_mean, t_min_mean AS t_min, t_max_mean AS t_max
-        FROM {CLIMATE_ANNUAL}
-        WHERE capital_city = ? AND days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
-        ORDER BY year
+        WITH base AS (
+            SELECT year AS period, t_mean, t_min_mean AS t_min, t_max_mean AS t_max
+            FROM {CLIMATE_ANNUAL}
+            WHERE capital_city = ? AND days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
+        ),
+        windowed AS (
+            SELECT *,
+                COUNT(*) OVER w AS n,
+                MAX(CAST(period AS INTEGER)) OVER w
+                    - MIN(CAST(period AS INTEGER)) OVER w AS span,
+                AVG(t_mean) OVER w AS rolling
+            FROM base
+            WINDOW w AS (
+                ORDER BY CAST(period AS INTEGER)
+                ROWS BETWEEN {ROLLING_YEARS_BEFORE} PRECEDING
+                         AND {ROLLING_YEARS_AFTER} FOLLOWING
+            )
+        )
+        SELECT period, t_mean, t_min, t_max,
+               [t_min, t_max] AS t_band,
+               CASE WHEN n = {ROLLING_WINDOW_SIZE} AND span = {ROLLING_WINDOW_SIZE - 1}
+                    THEN ROUND(rolling, 2)
+               END AS t_rolling
+        FROM windowed
+        ORDER BY CAST(period AS INTEGER)
         """,
         [city],
     )

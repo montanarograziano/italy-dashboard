@@ -146,12 +146,15 @@ EN: dict[str, str] = {
     "city": "City",
     "warming_title": "Annual temperature",
     "warming_sub": (
-        "Mean of daily mean, minimum and maximum, per year. ERA5-Land "
-        "reanalysis sampled at the province capital — not a station record."
+        "Annual mean (thin line), the min-max band each year (shaded), and a "
+        "10-year centred rolling average (heavy line). ERA5-Land reanalysis "
+        "sampled at the province capital — not a station record."
     ),
     "t_mean": "Mean",
     "t_min": "Min (mean of daily minima)",
     "t_max": "Max (mean of daily maxima)",
+    "t_band": "Min-max range",
+    "t_rolling": "10-year average",
     "stripes_title": "Anomaly against the 1981-2010 normal",
     "stripes_sub": "Degrees Celsius above or below the city's own 1981-2010 average",
     "grid_title": "Warming stripes across cities",
@@ -347,12 +350,15 @@ IT: dict[str, str] = {
     "city": "Città",
     "warming_title": "Temperatura annuale",
     "warming_sub": (
-        "Media delle medie, delle minime e delle massime giornaliere, per anno. "
+        "Media annuale (linea sottile), la fascia minimo-massimo di ogni anno "
+        "(colorata) e una media mobile centrata su 10 anni (linea spessa). "
         "Rianalisi ERA5-Land campionata nel capoluogo — non è una serie da stazione."
     ),
     "t_mean": "Media",
     "t_min": "Minima (media delle minime giornaliere)",
     "t_max": "Massima (media delle massime giornaliere)",
+    "t_band": "Intervallo min-max",
+    "t_rolling": "Media mobile (10 anni)",
     "stripes_title": "Anomalia rispetto alla norma 1981-2010",
     "stripes_sub": "Gradi Celsius sopra o sotto la media 1981-2010 della città",
     "grid_title": "Strisce del riscaldamento per città",

@@ -413,9 +413,116 @@ def test_climate_cities_are_the_sample_capitals(climate_db):
 def test_climate_annual_series_has_min_mean_max_per_year(climate_db):
     rows = q.climate_annual_series("Roma")
     assert rows
-    assert {"period", "t_mean", "t_min", "t_max"} == set(rows[0])
+    assert {"period", "t_mean", "t_min", "t_max", "t_band", "t_rolling"} == set(rows[0])
     assert [r["period"] for r in rows] == sorted(r["period"] for r in rows)
     assert all(r["t_min"] <= r["t_mean"] <= r["t_max"] for r in rows)
+
+
+def test_t_band_pairs_min_and_max_in_that_order(climate_db):
+    """`t_band` feeds a fill-between Area: [min, max], never [max, min]."""
+    rows = q.climate_annual_series("Roma")
+    assert rows
+    for r in rows:
+        assert list(r["t_band"]) == [r["t_min"], r["t_max"]]
+
+
+@pytest.fixture
+def short_rolling_mart(sample_db):
+    """Eight complete years: shorter than the 10-year rolling window.
+
+    Every `t_rolling` must be None here — there is no year in this series for
+    which a full 10-year window (4 before, the year itself, 5 after) exists.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = [
+        {
+            "province_code": "IT998",
+            "province_name": "Shortville",
+            "capital_city": "Shortville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": str(year),
+            "t_mean": float(year - 2000),
+            "t_min_mean": float(year - 2000) - 5.0,
+            "t_max_mean": float(year - 2000) + 5.0,
+            "days_observed": 365,
+            "anomaly_1981_2010": 0.0,
+        }
+        for year in range(2000, 2008)  # 8 years: 2000..2007
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_climate_annual.parquet")
+    return marts
+
+
+def test_rolling_mean_is_null_everywhere_when_series_is_shorter_than_the_window(
+    short_rolling_mart,
+):
+    rows = q.climate_annual_series("Shortville")
+    assert len(rows) == 8
+    assert all(r["t_rolling"] is None for r in rows)
+
+
+@pytest.fixture
+def long_rolling_mart(sample_db):
+    """Twenty years, t_mean = year - 2000 (a plain arithmetic series).
+
+    This makes the rolling mean's exact value predictable by hand: over any
+    window of consecutive integers, the mean is the average of the first and
+    last value in that window.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = [
+        {
+            "province_code": "IT997",
+            "province_name": "Longville",
+            "capital_city": "Longville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": str(year),
+            "t_mean": float(year - 2000),
+            "t_min_mean": float(year - 2000) - 5.0,
+            "t_max_mean": float(year - 2000) + 5.0,
+            "days_observed": 365,
+            "anomaly_1981_2010": 0.0,
+        }
+        for year in range(2000, 2020)  # 20 years: 2000..2019
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_climate_annual.parquet")
+    return marts
+
+
+def test_rolling_mean_edges_are_null_exactly_where_the_window_is_incomplete(long_rolling_mart):
+    """4 years precede, 5 follow: the first 4 and last 5 years can't fill it.
+
+    Asserts the EXACT boundary (years 2000-2003 and 2015-2019 null, 2004-2014
+    populated), not just "some are null" — a rolling mean that silently
+    shrinks its own window at the edges is the defect this test exists to
+    catch.
+    """
+    rows = {r["period"]: r["t_rolling"] for r in q.climate_annual_series("Longville")}
+    assert len(rows) == 20
+
+    null_years = set(range(2000, 2004)) | set(range(2015, 2020))
+    populated_years = set(range(2004, 2015))
+    assert null_years | populated_years == set(range(2000, 2020))
+
+    for year in null_years:
+        assert rows[str(year)] is None, f"{year} should be null (incomplete window)"
+    for year in populated_years:
+        assert rows[str(year)] is not None, f"{year} should be populated (full window)"
+
+
+def test_rolling_mean_is_centred_and_correct_on_a_synthetic_series(long_rolling_mart):
+    """Year 2009 (index 9): window is 2005..2014 (4 before, self, 5 after).
+
+    t_mean there is a straight line (t_mean = year - 2000), so the mean of a
+    consecutive integer window is just the average of its endpoints:
+    (5 + 14) / 2 = 9.5.
+    """
+    rows = {r["period"]: r["t_rolling"] for r in q.climate_annual_series("Longville")}
+    assert rows["2009"] == 9.5
 
 
 def test_warming_rate_ranking_is_sorted_descending(climate_db):

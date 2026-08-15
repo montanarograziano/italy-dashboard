@@ -326,6 +326,91 @@ def area_compare_chart(
     )
 
 
+def band_trend_chart(
+    data: ChartData,
+    band_key: str,
+    mean_key: str,
+    rolling_key: str,
+    band_label: str | rx.Var,
+    mean_label: str | rx.Var,
+    rolling_label: str | rx.Var,
+    color: str | rx.Var,
+    height: int = 300,
+) -> rx.Component:
+    """One quantity shown three ways, all in ONE hue: a min/max band, its thin
+    annual line, and a heavier multi-year rolling-mean trend line.
+
+    This is deliberately NOT three differently-coloured series: min, mean and
+    max here are one entity (e.g. a year's temperature) viewed at three levels
+    of detail, not three different entities that would each need their own
+    colour to stay distinguishable. The legend tells them apart by mark
+    weight and label instead — band vs thin line vs thick line — which is why
+    every one of `fill`/`stroke` below is the SAME `color` argument.
+
+    `band_key` must point at a two-element `[min, max]` array per row (see
+    `queries.climate_annual_series`'s `t_band`, and NOT two separate columns):
+    recharts' `Area` treats an array-valued `dataKey` as a "range area" and
+    fills BETWEEN the two values. Two ordinary areas would each fill from the
+    axis baseline instead and shade a region that means nothing.
+
+    `stroke="none"` and the translucent fill are exactly the mechanism
+    verified before this helper was written. `custom_attrs={"fillOpacity":
+    ...}` is required, not a `fill_opacity=` kwarg: `Area` has no such
+    declared field (see `area_compare_chart`'s docstring for the same
+    pitfall), so an undeclared kwarg silently lands in Reflex's generic
+    `wrapperStyle` fallback, a prop recharts never reads.
+
+    `rolling_key` is expected to be `None` at the series' edges (an
+    incomplete rolling window; see `queries.climate_annual_series`).
+    `connect_nulls` is left at its default (`False`) for that line so it
+    simply stops short at the edges instead of bridging the gap with a
+    straight segment that would misstate the trend exactly where it is
+    least supported by data.
+    """
+    band = rx.recharts.area(
+        data_key=band_key,
+        name=band_label,
+        stroke="none",
+        fill=color,
+        custom_attrs={"fillOpacity": 0.22},
+        legend_type="rect",
+        type_="monotone",
+        is_animation_active=False,
+    )
+    mean_line = rx.recharts.line(
+        data_key=mean_key,
+        name=mean_label,
+        stroke=color,
+        stroke_width=1.25,
+        dot=False,
+        legend_type="line",
+        type_="monotone",
+    )
+    rolling_line = rx.recharts.line(
+        data_key=rolling_key,
+        name=rolling_label,
+        stroke=color,
+        stroke_width=3,
+        dot=False,
+        legend_type="line",
+        type_="monotone",
+    )
+    return rx.recharts.composed_chart(
+        band,
+        mean_line,
+        rolling_line,
+        _x_axis(),
+        _y_axis(),
+        _grid(),
+        _tooltip(),
+        rx.recharts.legend(),
+        data=data,
+        width="100%",
+        height=height,
+        margin={"top": 8, "right": 8, "bottom": 4, "left": 8},
+    )
+
+
 def bar_chart(
     data: ChartData,
     data_key: str,
