@@ -403,11 +403,7 @@ def small_multiples(items: rx.Var | list, height: int = 90) -> rx.Component:
             items,
             lambda item: rx.vstack(
                 rx.text(item["city"], font_size="0.75em", color=theme.ink_secondary()),
-                # `item["rows"]` is typed `Any` (the outer `Row = dict[str, Any]`
-                # loses precision once you index into it inside a foreach arg),
-                # so `stripe_chart`'s own internal `rx.foreach` over it raises
-                # `ForeachVarError: ... of type Any` without this explicit cast.
-                stripe_chart(item["rows"].to(list[dict[str, Any]]), height=height),
+                stripe_chart(item["rows"], height=height),
                 spacing="1",
                 width="100%",
             ),

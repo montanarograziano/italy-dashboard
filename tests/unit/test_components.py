@@ -17,7 +17,7 @@ import reflex as rx
 
 from italy_dashboard import components as c
 from italy_dashboard import palette, theme
-from italy_dashboard.state import ClimateState
+from italy_dashboard.state import ClimateState, GridItem
 
 
 def test_stripe_chart_binds_fill_per_cell_not_once_for_the_whole_bar():
@@ -47,38 +47,58 @@ def test_stripe_chart_binds_fill_per_cell_not_once_for_the_whole_bar():
 # would pass just as happily if the grid quietly rendered one panel, or the
 # same city N times, as it does for a real per-city grid: the failure mode
 # lives in the OUTER iteration, not in the stripe rendering `stripe_chart`
-# already covers above. So this uses a concrete two-city literal (not a
-# state Var) precisely so the two cities' names and fills land as literal
-# text in the rendered tree and can be told apart.
+# already covers above. So this uses a concrete two-city literal, explicitly
+# typed as `list[GridItem]` (matching what `ClimateState.stripes_grid` really
+# is), precisely so the two cities' names and fills land as literal text in
+# the rendered tree and can be told apart. Without the explicit `.to(...)`,
+# Reflex's structural inference over a raw nested literal collapses `rows`
+# to a union type before it ever reaches `stripe_chart`'s own foreach — the
+# same class of problem `GridItem` fixes for the real state Var, just hit a
+# different way for a literal.
 
-GRID_ITEMS = [
-    {"city": "Roma", "rows": [{"period": "2020", "anomaly": 0.5, "fill": "var(--div-5)"}]},
-    {"city": "Milano", "rows": [{"period": "2020", "anomaly": -0.2, "fill": "var(--div-3)"}]},
-]
+GRID_ITEMS = rx.Var.create(
+    [
+        {"city": "Roma", "rows": [{"period": "2020", "anomaly": 0.5, "fill": "var(--div-5)"}]},
+        {"city": "Milano", "rows": [{"period": "2020", "anomaly": -0.2, "fill": "var(--div-3)"}]},
+    ]
+).to(list[GridItem])
 
 
 def test_small_multiples_renders_a_distinct_panel_per_city():
-    """Both cities' names and both cities' distinct fills must appear.
+    """Both cities' names and both cities' distinct fills must appear as
+    data, AND the tree must show a real per-item iteration rather than a
+    single indexed element.
 
-    If the grid rendered zero panels, neither city name would appear. If it
-    rendered every panel with the first item's data (e.g. `items[0]` instead
-    of iterating), "Milano" and `var(--div-3)` would be missing even though
-    the chart still builds successfully.
+    The data-level checks alone are not a reliable guard here: Reflex's Var
+    repr embeds the full underlying array literal as debug metadata on every
+    derived Var, INCLUDING on a single `.at(0)` index — so "Milano" and
+    `var(--div-3)` show up in `str(component.render())` even when the actual
+    generated code only ever reads index 0 (verified by hand: reverting
+    `small_multiples` to `first = items[0]; ...` still leaves both city names
+    in the rendered string). The real tell is the JS *shape*: a working
+    `rx.foreach` compiles to an anonymous per-item arg (`item_rx_state_...`)
+    bound over the whole array, with no `.at?.(` index anywhere; `items[0]`
+    compiles to an explicit `.at?.(0)` and drops that arg entirely. Both
+    `.at?.(` presence and `item_rx_state_` absence flip on that same revert.
     """
     rendered = str(c.small_multiples(GRID_ITEMS).render())
     assert "Roma" in rendered
     assert "Milano" in rendered
     assert "var(--div-5)" in rendered
     assert "var(--div-3)" in rendered
+    assert "item_rx_state_" in rendered, "expected a real rx.foreach arg, not indexed access"
+    assert ".at?.(" not in rendered, "items[0] compiles to an explicit index, not a foreach"
 
 
 def test_small_multiples_builds_against_the_real_state_var():
-    """`ClimateState.stripes_grid` is `list[Row]` (`Row = dict[str, Any]`), so
-    indexing `item["rows"]` inside the foreach arg loses its list type and
-    Reflex's own `rx.foreach` inside `stripe_chart` raises `ForeachVarError:
-    ... of type Any` without an explicit `.to(list[dict[str, Any]])` cast.
-    This is the same class of prop-typing trap as `wrapperStyle`: it looks
-    fine against a hand-rolled literal and only breaks against the real Var.
+    """`ClimateState.stripes_grid` is `list[GridItem]`, a `TypedDict` with
+    `rows: list[Row]`, precisely so Reflex infers `item["rows"]` as a real
+    list type inside the foreach arg. The flat `Row = dict[str, Any]` alias
+    would collapse it to `Any` and `stripe_chart`'s own internal `rx.foreach`
+    would raise `ForeachVarError: ... of type Any` at render time. This test
+    catches a regression to that flat typing even though a hand-rolled
+    literal (see the test above) would not: literals don't go through
+    Reflex's state-var type inference at all.
     """
     assert c.small_multiples(ClimateState.stripes_grid).render()
 
