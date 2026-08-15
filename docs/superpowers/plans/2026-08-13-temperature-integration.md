@@ -429,7 +429,7 @@ if __name__ == "__main__":
 Run: `uv run pytest tests/unit/test_capitals_seed.py -v`
 Expected: the seven mapping tests PASS; `test_committed_seed_is_complete_and_inside_italy` and `test_seed_coordinates_are_distinct` FAIL with `FileNotFoundError` — the seed does not exist yet. It is generated in Step 7, after the client exists.
 
-Note: `ingestion/capitals.py` imports `ingestion.openmeteo`, which Task 2 creates. Until then the import fails. **Do Task 2 Steps 1-4 now, then return here.** The seed cannot be built without the geocoding client, and the client cannot be tested without a place to put it, so these two tasks interlock at exactly this point.
+Note: `ingestion/capitals.py` imports `ingestion.openmeteo`. **Task 2 is executed before Task 1**, so that module already exists when you start — verify with `ls ingestion/openmeteo.py` before Step 3. If it is missing, stop and report BLOCKED rather than stubbing it: the geocoding client is Task 2's deliverable and duplicating it here would leave two implementations to reconcile.
 
 - [ ] **Step 5: Add seed wiring to `dbt/dbt_project.yml`**
 
@@ -542,12 +542,27 @@ def make_client(handler) -> OpenMeteoClient:
 
 GEO_MULTI = {
     "results": [
-        {"name": "Roma", "country_code": "US", "latitude": 43.2, "longitude": -75.4,
-         "population": 32000},
-        {"name": "Roma", "country_code": "IT", "latitude": 41.8933, "longitude": 12.4829,
-         "population": 2748109},
-        {"name": "Roma", "country_code": "IT", "latitude": 44.0, "longitude": 11.0,
-         "population": 900},
+        {
+            "name": "Roma",
+            "country_code": "US",
+            "latitude": 43.2,
+            "longitude": -75.4,
+            "population": 32000,
+        },
+        {
+            "name": "Roma",
+            "country_code": "IT",
+            "latitude": 41.8933,
+            "longitude": 12.4829,
+            "population": 2748109,
+        },
+        {
+            "name": "Roma",
+            "country_code": "IT",
+            "latitude": 44.0,
+            "longitude": 11.0,
+            "population": 900,
+        },
     ]
 }
 
@@ -577,10 +592,20 @@ async def test_geocode_picks_the_most_populous_italian_match():
 
 async def test_geocode_raises_when_no_italian_match():
     async def handler(request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(200, json={"results": [
-            {"name": "Nowhere", "country_code": "FR", "latitude": 1.0, "longitude": 2.0,
-             "population": 10}
-        ]})
+        return httpx2.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "name": "Nowhere",
+                        "country_code": "FR",
+                        "latitude": 1.0,
+                        "longitude": 2.0,
+                        "population": 10,
+                    }
+                ]
+            },
+        )
 
     async with make_client(handler) as client:
         with pytest.raises(OpenMeteoError, match="No Italian match"):
@@ -883,9 +908,7 @@ class OpenMeteoClient:
             if values is None:
                 values = daily.get(f"{var}_{MODEL}")
             if values is None:
-                raise OpenMeteoError(
-                    f"Response is missing {var!r}; keys present: {sorted(daily)}"
-                )
+                raise OpenMeteoError(f"Response is missing {var!r}; keys present: {sorted(daily)}")
             out[column] = list(values)
         return out
 
@@ -904,8 +927,6 @@ def _reason(resp: httpx2.Response) -> str:
 
 Run: `uv run pytest tests/unit/test_openmeteo.py -v`
 Expected: all 11 PASS.
-
-At this point return to **Task 1 Step 5** and finish the seed, then come back for Step 5 below.
 
 - [ ] **Step 5: Commit**
 
@@ -954,6 +975,7 @@ from __future__ import annotations
 
 import csv
 from datetime import date
+from itertools import pairwise
 from pathlib import Path
 
 import polars as pl
@@ -968,8 +990,15 @@ def write_seed(tmp_path: Path) -> Path:
     with path.open("w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(
-            ["province_code", "province_name", "capital_city",
-             "region_code", "region_name", "lat", "lon"]
+            [
+                "province_code",
+                "province_name",
+                "capital_city",
+                "region_code",
+                "region_name",
+                "lat",
+                "lon",
+            ]
         )
         w.writerow(["ITC45", "Milano", "Milano", "ITC4", "Lombardia", "45.4642", "9.19"])
         w.writerow(["ITE43", "Roma", "Roma", "ITE4", "Lazio", "41.8933", "12.4829"])
@@ -987,7 +1016,7 @@ def test_decade_chunks_cover_the_range_without_gaps_or_overlap():
     assert chunks[0] == (date(1950, 1, 1), date(1959, 12, 31))
     assert chunks[1] == (date(1960, 1, 1), date(1969, 12, 31))
     assert chunks[-1] == (date(1970, 1, 1), date(1971, 6, 15))
-    for (_, prev_end), (next_start, _) in zip(chunks, chunks[1:], strict=True):
+    for (_, prev_end), (next_start, _) in pairwise(chunks):
         assert (next_start - prev_end).days == 1
 
 
@@ -1016,18 +1045,26 @@ def test_payload_to_rows_pairs_dates_with_values():
 
 
 def test_payload_to_rows_rejects_ragged_arrays():
-    payload = {"time": ["1950-01-01", "1950-01-02"], "t_max": [1.0],
-               "t_min": [0.0], "t_mean": [0.5]}
+    payload = {
+        "time": ["1950-01-01", "1950-01-02"],
+        "t_max": [1.0],
+        "t_min": [0.0],
+        "t_mean": [0.5],
+    }
     with pytest.raises(WeatherError, match="length mismatch"):
         weather.payload_to_rows("ITE43", payload)
 
 
 def test_null_rate_counts_days_with_a_missing_mean():
     rows = [
-        {"province_code": "X", "date": date(1950, 1, 1), "t_min": 1.0,
-         "t_mean": 2.0, "t_max": 3.0},
-        {"province_code": "X", "date": date(1950, 1, 2), "t_min": None,
-         "t_mean": None, "t_max": None},
+        {"province_code": "X", "date": date(1950, 1, 1), "t_min": 1.0, "t_mean": 2.0, "t_max": 3.0},
+        {
+            "province_code": "X",
+            "date": date(1950, 1, 2),
+            "t_min": None,
+            "t_mean": None,
+            "t_max": None,
+        },
     ]
     assert weather.null_rate(rows) == 0.5
     assert weather.null_rate([]) == 1.0
@@ -1035,8 +1072,13 @@ def test_null_rate_counts_days_with_a_missing_mean():
 
 def test_write_snapshot_produces_the_expected_schema(tmp_path):
     rows = [
-        {"province_code": "ITE43", "date": date(1950, 1, 1), "t_min": 2.1,
-         "t_mean": 6.5, "t_max": 11.4}
+        {
+            "province_code": "ITE43",
+            "date": date(1950, 1, 1),
+            "t_min": 2.1,
+            "t_mean": 6.5,
+            "t_max": 11.4,
+        }
     ]
     out = weather.write_snapshot(rows, tmp_path)
     assert out == tmp_path / "weather_daily.parquet"
@@ -1049,8 +1091,13 @@ def test_write_snapshot_produces_the_expected_schema(tmp_path):
 
 def test_write_snapshot_is_atomic_and_leaves_no_tmp_file(tmp_path):
     rows = [
-        {"province_code": "ITE43", "date": date(1950, 1, 1), "t_min": 2.1,
-         "t_mean": 6.5, "t_max": 11.4}
+        {
+            "province_code": "ITE43",
+            "date": date(1950, 1, 1),
+            "t_min": 2.1,
+            "t_mean": 6.5,
+            "t_max": 11.4,
+        }
     ]
     weather.write_snapshot(rows, tmp_path)
     assert not list(tmp_path.glob("*.tmp"))
@@ -1065,8 +1112,13 @@ def test_placeholder_snapshot_has_the_same_schema_and_no_rows(tmp_path):
 
 def test_placeholder_never_overwrites_a_real_snapshot(tmp_path):
     rows = [
-        {"province_code": "ITE43", "date": date(1950, 1, 1), "t_min": 2.1,
-         "t_mean": 6.5, "t_max": 11.4}
+        {
+            "province_code": "ITE43",
+            "date": date(1950, 1, 1),
+            "t_min": 2.1,
+            "t_mean": 6.5,
+            "t_max": 11.4,
+        }
     ]
     weather.write_snapshot(rows, tmp_path)
     weather.ensure_weather_placeholder(tmp_path)
@@ -1272,8 +1324,9 @@ async def cmd_refresh(only: str | None = None, data_dir: Path = DATA_DIR) -> int
     bad: list[tuple[str, float]] = []
     async with OpenMeteoClient() as client:
         for i, cap in enumerate(capitals, start=1):
-            logger.info("=== [%d/%d] %s (%s) ===", i, len(capitals), cap.capital_city,
-                        cap.province_code)
+            logger.info(
+                "=== [%d/%d] %s (%s) ===", i, len(capitals), cap.capital_city, cap.province_code
+            )
             try:
                 rows = await _fetch_capital(client, cap, end, raw_dir)
             except OpenMeteoError as exc:
@@ -1287,8 +1340,11 @@ async def cmd_refresh(only: str | None = None, data_dir: Path = DATA_DIR) -> int
                     "cell is probably ocean — nudge lat/lon inland in "
                     "dbt/seeds/province_capitals.csv and rerun "
                     "`just refresh-weather %s`.",
-                    cap.province_code, cap.capital_city, 100 * rate,
-                    100 * MAX_NULL_RATE, cap.province_code,
+                    cap.province_code,
+                    cap.capital_city,
+                    100 * rate,
+                    100 * MAX_NULL_RATE,
+                    cap.province_code,
                 )
             all_rows.extend(r for r in rows if r["t_mean"] is not None)
 
@@ -1909,7 +1965,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Create the violent-crime seed**
 
-The real dataflow publishes 59 offence codes. The chosen set is deliberately narrow: heat-aggression theory predicts interpersonal violence, and ISTAT's homicide sub-types (`MAFIAHOM`, `ROBBHOM`, `TERRORHOM`, `INFANTHOM`, `MASSMURD`) are suspected to nest inside `INTENHOM`, so summing them would double count. `STALK` and `CP612BIS` are both labelled "stalking" and are excluded as suspected duplicates of each other.
+The real dataflow publishes 59 offence codes. The chosen set is deliberately narrow: heat-aggression theory predicts interpersonal violence, and ISTAT's homicide sub-types (`MAFIAHOM`, `ROBBHOM`, `TERRORHOM`, `INFANTHOM`, `MASSMURD`) nest inside `INTENHOM`, so summing them would double count. `STALK` and `CP612BIS` are both labelled "stalking" and are excluded as suspected duplicates of each other.
 
 Create `dbt/seeds/violent_crime_codes.csv`:
 
@@ -1919,34 +1975,36 @@ INTENHOM,intentional homicides
 ATTEMPHOM,attempted homicides
 BLOWS,blows
 RAPE,sexual violence
-CP572,maltreatment in the family or against live-in
 MENACE,menaces
 KIDNAPP,kidnappings
 ```
 
-- [ ] **Step 2: Run the nesting diagnostic against real data**
+Six codes, not seven. `CP572` (maltreatment in the family) is published only from 2022; including it would put a step change in the outcome series at 2022 that region and year fixed effects cannot absorb, because it is a change in *what is counted*, not in the world.
 
-This decides whether the exclusions above are right. Skip it only if `data/marts/mart_offenders.parquet` was built from sample data.
+- [ ] **Step 2: Confirm the two diagnostics (already run, results recorded)**
 
-```bash
-uv run python -c "
-import duckdb
-c = duckdb.connect()
-m = 'data/marts/mart_offenders.parquet'
-print(c.execute(f\"\"\"
-  select year,
-         sum(case when crime_code='INTENHOM' then value end) as intenhom,
-         sum(case when crime_code in
-             ('MAFIAHOM','ROBBHOM','TERRORHOM','INFANTHOM','MASSMURD')
-             then value end) as subtypes
-  from '{m}'
-  where region_code='IT' and sex_is_total and age_is_total and citizenship_is_total
-  group by year order by year
-\"\"\").fetchall())
-"
-```
+Both diagnostics behind the seed above were run during pre-flight against the real `mart_offenders.parquet` in the main checkout, because the worktree's `data/` is gitignored and empty. Their results are recorded here; **do not re-run them and do not change the seed based on sample data**, where the crime codes are synthetic.
 
-If `subtypes <= intenhom` in every year, the sub-types nest inside `INTENHOM` and excluding them is correct — record that in the seed's commit message. If `subtypes > intenhom` in any year they are disjoint categories, so **add** those five codes to the seed. Either way the decision is now evidence-based, and the reasoning belongs in the commit message.
+1. **Homicide sub-types nest inside `INTENHOM`.** At `region_code='IT'`, the five sub-types summed to 225 / 240 / 180 against `INTENHOM` of 758 / 828 / 771 for 2022 / 2023 / 2024. Excluding them is correct.
+2. **All six chosen codes are published in all 18 years** (2007-2024), 6 distinct codes present every year, giving 21 regions × 18 years = **378 region-years**.
+
+- [ ] **Step 2b: Understand why the citizenship filter is inverted (read before writing the model)**
+
+This is the single most important detail in this task, and it is the opposite of what the rest of the codebase does.
+
+At region level, ISTAT publishes only **marginal** slices before 2022, not the full cross-tabulation:
+
+| `sex_is_total` | `age_is_total` | `citizenship_is_total` | years available |
+|---|---|---|---|
+| true | true | **false** | **2007-2024 (18)** |
+| false | true | true | 2008-2024 (17) |
+| true | true | true | **2022-2024 only (3)** |
+
+The triple-total combination — the obvious one to filter on — exists for **three years**. Filtering on `citizenship_is_total` would silently produce a 63-row panel instead of a 378-row one, and nothing would error.
+
+The 18-year slice splits citizenship into `ITL` and `FRG`, so the model sums **across** the citizenship detail rows to reconstruct the total. That reconstruction was verified exact wherever both representations exist: summing `ITL + FRG` gives 67595 / 66454 / 70521 for 2022 / 2023 / 2024, matching the `TOTAL` rows to the unit.
+
+Hence the `violent` CTE below uses `not o.citizenship_is_total` and sums. This is safe **only** because citizenship is the dimension being summed and its two categories partition the total exactly. Do not generalise the pattern to sex or age.
 
 - [ ] **Step 3: Register the seed's column types**
 
@@ -2072,10 +2130,26 @@ climate as (
     join summer_baseline b on s.region_code = b.region_code
 ),
 
--- Violent offenders per region-year. Every non-crime dimension sits on its
--- TOTAL row: summing detail rows across sex, age and citizenship at once would
--- multiply the same people several times over. region_level pins the admin
--- level, because the mart mixes country, macro-area, region and province rows.
+-- Violent offenders per region-year.
+--
+-- NOTE THE INVERTED CITIZENSHIP FILTER -- it is deliberate, and it is the
+-- opposite of what every other model here does.
+--
+-- Before 2022 ISTAT publishes only MARGINAL slices at region level, never the
+-- full cross-tabulation. The triple-total combination (sex_is_total AND
+-- age_is_total AND citizenship_is_total) exists for 2022-2024 ONLY -- three
+-- years. Filtering on it yields a 63-row panel instead of 378, silently.
+--
+-- The slice that spans all 18 years is sex-total x age-total x citizenship
+-- SPLIT, so this sums across the citizenship detail rows to rebuild the total.
+-- Verified exact where both representations coexist: ITL + FRG reproduces the
+-- TOTAL row to the unit (67595 / 66454 / 70521 for 2022 / 2023 / 2024).
+--
+-- Safe ONLY because ITL and FRG partition the total exactly. Do not copy this
+-- pattern onto sex or age, whose categories do not.
+--
+-- region_level pins the admin level: the mart mixes country, macro-area,
+-- region and province rows, and summing across them would multiply everything.
 violent as (
     select
         o.region_code,
@@ -2087,7 +2161,7 @@ violent as (
     where o.region_level = 'region'
       and o.sex_is_total
       and o.age_is_total
-      and o.citizenship_is_total
+      and not o.citizenship_is_total
       and not o.crime_is_total
     group by o.region_code, o.year
 ),
@@ -2187,6 +2261,18 @@ print('slope, r, n:', c.execute(f\"select round(regr_slope(ln_offenders_dm, summ
 ```
 
 Expected against sample data: 8 regions (the NUTS-2006/2013 overlap documented in Task 4) × 19 years, so ~152 rows. Both demeaned means must be within about 1e-3 of zero — this is only exactly zero on a fully balanced panel, and rounding to four decimals in SQL adds a little slack. A larger residual means the window partitions are wrong.
+
+**Year coverage is the thing to check hardest.** Print the distinct years:
+
+```bash
+uv run python -c "
+import duckdb
+c = duckdb.connect()
+print(c.execute(\"select min(year), max(year), count(distinct year) from 'data/marts/mart_crime_climate.parquet'\").fetchone())
+"
+```
+
+Against sample data this must span the full synthetic range (2006-2024, 19 years). **If it returns 3 years, the citizenship filter was written as `citizenship_is_total` instead of `not citizenship_is_total`** — re-read Step 2b. Against real data the same check must return 2007-2024, 18 years, 378 rows.
 
 - [ ] **Step 9: Commit**
 
@@ -2472,8 +2558,7 @@ def climate_distribution(city: str) -> list[Row]:
         HAVING ANY_VALUE(tot.n_early) > 0 AND ANY_VALUE(tot.n_late) > 0
         ORDER BY d.bucket
         """,
-        [city, early_lo, early_hi, late_lo, late_hi,
-         early_lo, early_hi, late_lo, late_hi],
+        [city, early_lo, early_hi, late_lo, late_hi, early_lo, early_hi, late_lo, late_hi],
     )
 
 
@@ -2716,7 +2801,7 @@ class ClimateState(AppState):
 In `italy_dashboard/components.py`, add to `NAV_LINKS` after the population entry:
 
 ```python
-    ("nav_climate", "/climate"),
+(("nav_climate", "/climate"),)
 ```
 
 - [ ] **Step 6: Write `italy_dashboard/pages/climate.py`**
@@ -2791,9 +2876,7 @@ def climate_page() -> rx.Component:
                 card(
                     t("stripes_title"),
                     t("stripes_sub"),
-                    bar_chart(
-                        ClimateState.stripes, "anomaly", "period", theme.SERIES_2
-                    ),
+                    bar_chart(ClimateState.stripes, "anomaly", "period", theme.SERIES_2),
                 ),
                 card(
                     t("ranking_title"),
@@ -2830,9 +2913,7 @@ def climate_page() -> rx.Component:
                 spacing="5",
                 width="100%",
             ),
-            rx.callout(
-                t("no_climate"), icon="triangle_alert", color_scheme="orange", width="100%"
-            ),
+            rx.callout(t("no_climate"), icon="triangle_alert", color_scheme="orange", width="100%"),
         ),
     )
 ```
@@ -3010,7 +3091,7 @@ class ClimateCrimeState(AppState):
 In `italy_dashboard/components.py`, add to `NAV_LINKS` after the climate entry:
 
 ```python
-    ("nav_climate_crime", "/climate-crime"),
+(("nav_climate_crime", "/climate-crime"),)
 ```
 
 - [ ] **Step 6: Write `italy_dashboard/pages/climate_crime.py`**
@@ -3071,14 +3152,14 @@ def climate_crime_page() -> rx.Component:
                         label_name=t("region"),
                     ),
                 ),
-                rx.callout(
-                    t("cc_caveat"), icon="info", color_scheme="gray", width="100%"
-                ),
+                rx.callout(t("cc_caveat"), icon="info", color_scheme="gray", width="100%"),
                 spacing="5",
                 width="100%",
             ),
             rx.callout(
-                t("no_climate_crime"), icon="triangle_alert", color_scheme="orange",
+                t("no_climate_crime"),
+                icon="triangle_alert",
+                color_scheme="orange",
                 width="100%",
             ),
         ),
@@ -3272,6 +3353,10 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 1. The month × year anomaly heatmap is deferred. Recharts, the chart library already in the project, has no heatmap mark, and the anomaly stripes carry the same message. `mart_climate_monthly` is still built, so the view can be added later without rework.
 2. `mart_climate_region` is built but no page reads it yet. It is a dependency-free rollup that the crime panel's logic mirrors, and the roadmap's choropleth work will consume it directly.
 
-**Known ordering constraint.** Tasks 1 and 2 interlock: `ingestion/capitals.py` imports `ingestion/openmeteo.py`, and the seed cannot be generated until the geocoding client exists. Task 1 Step 4 says explicitly to jump to Task 2 Steps 1-4 and return. Anyone executing tasks strictly in order will hit this and the plan tells them what to do.
+**Execution order is 2, 1, 3, 4, 5, 6, 7, 8, 9, 10.** `ingestion/capitals.py` imports `ingestion/openmeteo.py`, so the client is built first and the seed second. Everything after Task 1 runs in numeric order.
+
+**Amended during pre-flight**, after running the plan's own diagnostics against the real `mart_offenders.parquet`:
+- The violent-crime seed dropped to six codes. `CP572` is published only from 2022 and would put a step change in the outcome series that fixed effects cannot absorb.
+- `mart_crime_climate`'s citizenship filter is **inverted** (`not citizenship_is_total`, summing `ITL + FRG`). Before 2022 ISTAT publishes only marginal slices at region level; the triple-total combination exists for three years, so the obvious filter would have silently produced a 63-row panel. The 18-year slice splits citizenship, and `ITL + FRG` was verified to reproduce the `TOTAL` row exactly. See Task 6 Step 2b.
 
 **Type consistency.** `year` is VARCHAR in `stg_weather`, every climate mart and `mart_crime_climate`, matching `mart_offenders`, so the Task 6 join needs no cast. `month` is INTEGER throughout. `province_code` is the join key between the snapshot and the seed; `region_code` is the join key between the climate marts and the crime marts. Query functions return `period` as the x-axis key everywhere, which is why Task 8 Step 6 aliases `bucket` to `period` and fixes the corresponding Task 7 test in the same step.

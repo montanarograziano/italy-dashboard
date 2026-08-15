@@ -44,3 +44,11 @@ sources:
         meta:
           external_location: >-
             read_parquet('{{ env_var('ITALY_DATA_DIR', 'data') }}/income_regional.parquet')
+      - name: weather_daily_pq
+        description: >
+          Daily min/mean/max 2 m temperature per province capital city from
+          Open-Meteo's ERA5-Land archive (1950+). Reanalysis, not station
+          observations: right for trends and anomalies, wrong for record extremes.
+        meta:
+          external_location: >-
+            read_parquet('{{ env_var('ITALY_DATA_DIR', 'data') }}/weather_daily.parquet')

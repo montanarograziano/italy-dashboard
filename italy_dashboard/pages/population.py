@@ -9,7 +9,7 @@ from italy_dashboard.state import PopulationState
 def population_page() -> rx.Component:
     return shell(
         rx.hstack(
-            rx.heading(t("population_title"), size="6", color=theme.INK_PRIMARY),
+            rx.heading(t("population_title"), size="6", color=theme.ink_primary()),
             rx.spacer(),
             region_select(PopulationState.region, PopulationState.set_region_filter),
             width="100%",
@@ -22,7 +22,7 @@ def population_page() -> rx.Component:
             t("residents_sub"),
             line_chart(
                 PopulationState.residents,
-                [("value", t("residents"), theme.SERIES_1)],
+                [("value", t("residents"), theme.series(1))],
             ),
             data_table(
                 PopulationState.residents,
@@ -34,7 +34,7 @@ def population_page() -> rx.Component:
             t("foreign_share_sub"),
             line_chart(
                 PopulationState.foreign_share,
-                [("value", t("share_label"), theme.SERIES_2)],
+                [("value", t("share_label"), theme.series(2))],
             ),
             data_table(
                 PopulationState.foreign_share,

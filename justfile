@@ -37,6 +37,25 @@ discover keyword:
 dims dataset:
     uv run python -m ingestion.fetch dims "{{dataset}}"
 
+# Rebuild the province-capitals seed (geocodes once; REVIEW the CSV before committing)
+build-capitals:
+    uv run python -m ingestion.capitals
+
+# Fetch ERA5-Land daily temperatures for every province capital, then rebuild marts
+# `just refresh-weather ITC45` refetches one city (after a coordinate fix)
+refresh-weather *province:
+    uv run python -m ingestion.weather refresh {{province}}
+    just transform
+
+# Bulk ERA5-Land backfill from Copernicus CDS, then rebuild marts. Requires the
+# `cds` extra (`uv sync --extra cds`) and a CDS account with the ERA5-Land
+# licence accepted (credentials in ~/.cdsapirc). `just refresh-weather-cds 1950 1979`
+# backfills one year range; with no args it covers 1950 up to the last fully
+# published month (ERA5-Land lags reality, see docs/04-datasets.md).
+refresh-weather-cds *years:
+    uv run python -m ingestion.cds refresh {{years}}
+    just transform
+
 # Re-normalize existing raw CSVs (no download), e.g. after a mapping fix
 normalize *dataset:
     uv run python -m ingestion.fetch normalize {{dataset}}
@@ -95,6 +114,11 @@ test-integration:
 # Run the live ISTAT API tests (requires network to esploradati.istat.it)
 test-live:
     uv run pytest -m live
+
+# Run the browser rendering tests (needs `uv sync --extra browser` and
+# `uv run playwright install chromium`; boots a real prod-mode app instance)
+test-browser:
+    uv run pytest tests/browser -m browser
 
 # Lint + typecheck + tests: what CI should run
 check: lint typecheck test

@@ -13,6 +13,8 @@ flowchart LR
     E --> F
     E --> G["marimo notebook"]
     C --> G
+    W["Open-Meteo archive API<br/>ERA5-Land, 1950+"] -->|"just refresh-weather"| X["data/raw/weather/*.json"]
+    X --> C
 ```
 
 ## Design decisions and their reasons
@@ -41,6 +43,13 @@ income_regional`") instead of errors.
 **The app is stateless with respect to data.** Refreshing data requires no app
 restart — the next page load reads the new snapshot.
 
+**`ingestion/` is no longer ISTAT-only.** Temperature comes from Open-Meteo,
+because no ISTAT source has province-level climate before 2006. The two
+fetchers share one output contract, write a parquet snapshot into `data/`, so
+everything downstream is unchanged. `ingestion/openmeteo.py` is the HTTP
+client, `ingestion/weather.py` the orchestration, mirroring the
+`sdmx_client.py` / `fetch.py` split.
+
 ## Repository layout
 
 ```
@@ -50,7 +59,7 @@ italy-dashboard/
 ├── dbt/                  # dbt project: staging + marts + tests, profiles
 ├── italy_dashboard/      # Reflex app: pages, state, queries, i18n, theme
 ├── notebooks/explore.py  # marimo data playground
-├── tests/                # unit + integration (57 tests, all offline)
+├── tests/                # unit + integration (115 tests, all offline)
 ├── docs/                 # this documentation (zensical)
 ├── justfile              # every workflow, one command each
 └── pyproject.toml        # uv-managed; all tool configs

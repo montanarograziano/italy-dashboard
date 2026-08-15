@@ -295,6 +295,10 @@ async def cmd_refresh(only: str | None = None) -> int:
                 continue
             logger.info("[%s] snapshot updated — dashboard can use it now", name)
     ensure_placeholder_snapshots(registry)
+
+    from ingestion.weather import ensure_weather_placeholder
+
+    ensure_weather_placeholder(DATA_DIR)
     if failures:
         logger.error("Refresh finished with failures: %s", ", ".join(failures))
         return 1
@@ -400,6 +404,10 @@ def cmd_sample() -> int:
     generate_all(DATA_DIR)
     MARTS_DIR.mkdir(parents=True, exist_ok=True)
     ensure_placeholder_snapshots(load_registry())
+
+    from ingestion.weather import ensure_weather_placeholder
+
+    ensure_weather_placeholder(DATA_DIR)
     logger.info("Sample data generated. NOTE: this is SYNTHETIC data for dev only.")
     return 0
 

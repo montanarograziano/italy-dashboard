@@ -390,6 +390,384 @@ def test_region_rate_ranking_respects_citizenship(rates_mart):
 
 
 def test_region_rate_ranking_defaults_to_latest_year(rates_mart):
-    assert q.region_rate_ranking(None, q.ALL, q.ALL) == q.region_rate_ranking(
-        "2024", q.ALL, q.ALL
+    assert q.region_rate_ranking(None, q.ALL, q.ALL) == q.region_rate_ranking("2024", q.ALL, q.ALL)
+
+
+# ------------------------------------------------------------------ climate
+
+
+def test_climate_not_ready_without_a_snapshot(missing_db):
+    assert q.climate_ready() is False
+    assert q.climate_cities() == []
+    assert q.climate_annual_series("Roma") == []
+    assert q.warming_rate_ranking() == []
+
+
+def test_climate_cities_are_the_sample_capitals(climate_db):
+    cities = q.climate_cities()
+    assert len(cities) == 20
+    assert cities == sorted(cities)
+    assert "Roma" in cities and "Palermo" in cities
+
+
+def test_climate_annual_series_has_min_mean_max_per_year(climate_db):
+    rows = q.climate_annual_series("Roma")
+    assert rows
+    assert {"period", "t_mean", "t_min", "t_max", "t_band", "t_rolling"} == set(rows[0])
+    assert [r["period"] for r in rows] == sorted(r["period"] for r in rows)
+    assert all(r["t_min"] <= r["t_mean"] <= r["t_max"] for r in rows)
+
+
+def test_t_band_pairs_min_and_max_in_that_order(climate_db):
+    """`t_band` feeds a fill-between Area: [min, max], never [max, min]."""
+    rows = q.climate_annual_series("Roma")
+    assert rows
+    for r in rows:
+        assert list(r["t_band"]) == [r["t_min"], r["t_max"]]
+
+
+@pytest.fixture
+def short_rolling_mart(sample_db):
+    """Eight complete years: shorter than the 10-year rolling window.
+
+    Every `t_rolling` must be None here — there is no year in this series for
+    which a full 10-year window (4 before, the year itself, 5 after) exists.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = [
+        {
+            "province_code": "IT998",
+            "province_name": "Shortville",
+            "capital_city": "Shortville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": str(year),
+            "t_mean": float(year - 2000),
+            "t_min_mean": float(year - 2000) - 5.0,
+            "t_max_mean": float(year - 2000) + 5.0,
+            "days_observed": 365,
+            "anomaly_1981_2010": 0.0,
+        }
+        for year in range(2000, 2008)  # 8 years: 2000..2007
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_climate_annual.parquet")
+    return marts
+
+
+def test_rolling_mean_is_null_everywhere_when_series_is_shorter_than_the_window(
+    short_rolling_mart,
+):
+    rows = q.climate_annual_series("Shortville")
+    assert len(rows) == 8
+    assert all(r["t_rolling"] is None for r in rows)
+
+
+@pytest.fixture
+def long_rolling_mart(sample_db):
+    """Twenty years, t_mean = year - 2000 (a plain arithmetic series).
+
+    This makes the rolling mean's exact value predictable by hand: over any
+    window of consecutive integers, the mean is the average of the first and
+    last value in that window.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = [
+        {
+            "province_code": "IT997",
+            "province_name": "Longville",
+            "capital_city": "Longville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": str(year),
+            "t_mean": float(year - 2000),
+            "t_min_mean": float(year - 2000) - 5.0,
+            "t_max_mean": float(year - 2000) + 5.0,
+            "days_observed": 365,
+            "anomaly_1981_2010": 0.0,
+        }
+        for year in range(2000, 2020)  # 20 years: 2000..2019
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_climate_annual.parquet")
+    return marts
+
+
+def test_rolling_mean_edges_are_null_exactly_where_the_window_is_incomplete(long_rolling_mart):
+    """4 years precede, 5 follow: the first 4 and last 5 years can't fill it.
+
+    Asserts the EXACT boundary (years 2000-2003 and 2015-2019 null, 2004-2014
+    populated), not just "some are null" — a rolling mean that silently
+    shrinks its own window at the edges is the defect this test exists to
+    catch.
+    """
+    rows = {r["period"]: r["t_rolling"] for r in q.climate_annual_series("Longville")}
+    assert len(rows) == 20
+
+    null_years = set(range(2000, 2004)) | set(range(2015, 2020))
+    populated_years = set(range(2004, 2015))
+    assert null_years | populated_years == set(range(2000, 2020))
+
+    for year in null_years:
+        assert rows[str(year)] is None, f"{year} should be null (incomplete window)"
+    for year in populated_years:
+        assert rows[str(year)] is not None, f"{year} should be populated (full window)"
+
+
+def test_rolling_mean_is_centred_and_correct_on_a_synthetic_series(long_rolling_mart):
+    """Year 2009 (index 9): window is 2005..2014 (4 before, self, 5 after).
+
+    t_mean there is a straight line (t_mean = year - 2000), so the mean of a
+    consecutive integer window is just the average of its endpoints:
+    (5 + 14) / 2 = 9.5.
+    """
+    rows = {r["period"]: r["t_rolling"] for r in q.climate_annual_series("Longville")}
+    assert rows["2009"] == 9.5
+
+
+def test_warming_rate_ranking_is_sorted_descending(climate_db):
+    rows = q.warming_rate_ranking(top_n=5)
+    assert len(rows) == 5
+    values = [r["value"] for r in rows]
+    assert values == sorted(values, reverse=True)
+
+
+def test_threshold_days_are_non_negative_integers(climate_db):
+    rows = q.climate_threshold_days("Palermo")
+    assert rows
+    assert {"period", "hot_days", "tropical_nights", "frost_days"} == set(rows[0])
+    assert all(r["hot_days"] >= 0 and r["frost_days"] >= 0 for r in rows)
+
+
+def test_month_heatmap_has_twelve_month_columns(climate_db):
+    rows = q.climate_month_heatmap("Milano")
+    assert rows
+    assert {"period", *[f"m{i}" for i in range(1, 13)]} == set(rows[0])
+
+
+@pytest.fixture
+def climate_daily_mart(sample_db):
+    """Minimal mart_climate_daily.parquet spanning both distribution windows.
+
+    climate_db's synthetic weather series only covers 1981-2024 (see
+    ingestion.sample_data.WEATHER_YEARS), which has ZERO overlap with
+    EARLY_WINDOW (1951-1980). That makes climate_distribution("Torino")
+    legitimately return [] against climate_db: the same short-series
+    limitation already documented for the anomaly columns, not a bug to
+    paper over. Real ERA5 data starts in 1950 and covers both windows.
+
+    This fixture supplies rows in both windows directly (bypassing dbt, like
+    crime_mart/rates_mart above) so the bucketing/normalization logic itself
+    is still exercised by a real test.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = []
+    # early window (1951-1980): cooler days -> lower buckets
+    for year, t_max in [(1960, 20.0), (1965, 22.0), (1970, 24.0)]:
+        rows.append((year, t_max))
+    # late window (1996-2025): warmer days -> higher buckets
+    for year, t_max in [(2000, 26.0), (2010, 28.0), (2020, 30.0)]:
+        rows.append((year, t_max))
+    pl.DataFrame(
+        [
+            {
+                "province_code": "IT001",
+                "province_name": "Torino",
+                "capital_city": "Torino",
+                "region_code": "ITC1",
+                "region_name": "Piemonte",
+                "obs_date": f"{year}-07-15",
+                "year": str(year),
+                "month": 7,
+                "t_min": t_max - 10.0,
+                "t_mean": t_max - 5.0,
+                "t_max": t_max,
+            }
+            for year, t_max in rows
+        ]
+    ).write_parquet(marts / "mart_climate_daily.parquet")
+    return marts
+
+
+def test_distribution_buckets_are_ordered_and_comparable(climate_daily_mart):
+    rows = q.climate_distribution("Torino")
+    assert rows
+    assert {"period", "early", "late"} == set(rows[0])
+    assert [r["period"] for r in rows] == sorted(r["period"] for r in rows)
+    # early-window days landed in the cooler buckets, late-window in the
+    # warmer ones: each row is 100% one side, 0% the other.
+    assert all((r["early"] > 0) != (r["late"] > 0) for r in rows)
+
+
+def test_crime_climate_scatter_returns_both_views(climate_db):
+    out = q.crime_climate_scatter()
+    assert set(out) == {"raw", "panel"}
+    assert out["panel"]
+    assert {"x", "y", "region", "year"} == set(out["panel"][0])
+
+
+def test_crime_climate_stats_report_n_and_never_a_p_value(climate_db):
+    stats = q.crime_climate_stats()
+    assert set(stats) == {"raw", "panel", "n"}
+    assert stats["n"].isdigit()
+    # No significance claim is made anywhere: 21 clusters cannot support one.
+    assert "p =" not in stats["panel"] and "p<" not in stats["panel"]
+
+
+@pytest.fixture
+def crime_climate_mart(sample_db):
+    """Two regions whose ABSOLUTE and WITHIN-region temperatures disagree.
+
+    A cool region with high offending and a hot region with low offending, and
+    inside each region the warmer years are the higher-offending ones. So
+    corr(ln_offenders, summer_tmax) is strongly NEGATIVE while
+    corr(ln_offenders, summer_anomaly) is POSITIVE, and the two columns have
+    no overlap in range (28-35 C against -0.5..+0.5). Reading the raw view off
+    the wrong column cannot go unnoticed against this fixture.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = []
+    for region, tmax0, ln0 in (("Cool region", 28.0, 10.0), ("Hot region", 34.0, 9.0)):
+        for i, year in enumerate(("2020", "2021", "2022")):
+            rows.append(
+                {
+                    "region_code": region[:4],
+                    "region_name": region,
+                    "year": year,
+                    "summer_tmax": tmax0 + 0.5 * i,
+                    "summer_anomaly": -0.5 + 0.5 * i,
+                    "offenders": 1000,
+                    "ln_offenders": ln0 + 0.1 * i,
+                    "summer_anomaly_dm": -0.5 + 0.5 * i,
+                    "ln_offenders_dm": 0.1 * i - 0.1,
+                }
+            )
+    pl.DataFrame(rows).write_parquet(marts / "mart_crime_climate.parquet")
+    return marts
+
+
+def test_raw_scatter_plots_absolute_temperature_not_the_anomaly(crime_climate_mart):
+    """The raw view must be a real cross-section.
+
+    summer_anomaly is each region's deviation from its OWN baseline, so it has
+    the between-region variation already removed: plotting it as the "naive
+    cross-section" shows the confound the page exists to expose has vanished.
+    """
+    out = q.crime_climate_scatter()
+
+    raw_x = sorted(p["x"] for p in out["raw"])
+    panel_x = sorted(p["x"] for p in out["panel"])
+    assert raw_x != panel_x  # the two views must not share an x variable
+
+    # Absolute summer temperatures, not anomalies around zero.
+    assert raw_x == [28.0, 28.5, 29.0, 34.0, 34.5, 35.0]
+    assert all(x > 20 for x in raw_x)
+
+    # The panel branch is untouched: it still plots the demeaned columns.
+    assert panel_x == [-0.5, -0.5, 0.0, 0.0, 0.5, 0.5]
+
+
+def test_raw_stats_are_computed_on_absolute_temperature(crime_climate_mart):
+    """Same guard on the numbers under the charts.
+
+    On this fixture the two candidate x variables give opposite signs, so a
+    slope or r taken from summer_anomaly cannot pass as one from summer_tmax.
+    """
+    stats = q.crime_climate_stats()
+
+    assert stats["n"] == "6"
+    # corr(ln_offenders, summer_tmax) is negative here; the anomaly version
+    # would be +1.00 and this assertion is what catches the swap.
+    assert "r = -" in stats["raw"]
+    assert "slope = -" in stats["raw"]
+    # The panel line still reads off the demeaned columns (positive here).
+    assert "r = +" in stats["panel"]
+
+
+@pytest.fixture
+def partial_year_annual_mart(sample_db):
+    """Twelve flat complete years plus one hot, unfinished year.
+
+    The complete years have an identical mean, so the warming rate over them
+    is exactly zero. The partial year is 6 C warmer with 210 days of data,
+    which is what a January-to-August year looks like on the real feed (the
+    fetch always runs to today minus 7 days).
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = [
+        {
+            "province_code": "IT999",
+            "province_name": "Testville",
+            "capital_city": "Testville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": str(year),
+            "t_mean": 15.0,
+            "t_min_mean": 10.0,
+            "t_max_mean": 20.0,
+            "days_observed": 365,
+            "anomaly_1981_2010": 0.0,
+        }
+        for year in range(2010, 2022)
+    ]
+    rows.append(
+        {
+            "province_code": "IT999",
+            "province_name": "Testville",
+            "capital_city": "Testville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": "2022",
+            "t_mean": 21.0,
+            "t_min_mean": 16.0,
+            "t_max_mean": 26.0,
+            "days_observed": 210,
+            "anomaly_1981_2010": 6.0,
+        }
     )
+    pl.DataFrame(rows).write_parquet(marts / "mart_climate_annual.parquet")
+    return marts
+
+
+def test_partial_years_are_excluded_from_every_climate_series(partial_year_annual_mart):
+    """A year that is not over yet must not be plotted as if it were.
+
+    Without the days_observed gate the unfinished year is a record-warm point
+    on the line and on the stripes, and the last, highest-leverage point of the
+    warming-rate regression.
+    """
+    years = [r["period"] for r in q.climate_annual_series("Testville")]
+    assert "2022" not in years
+    assert len(years) == 12
+
+    stripe_years = [r["period"] for r in q.climate_stripes("Testville")]
+    assert "2022" not in stripe_years
+
+    ranking = q.warming_rate_ranking()
+    assert ranking == [{"name": "Testville", "value": 0.0}]  # flat, not warming
+
+
+def test_climate_stripes_carry_a_diverging_fill(climate_db):
+    rows = q.climate_stripes("Roma")
+    if not rows:
+        pytest.skip("no anomalies in this fixture: the CLINO guard nulls them")
+    assert {"period", "anomaly", "fill"} == set(rows[0])
+    for r in rows:
+        assert r["fill"].startswith("var(--div-")
+    # colour must track the value: the warmest year cannot share the coldest's step
+    warmest = max(rows, key=lambda r: r["anomaly"])
+    coldest = min(rows, key=lambda r: r["anomaly"])
+    if warmest["anomaly"] > coldest["anomaly"]:
+        assert warmest["fill"] != coldest["fill"]
+
+
+def test_climate_stripes_grid_returns_one_entry_per_city(climate_db):
+    grid = q.climate_stripes_grid(limit=6)
+    if not grid:
+        pytest.skip("no anomalies in this fixture: the CLINO guard nulls them")
+    assert len(grid) <= 6
+    assert {"city", "rows"} == set(grid[0])
+    assert all(r["fill"].startswith("var(--div-") for r in grid[0]["rows"])

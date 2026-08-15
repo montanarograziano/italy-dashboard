@@ -19,10 +19,15 @@ REGIONS: list[tuple[str, str]] = [
     ("ITC1", "Piemonte"),
     ("ITC3", "Liguria"),
     ("ITC4", "Lombardia"),
-    ("ITH3", "Veneto"),
-    ("ITH5", "Emilia-Romagna"),
-    ("ITI1", "Toscana"),
-    ("ITI4", "Lazio"),
+    # NUTS-2006 spellings on purpose: ISTAT's real offenders dataflow and
+    # dbt/seeds/province_capitals.csv both use them (ITD3/ITD5/ITE1/ITE4, not
+    # the NUTS-2021 ITH3/ITH5/ITI1/ITI4). A mismatch here does not error, it
+    # silently drops these four regions from every join keyed on region_code,
+    # the crime-climate panel included.
+    ("ITD3", "Veneto"),
+    ("ITD5", "Emilia-Romagna"),
+    ("ITE1", "Toscana"),
+    ("ITE4", "Lazio"),
     ("ITF1", "Abruzzo"),
     ("ITF3", "Campania"),
     ("ITF4", "Puglia"),
@@ -148,8 +153,7 @@ def _rows_inflation(rng: random.Random) -> list[dict]:
                     "territory_name": "Italy",
                     "category": "39",
                     "category_name": (
-                        "consumer price index for the whole nation (base 2015=100)"
-                        " - monthly data"
+                        "consumer price index for the whole nation (base 2015=100) - monthly data"
                     ),
                     "period": f"{year}-{month:02d}",
                     "value": round(yoy + rng.uniform(-0.3, 0.3), 1),
@@ -171,6 +175,7 @@ def generate_all(data_dir: Path, seed: int = 42) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     generate_raw_crime_csv(data_dir / "raw", seed=seed)
     generate_raw_offenders_csv(data_dir / "raw", seed=seed)
+    generate_weather_parquet(data_dir, seed=seed)
     for name, rows in datasets.items():
         df = pl.DataFrame(rows).with_columns(pl.col("value").cast(pl.Float64))
         out = data_dir / f"{name}.parquet"
@@ -276,6 +281,8 @@ OFFENDER_CRIMES = [
     ("FRAUD", "fraud and cyber fraud"),
     ("INJURIES", "voluntary injuries"),
     ("DRUGS", "drug-related crimes"),
+    ("INTENHOM", "intentional homicides"),
+    ("BLOWS", "blows"),
 ]
 
 OFFENDER_AGES = [
@@ -308,12 +315,14 @@ def generate_raw_offenders_csv(raw_dir: Path, seed: int = 42) -> Path:
         ("ITC41", "Varese"),
     ]
     base = {
-        "TOT": 10500,  # grand total = sum of the five crime types
+        "TOT": 10500,  # grand total = sum of the five original crime types
         "THEFT": 5000,
         "ROBBERY": 900,
         "FRAUD": 1600,
         "INJURIES": 1300,
         "DRUGS": 1700,
+        "INTENHOM": 45,
+        "BLOWS": 800,
     }
 
     lines = [RAW_OFFENDERS_HEADER]
@@ -366,3 +375,92 @@ def _rows_income(rng: random.Random) -> list[dict]:
                 }
             )
     return rows
+
+
+# ------------------------------------------------------------------
+# Synthetic daily temperatures, mirroring the real weather_daily.parquet
+# schema so the climate marts build offline.
+#
+# Twenty capitals rather than all 106: generate_all runs in the sample_db
+# fixture on many tests, and 106 cities would multiply every row count by five.
+# Latitudes are approximate on purpose — the values are FAKE.
+
+SAMPLE_CAPITALS: list[tuple[str, float]] = [
+    ("ITC11", 45.07),  # Torino
+    ("ITC16", 44.39),  # Cuneo
+    ("ITC33", 44.41),  # Genova
+    ("ITC34", 44.11),  # La Spezia
+    ("ITC45", 45.46),  # Milano
+    ("ITC47", 45.54),  # Brescia
+    ("ITD35", 45.44),  # Venezia
+    ("ITD55", 44.49),  # Bologna
+    ("ITE14", 43.77),  # Firenze
+    ("ITE43", 41.89),  # Roma
+    ("ITF11", 42.35),  # L'Aquila
+    ("ITF13", 42.46),  # Pescara
+    ("ITF33", 40.85),  # Napoli
+    ("ITF35", 40.68),  # Salerno
+    ("ITF42", 41.12),  # Bari
+    ("ITF45", 40.35),  # Lecce
+    ("ITG12", 38.12),  # Palermo
+    ("ITG17", 37.51),  # Catania
+    ("ITG25", 40.73),  # Sassari
+    ("ITG27", 39.22),  # Cagliari
+]
+
+# Starts in 1981, not in the crime years, so the synthetic series covers the
+# whole 1981-2010 climate normal. Every CLINO baseline in the project needs 25
+# of its 30 years before it emits anything; a 2006-2024 series has only five
+# years inside that window, so every anomaly (annual, monthly and the summer
+# anomaly behind the crime panel) would be NULL and the sample data would
+# exercise none of the anomaly code paths. The 1971-2000 normal stays
+# uncovered on purpose: it keeps a live example of the guard returning NULL.
+WEATHER_YEARS = list(range(1981, 2025))
+
+
+def generate_weather_parquet(data_dir: Path, seed: int = 42) -> Path:
+    """Daily min/mean/max for 20 capitals: latitude gradient + seasonal cycle
+    + a warming trend, so the climate marts have something to aggregate."""
+    import math
+    from datetime import date, timedelta
+
+    from ingestion.weather import SNAPSHOT_NAME, WEATHER_COLUMNS
+
+    rng = random.Random(seed)
+    rows: list[dict] = []
+    for code, lat in SAMPLE_CAPITALS:
+        # Warmer towards the south; roughly 0.7 C per degree of latitude.
+        annual_mean = 26.0 - 0.7 * (lat - 36.0)
+        for year in WEATHER_YEARS:
+            warming = 0.035 * (year - WEATHER_YEARS[0])
+            day = date(year, 1, 1)
+            while day.year == year:
+                doy = day.timetuple().tm_yday
+                seasonal = 9.0 * math.sin(2 * math.pi * (doy - 105) / 365.25)
+                mean = annual_mean + warming + seasonal + rng.uniform(-2.5, 2.5)
+                spread = rng.uniform(4.0, 9.0)
+                rows.append(
+                    {
+                        "province_code": code,
+                        "date": day,
+                        "t_min": round(mean - spread / 2, 1),
+                        "t_mean": round(mean, 1),
+                        "t_max": round(mean + spread / 2, 1),
+                    }
+                )
+                day += timedelta(days=1)
+
+    df = pl.DataFrame(
+        rows,
+        schema={
+            "province_code": pl.Utf8,
+            "date": pl.Date,
+            "t_min": pl.Float64,
+            "t_mean": pl.Float64,
+            "t_max": pl.Float64,
+        },
+    ).select(WEATHER_COLUMNS)
+    out = data_dir / SNAPSHOT_NAME
+    df.write_parquet(out)
+    logger.info("[sample] weather: %d rows -> %s", df.height, out.name)
+    return out

@@ -8,7 +8,7 @@ from italy_dashboard.state import EconomyState
 
 def economy_page() -> rx.Component:
     return shell(
-        rx.heading(t("economy_title"), size="6", color=theme.INK_PRIMARY),
+        rx.heading(t("economy_title"), size="6", color=theme.ink_primary()),
         card(
             t("inflation_title"),
             t("inflation_sub"),
@@ -16,7 +16,7 @@ def economy_page() -> rx.Component:
                 EconomyState.inflation,
                 data_key="value",
                 x_key="period",
-                color=theme.SERIES_1,
+                color=theme.series(1),
             ),
             data_table(
                 EconomyState.inflation,

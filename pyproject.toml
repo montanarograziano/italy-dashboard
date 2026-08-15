@@ -13,6 +13,28 @@ dependencies = [
     "dbt-duckdb>=1.9,<2",
 ]
 
+[project.optional-dependencies]
+# Bulk ERA5-Land backfill via Copernicus CDS (ingestion/cds.py). Not part of
+# the core install: only someone doing a bulk temperature backfill needs a
+# CDS account, an accepted licence, and these packages. Install with:
+#   uv sync --extra cds
+cds = [
+    "cdsapi>=0.7,<1",
+    "xarray>=2024.1,<2026",
+    "netcdf4>=1.6,<2",
+]
+
+# Browser rendering tests (tests/browser/): assertions on computed styles a
+# real browser paints, which no Reflex render-TREE test can see (recharts
+# resolves several props, like an axis tick's `fill`, in ways the Python-side
+# component tree cannot reflect). Only someone running that suite needs a
+# Chromium download. Install with:
+#   uv sync --extra browser
+#   uv run playwright install chromium
+browser = [
+    "pytest-playwright>=0.5,<1",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8",
@@ -37,6 +59,10 @@ packages = ["ingestion", "italy_dashboard"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Plan and spec docs hold code FRAGMENTS, not modules: formatting them wraps
+# isolated snippets in tuple parens, so an implementer pasting a fence gets a
+# tuple literal instead of the call argument the step meant.
+exclude = ["docs/superpowers/**"]
 
 [tool.ruff.lint]
 select = [
@@ -80,5 +106,6 @@ asyncio_mode = "auto"
 markers = [
     "integration: end-to-end pipeline tests (still offline)",
     "live: tests that hit the real ISTAT API (deselected by default)",
+    "browser: browser-rendering tests against a real Chromium (needs the `browser` extra + `playwright install chromium`, deselected by default)",
 ]
-addopts = "-m 'not live'"
+addopts = "-m 'not live and not browser'"

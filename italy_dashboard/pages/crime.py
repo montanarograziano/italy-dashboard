@@ -24,7 +24,7 @@ def _labeled_select(
     disabled: rx.Var | bool = False,
 ) -> rx.Component:
     return rx.vstack(
-        rx.text(label, color=theme.INK_SECONDARY, font_size="0.8em"),
+        rx.text(label, color=theme.ink_secondary(), font_size="0.8em"),
         rx.select(options, value=value, on_change=on_change, disabled=disabled, width="160px"),
         spacing="1",
     )
@@ -34,14 +34,14 @@ def _trend_chart(state: type[CrimeState] | type[OffendersState], single_label: r
     """One compiled chart per series count; the split dimension picks at runtime."""
     return rx.match(
         state.series_count,
-        (1, line_chart(state.trend_rows, [("s1", state.series_label_1, theme.SERIES_1)])),
+        (1, line_chart(state.trend_rows, [("s1", state.series_label_1, theme.series(1))])),
         (
             2,
             line_chart(
                 state.trend_rows,
                 [
-                    ("s1", state.series_label_1, theme.SERIES_1),
-                    ("s2", state.series_label_2, theme.SERIES_2),
+                    ("s1", state.series_label_1, theme.series(1)),
+                    ("s2", state.series_label_2, theme.series(2)),
                 ],
             ),
         ),
@@ -50,13 +50,13 @@ def _trend_chart(state: type[CrimeState] | type[OffendersState], single_label: r
             line_chart(
                 state.trend_rows,
                 [
-                    ("s1", state.series_label_1, theme.SERIES_1),
-                    ("s2", state.series_label_2, theme.SERIES_2),
-                    ("s3", state.series_label_3, theme.SERIES_3),
+                    ("s1", state.series_label_1, theme.series(1)),
+                    ("s2", state.series_label_2, theme.series(2)),
+                    ("s3", state.series_label_3, theme.series(3)),
                 ],
             ),
         ),
-        line_chart(state.trend_rows, [("value", single_label, theme.SERIES_1)]),
+        line_chart(state.trend_rows, [("value", single_label, theme.series(1))]),
     )
 
 
@@ -126,7 +126,7 @@ def _offenders_filter_bar() -> rx.Component:
             on_click=s.reset_filters,
             variant="ghost",
             size="1",
-            color=theme.INK_SECONDARY,
+            color=theme.ink_secondary(),
             cursor="pointer",
         ),
         align="start",
@@ -171,8 +171,8 @@ def _offenders_tab() -> rx.Component:
                 line_chart(
                     s.rates_rows,
                     [
-                        ("s1", t("italians"), theme.SERIES_1),
-                        ("s2", t("foreigners"), theme.SERIES_2),
+                        ("s1", t("italians"), theme.series(1)),
+                        ("s2", t("foreigners"), theme.series(2)),
                     ],
                 ),
                 data_table(
@@ -192,7 +192,7 @@ def _offenders_tab() -> rx.Component:
                     s.region_ranking,
                     data_key="value",
                     y_key="name",
-                    color=theme.SERIES_2,
+                    color=theme.series(2),
                     height=560,
                 ),
                 data_table(s.region_ranking, [("name", t("region")), ("value", t("rate_axis"))]),
@@ -202,7 +202,7 @@ def _offenders_tab() -> rx.Component:
                 t("share_sub"),
                 line_chart(
                     s.share_rows,
-                    [("value", t("share_label"), theme.SERIES_2)],
+                    [("value", t("share_label"), theme.series(2))],
                 ),
                 data_table(s.share_rows, [("period", t("year")), ("value", t("share_label"))]),
             ),
@@ -214,13 +214,13 @@ def _offenders_tab() -> rx.Component:
                     s.by_crime,
                     data_key="value",
                     y_key="name",
-                    color=theme.SERIES_1,
+                    color=theme.series(1),
                     height=420,
                 ),
                 data_table(s.by_crime, [("name", t("crime_type")), ("value", t("offenders"))]),
             ),
             _income_card(),
-            rx.text(t("method_note"), color=theme.INK_MUTED, font_size="0.8em"),
+            rx.text(t("method_note"), color=theme.ink_muted(), font_size="0.8em"),
             spacing="5",
             width="100%",
         ),
@@ -240,13 +240,15 @@ def _income_card() -> rx.Component:
                     _labeled_select(t("year"), s.income_years, s.income_year, s.set_income_year),
                     rx.spacer(),
                     rx.vstack(
-                        rx.text(t("corr_italians"), color=theme.INK_SECONDARY, font_size="0.8em"),
-                        rx.text(s.corr_itl, font_weight="600", color=theme.INK_PRIMARY),
+                        rx.text(t("corr_italians"), color=theme.ink_secondary(), font_size="0.8em"),
+                        rx.text(s.corr_itl, font_weight="600", color=theme.ink_primary()),
                         spacing="1",
                     ),
                     rx.vstack(
-                        rx.text(t("corr_foreigners"), color=theme.INK_SECONDARY, font_size="0.8em"),
-                        rx.text(s.corr_frg, font_weight="600", color=theme.INK_PRIMARY),
+                        rx.text(
+                            t("corr_foreigners"), color=theme.ink_secondary(), font_size="0.8em"
+                        ),
+                        rx.text(s.corr_frg, font_weight="600", color=theme.ink_primary()),
                         spacing="1",
                     ),
                     width="100%",
@@ -255,8 +257,8 @@ def _income_card() -> rx.Component:
                 ),
                 scatter_chart(
                     [
-                        (s.income_itl, t("italians"), theme.SERIES_1),
-                        (s.income_frg, t("foreigners"), theme.SERIES_2),
+                        (s.income_itl, t("italians"), theme.series(1)),
+                        (s.income_frg, t("foreigners"), theme.series(2)),
                     ],
                     x_key="income",
                     y_key="rate",
@@ -265,7 +267,7 @@ def _income_card() -> rx.Component:
                     label_key="region",
                     label_name=t("region"),
                 ),
-                rx.text(t("income_caveat"), color=theme.INK_MUTED, font_size="0.75em"),
+                rx.text(t("income_caveat"), color=theme.ink_muted(), font_size="0.75em"),
                 spacing="4",
                 width="100%",
             ),
@@ -346,7 +348,7 @@ def _convictions_tab() -> rx.Component:
                     s.by_offence,
                     data_key="value",
                     y_key="name",
-                    color=theme.SERIES_1,
+                    color=theme.series(1),
                     height=420,
                 ),
                 data_table(
@@ -360,7 +362,7 @@ def _convictions_tab() -> rx.Component:
                     s.by_region,
                     data_key="value",
                     y_key="name",
-                    color=theme.SERIES_1,
+                    color=theme.series(1),
                     height=460,
                 ),
                 data_table(s.by_region, [("name", t("region")), ("value", t("convictions"))]),
@@ -374,7 +376,7 @@ def _convictions_tab() -> rx.Component:
 
 def crime_page() -> rx.Component:
     return shell(
-        rx.heading(t("crime_title"), size="6", color=theme.INK_PRIMARY),
+        rx.heading(t("crime_title"), size="6", color=theme.ink_primary()),
         rx.tabs.root(
             rx.tabs.list(
                 rx.tabs.trigger(t("tab_offenders"), value="offenders"),

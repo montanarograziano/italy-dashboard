@@ -1,24 +1,136 @@
-"""Chart & UI color tokens.
+"""Chart and UI colour tokens.
 
-Palette follows a validated data-viz palette (colorblind-safe adjacent pairs,
-light surface #fcfcfb). Series colors are assigned in fixed slot order and
-never cycled; multi-series charts stay within the first three slots, which
-validate for all pair combinations.
+Values live in italy_dashboard/palette.py, which is plain data and machine
+validated. This module wraps them in Reflex's native colour-mode conditional so
+a component can ask for "the current mode's blue" without knowing the mode.
+
+Every colour token is reached through an accessor (`series()`, `surface()`,
+`ink_primary()`, `gridline()`, `axis()`, `border()`, ...), which returns an
+`rx.color_mode_cond` Var that follows the toggle. There are no public bare
+light-mode constants: an earlier version of this module exposed both a bare
+constant (fixed at the light value) and an accessor for the same colour, and
+~84 call sites quietly used the bare constant, so toggling dark mode flipped
+the tooltip and page shell but left every chart's gridlines, axes and tick
+labels pinned to light-mode hex on a dark surface. Removing the bare names
+turns that mistake into an immediate `AttributeError` instead of a silent
+rendering bug; `tests/unit/test_theme.py` also greps for the old names as a
+second guard against reintroducing them under a new call site.
+
+`FONT` is the one exception: the font family does not vary with colour mode,
+so it stays a plain public string rather than growing a pointless accessor.
+
+Two call sites need a COMPLETE CSS value (e.g. `"1px solid <colour>"`) rather
+than a bare colour, because a Reflex Var does not survive f-string
+interpolation the way a plain string does: `f"1px solid {some_var}"` bakes the
+Var's repr into the string instead of producing a live conditional wherever
+the plain-string path does not run it back through Reflex's Var machinery.
+`border_css()` and `tooltip_border_css()` build the whole declaration here so
+callers never assemble it themselves.
 """
 
-# Categorical series slots (light mode) — fixed order, never re-assigned.
-SERIES_1 = "#2a78d6"  # blue
-SERIES_2 = "#eb6834"  # orange
-SERIES_3 = "#1baf7a"  # aqua
+from __future__ import annotations
 
-# Chrome & ink
-SURFACE = "#fcfcfb"
-PAGE_BG = "#f9f9f7"
-INK_PRIMARY = "#0b0b0b"
-INK_SECONDARY = "#52514e"
-INK_MUTED = "#898781"
-GRIDLINE = "#e1e0d9"
-AXIS = "#c3c2b7"
-BORDER = "rgba(11,11,11,0.10)"
+import reflex as rx
+
+from italy_dashboard import palette
 
 FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
+
+# Light and dark chrome & ink values, keyed identically. Private: nothing
+# outside this module should reach for a single mode's colour directly — that
+# is exactly the bug described above. Always go through the accessors below.
+_LIGHT = {
+    "SURFACE": palette.SURFACE_LIGHT,
+    "PAGE_BG": "#f9f9f7",
+    "INK_PRIMARY": "#0b0b0b",
+    "INK_SECONDARY": "#52514e",
+    "INK_MUTED": "#898781",
+    "GRIDLINE": "#e1e0d9",
+    "AXIS": "#c3c2b7",
+    "BORDER": "rgba(11,11,11,0.10)",
+}
+
+# Dark counterparts, selected against the dark surface (not inverted).
+_DARK = {
+    "SURFACE": palette.SURFACE_DARK,
+    "PAGE_BG": "#131312",
+    "INK_PRIMARY": "#f4f4f2",
+    "INK_SECONDARY": "#b8b7b2",
+    "INK_MUTED": "#8a8983",
+    "GRIDLINE": "#2e2e2c",
+    "AXIS": "#3d3d3a",
+    "BORDER": "rgba(244,244,242,0.12)",
+}
+
+
+def _cond(key: str) -> rx.Var:
+    return rx.color_mode_cond(light=_LIGHT[key], dark=_DARK[key])
+
+
+def series(n: int) -> rx.Var:
+    """The current mode's colour for categorical slot n (1-based, 1..3)."""
+    if not 1 <= n <= len(palette.CATEGORICAL_LIGHT):
+        raise ValueError(f"series slot {n} outside 1..{len(palette.CATEGORICAL_LIGHT)}")
+    return rx.color_mode_cond(
+        light=palette.CATEGORICAL_LIGHT[n - 1],
+        dark=palette.CATEGORICAL_DARK[n - 1],
+    )
+
+
+def surface() -> rx.Var:
+    return _cond("SURFACE")
+
+
+def page_bg() -> rx.Var:
+    return _cond("PAGE_BG")
+
+
+def ink_primary() -> rx.Var:
+    return _cond("INK_PRIMARY")
+
+
+def ink_secondary() -> rx.Var:
+    return _cond("INK_SECONDARY")
+
+
+def ink_muted() -> rx.Var:
+    return _cond("INK_MUTED")
+
+
+def gridline() -> rx.Var:
+    return _cond("GRIDLINE")
+
+
+def axis() -> rx.Var:
+    return _cond("AXIS")
+
+
+def border() -> rx.Var:
+    return _cond("BORDER")
+
+
+def border_css() -> rx.Var:
+    """The full `1px solid <colour>` value, using the BORDER token.
+
+    A Var cannot be interpolated into an f-string (see module docstring), so
+    callers that need the whole CSS declaration (`border=`, `border_bottom=`)
+    get it built here under `color_mode_cond` rather than assembling it
+    themselves with `f"1px solid {border()}"`.
+    """
+    return rx.color_mode_cond(
+        light=f"1px solid {_LIGHT['BORDER']}",
+        dark=f"1px solid {_DARK['BORDER']}",
+    )
+
+
+def tooltip_border_css() -> rx.Var:
+    """The full `1px solid <colour>` value, using the GRIDLINE token.
+
+    The chart tooltip wants a subtler line than the card BORDER token (it
+    matches the gridlines instead), so it gets its own complete-value
+    accessor rather than sharing `border_css()`.
+    """
+    return rx.color_mode_cond(
+        light=f"1px solid {_LIGHT['GRIDLINE']}",
+        dark=f"1px solid {_DARK['GRIDLINE']}",
+    )

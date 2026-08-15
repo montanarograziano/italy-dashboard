@@ -9,7 +9,7 @@ from italy_dashboard.state import LaborState
 def labor_page() -> rx.Component:
     return shell(
         rx.hstack(
-            rx.heading(t("labor_title"), size="6", color=theme.INK_PRIMARY),
+            rx.heading(t("labor_title"), size="6", color=theme.ink_primary()),
             rx.spacer(),
             region_select(LaborState.region, LaborState.set_region_filter),
             width="100%",
@@ -21,8 +21,8 @@ def labor_page() -> rx.Component:
             line_chart(
                 LaborState.series,
                 [
-                    ("selected", t("selected_region"), theme.SERIES_1),
-                    ("national", t("national_avg"), theme.SERIES_2),
+                    ("selected", t("selected_region"), theme.series(1)),
+                    ("national", t("national_avg"), theme.series(2)),
                 ],
             ),
             data_table(

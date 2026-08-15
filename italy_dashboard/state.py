@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, TypedDict, cast
 
 import reflex as rx
 
@@ -10,6 +10,19 @@ from italy_dashboard import queries as q
 from italy_dashboard.translations import SPLIT_LABEL_TO_KEY, SPLIT_LABELS
 
 Row = dict[str, Any]
+
+
+class GridItem(TypedDict):
+    """One small-multiples panel: a city and its stripe rows.
+
+    Typed precisely rather than as the flat `Row` alias, because Reflex infers
+    the inner type from this annotation. With `list[Row]` the `rows` field
+    collapses to Any inside an rx.foreach lambda and the component raises
+    ForeachVarError at render time.
+    """
+
+    city: str
+    rows: list[Row]
 
 
 class AppState(rx.State):
@@ -168,7 +181,10 @@ class CrimeState(AppState):
             self._selections(), top_n=10, year=self.breakdown_year or None
         )
         self.by_region = q.mart_breakdown(
-            q.CRIME_MART, "region", self._selections(), top_n=25,
+            q.CRIME_MART,
+            "region",
+            self._selections(),
+            top_n=25,
             year=self.breakdown_year or None,
         )
 
@@ -350,7 +366,10 @@ class OffendersState(AppState):
         self.series_label_2 = labels[1] if len(labels) > 1 else ""
         self.series_label_3 = labels[2] if len(labels) > 2 else ""
         self.by_crime = q.mart_breakdown(
-            q.OFFENDERS_MART, "crime", self._selections(), top_n=10,
+            q.OFFENDERS_MART,
+            "crime",
+            self._selections(),
+            top_n=10,
             year=self.breakdown_year or None,
         )
         # rates use resident-population denominators, which exist per region
@@ -433,3 +452,73 @@ class EconomyState(AppState):
     def load(self):
         self.load_shared()
         self.inflation = q.inflation_series()
+
+
+class ClimateState(AppState):
+    """Climate explorer over the mart_climate_* marts."""
+
+    city_options: list[str] = []
+    city: str = ""
+    annual: list[Row] = []
+    stripes: list[Row] = []
+    ranking: list[Row] = []
+    stripes_grid: list[GridItem] = []
+    thresholds: list[Row] = []
+    distribution: list[Row] = []
+    mart_ready: bool = False
+
+    @rx.event
+    def load(self):
+        self.load_shared()
+        self.mart_ready = q.climate_ready()
+        if not self.mart_ready:
+            return
+        self.city_options = q.climate_cities()
+        # Roma is the default when present: a familiar reference point beats an
+        # alphabetically-first city nobody has intuitions about.
+        if self.city not in self.city_options:
+            self.city = "Roma" if "Roma" in self.city_options else self.city_options[0]
+        self.ranking = q.warming_rate_ranking(top_n=20)
+        # `climate_stripes_grid` returns `list[Row]` (the flat, broadly-used
+        # alias); `GridItem` narrows the shape for Reflex's benefit only, at
+        # this one boundary. The runtime values already conform (`{"city":
+        # str, "rows": list[Row]}`); this is a static-typing reconciliation,
+        # not a runtime coercion.
+        self.stripes_grid = cast(list[GridItem], q.climate_stripes_grid(limit=12))
+        self._refresh()
+
+    @rx.event
+    def set_city(self, value: str):
+        self.city = value
+        self._refresh()
+
+    def _refresh(self):
+        self.annual = q.climate_annual_series(self.city)
+        self.stripes = q.climate_stripes(self.city)
+        self.thresholds = q.climate_threshold_days(self.city)
+        self.distribution = q.climate_distribution(self.city)
+
+
+class ClimateCrimeState(AppState):
+    """Region x year panel: summer heat against violent offending."""
+
+    raw_points: list[Row] = []
+    panel_points: list[Row] = []
+    stat_raw: str = "—"
+    stat_panel: str = "—"
+    stat_n: str = "0"
+    mart_ready: bool = False
+
+    @rx.event
+    def load(self):
+        self.load_shared()
+        self.mart_ready = q.crime_climate_ready()
+        if not self.mart_ready:
+            return
+        scatter = q.crime_climate_scatter()
+        self.raw_points = scatter["raw"]
+        self.panel_points = scatter["panel"]
+        stats = q.crime_climate_stats()
+        self.stat_raw = stats["raw"]
+        self.stat_panel = stats["panel"]
+        self.stat_n = stats["n"]

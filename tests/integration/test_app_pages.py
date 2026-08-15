@@ -19,6 +19,8 @@ pytestmark = pytest.mark.integration
         ("italy_dashboard.pages.population", "population_page"),
         ("italy_dashboard.pages.labor", "labor_page"),
         ("italy_dashboard.pages.economy", "economy_page"),
+        ("italy_dashboard.pages.climate", "climate_page"),
+        ("italy_dashboard.pages.climate_crime", "climate_crime_page"),
     ],
 )
 def test_page_component_builds(module_name: str, page_fn: str):
@@ -34,4 +36,12 @@ def test_app_registers_all_routes():
     from italy_dashboard.italy_dashboard import app
 
     routes = set(app._unevaluated_pages)
-    assert {"index", "crime", "population", "labor", "economy"} <= routes
+    assert {
+        "index",
+        "crime",
+        "population",
+        "labor",
+        "economy",
+        "climate",
+        "climate-crime",
+    } <= routes

@@ -14,12 +14,14 @@ EN: dict[str, str] = {
     "nav_population": "Population",
     "nav_labor": "Labor",
     "nav_economy": "Economy",
+    "nav_climate": "Climate",
     "home_title": "Italy at a glance",
     "home_subtitle": "Key indicators from ISTAT snapshots. Open a section for detail.",
     "crime_title": "Crime",
     "population_title": "Population & migration",
     "labor_title": "Labor market",
     "economy_title": "Economy & prices",
+    "climate_title": "Climate",
     # shared
     "view_table": "View as table",
     "year": "Year",
@@ -140,6 +142,77 @@ EN: dict[str, str] = {
     "inflation_title": "Inflation (consumer prices)",
     "inflation_sub": "Annual average change of the general index (%)",
     "change_pct": "Change (%)",
+    # climate page
+    "city": "City",
+    "warming_title": "Annual temperature",
+    "warming_sub": (
+        "Annual mean (thin line), the min-max band each year (shaded), and a "
+        "10-year centred rolling average (heavy line). ERA5-Land reanalysis "
+        "sampled at the province capital — not a station record."
+    ),
+    "t_mean": "Mean",
+    "t_min": "Min (mean of daily minima)",
+    "t_max": "Max (mean of daily maxima)",
+    "t_band": "Min-max range",
+    "t_rolling": "10-year average",
+    "stripes_title": "Anomaly against the 1981-2010 normal",
+    "stripes_sub": "Degrees Celsius above or below the city's own 1981-2010 average",
+    "grid_title": "Warming stripes across cities",
+    "grid_sub": "Fastest-warming capitals, same colour scale in every panel",
+    "ranking_title": "Fastest-warming cities",
+    "ranking_sub": "Degrees Celsius per decade, ordinary least squares over annual means",
+    "thresholds_title": "Hot days, tropical nights and frost days",
+    "thresholds_sub": ("Days per year with max >= 30 C, min >= 20 C and min <= 0 C"),
+    "hot_days": "Hot days",
+    "tropical_nights": "Tropical nights",
+    "frost_days": "Frost days",
+    "distribution_title": "Distribution of daily maxima",
+    "distribution_sub": "Share of days per 2 C bucket, 1951-1980 against 1996-2025",
+    "dist_early": "1951-1980",
+    "dist_late": "1996-2025",
+    "anomaly": "Anomaly (C)",
+    "degrees_per_decade": "C / decade",
+    "no_climate": (
+        "No temperature data yet. Run  just refresh-weather  (or  just sample  "
+        "for synthetic dev data), then reload."
+    ),
+    "nav_climate_crime": "Climate × Crime",  # noqa: RUF001
+    "climate_crime_title": "Summer heat and violent crime",
+    "cc_raw_title": "Naive view: raw cross-section",
+    "cc_raw_sub": (
+        "Every region-year, untransformed: absolute summer temperature against "
+        "offender counts. The hotter southern regions sit on the right, so this "
+        "mostly recovers that the South is warmer and reports crime differently "
+        "— a confound, not a finding."
+    ),
+    "cc_panel_title": "Panel view: within-region deviation",
+    "cc_panel_sub": (
+        "Region and year fixed effects removed, so each point is a region's "
+        "deviation from its own norm in a year that was unusual nationally."
+    ),
+    "cc_x_raw": "Summer mean daily max (C)",
+    "cc_y_raw": "ln(violent offenders)",
+    "cc_x_panel": "Summer max, region and year effects removed (C)",
+    "cc_y_panel": "ln(violent offenders), region and year effects removed",
+    "cc_stat_raw": "Raw",
+    "cc_stat_panel": "Panel",
+    "cc_stat_n": "Observations",
+    "cc_obs_note": "region-years, shared by both views",
+    "cc_caveat": (
+        "Association only. This is an ECOLOGICAL comparison: it is region-level "
+        "and says nothing about individuals. It is ANNUAL, while the "
+        "heat-aggression literature works at daily and monthly grain. It is "
+        "UNDERPOWERED, bounded by ISTAT publishing province-level offenders only "
+        "from 2022. The outcome is offender counts, not rates, because population "
+        "denominators start in 2019; region fixed effects absorb the population "
+        "level but not differential regional growth. No p-values or confidence "
+        "intervals are shown: with 21 clusters they would overstate precision."
+    ),
+    "no_climate_crime": (
+        "The crime-climate panel needs both the offenders mart and temperature "
+        "data. Run  just refresh  and  just refresh-weather  (or  just sample), "
+        "then reload."
+    ),
 }
 
 IT: dict[str, str] = {
@@ -148,12 +221,14 @@ IT: dict[str, str] = {
     "nav_population": "Popolazione",
     "nav_labor": "Lavoro",
     "nav_economy": "Economia",
+    "nav_climate": "Clima",
     "home_title": "L'Italia in sintesi",
     "home_subtitle": "Indicatori chiave dagli snapshot ISTAT. Apri una sezione per i dettagli.",
     "crime_title": "Criminalità",
     "population_title": "Popolazione e migrazioni",
     "labor_title": "Mercato del lavoro",
     "economy_title": "Economia e prezzi",
+    "climate_title": "Clima",
     "view_table": "Vedi come tabella",
     "year": "Anno",
     "province": "Provincia",
@@ -272,6 +347,78 @@ IT: dict[str, str] = {
     "inflation_title": "Inflazione (prezzi al consumo)",
     "inflation_sub": "Variazione media annua dell'indice generale (%)",
     "change_pct": "Variazione (%)",
+    "city": "Città",
+    "warming_title": "Temperatura annuale",
+    "warming_sub": (
+        "Media annuale (linea sottile), la fascia minimo-massimo di ogni anno "
+        "(colorata) e una media mobile centrata su 10 anni (linea spessa). "
+        "Rianalisi ERA5-Land campionata nel capoluogo — non è una serie da stazione."
+    ),
+    "t_mean": "Media",
+    "t_min": "Minima (media delle minime giornaliere)",
+    "t_max": "Massima (media delle massime giornaliere)",
+    "t_band": "Intervallo min-max",
+    "t_rolling": "Media mobile (10 anni)",
+    "stripes_title": "Anomalia rispetto alla norma 1981-2010",
+    "stripes_sub": "Gradi Celsius sopra o sotto la media 1981-2010 della città",
+    "grid_title": "Strisce del riscaldamento per città",
+    "grid_sub": "Capoluoghi che si scaldano più in fretta, stessa scala di colore in ogni pannello",
+    "ranking_title": "Città che si scaldano più in fretta",
+    "ranking_sub": "Gradi Celsius per decennio, minimi quadrati sulle medie annuali",
+    "thresholds_title": "Giorni caldi, notti tropicali e giorni di gelo",
+    "thresholds_sub": ("Giorni all'anno con massima >= 30 C, minima >= 20 C e minima <= 0 C"),
+    "hot_days": "Giorni caldi",
+    "tropical_nights": "Notti tropicali",
+    "frost_days": "Giorni di gelo",
+    "distribution_title": "Distribuzione delle massime giornaliere",
+    "distribution_sub": "Quota di giorni per intervallo di 2 C, 1951-1980 contro 1996-2025",
+    "dist_early": "1951-1980",
+    "dist_late": "1996-2025",
+    "anomaly": "Anomalia (C)",
+    "degrees_per_decade": "C / decennio",
+    "no_climate": (
+        "Nessun dato di temperatura. Esegui  just refresh-weather  (oppure  just sample  "
+        "per dati sintetici di sviluppo), poi ricarica."
+    ),
+    "nav_climate_crime": "Clima × Criminalità",  # noqa: RUF001
+    "climate_crime_title": "Caldo estivo e criminalità violenta",
+    "cc_raw_title": "Vista ingenua: sezione trasversale grezza",
+    "cc_raw_sub": (
+        "Ogni regione-anno, senza trasformazioni: temperatura estiva assoluta "
+        "contro il numero di autori. Le regioni del Sud, più calde, stanno a "
+        "destra: ritrova soprattutto che il Sud è più caldo e denuncia in modo "
+        "diverso, un fattore confondente, non un risultato."
+    ),
+    "cc_panel_title": "Vista panel: deviazione entro regione",
+    "cc_panel_sub": (
+        "Effetti fissi di regione e anno rimossi: ogni punto è lo scostamento "
+        "di una regione dalla propria norma in un anno anomalo a livello nazionale."
+    ),
+    "cc_x_raw": "Media estiva delle massime giornaliere (C)",
+    "cc_y_raw": "ln(autori di reati violenti)",
+    "cc_x_panel": "Massima estiva, al netto degli effetti di regione e anno (C)",
+    "cc_y_panel": "ln(autori di reati violenti), al netto degli effetti di regione e anno",
+    "cc_stat_raw": "Grezzo",
+    "cc_stat_panel": "Panel",
+    "cc_stat_n": "Osservazioni",
+    "cc_obs_note": "regione-anno, comuni a entrambe le viste",
+    "cc_caveat": (
+        "Solo associazione. Confronto ECOLOGICO: è a livello regionale e non "
+        "dice nulla sugli individui. È ANNUALE, mentre la letteratura su caldo "
+        "e aggressività lavora su scala giornaliera e mensile. Ha SCARSA "
+        "POTENZA STATISTICA, "
+        "limitata dal fatto che ISTAT pubblica gli autori a livello provinciale "
+        "solo dal 2022. L'esito è il conteggio degli autori, non un tasso, "
+        "perché i denominatori di popolazione partono dal 2019; gli effetti "
+        "fissi di regione assorbono il livello della popolazione ma non la "
+        "crescita differenziale. Non sono mostrati p-value né intervalli di "
+        "confidenza: con 21 cluster sovrastimerebbero la precisione."
+    ),
+    "no_climate_crime": (
+        "Il panel clima-criminalità richiede sia il mart degli autori sia i dati "
+        "di temperatura. Esegui  just refresh  e  just refresh-weather  (oppure  "
+        "just sample), poi ricarica."
+    ),
 }
 
 # Split-by choices: canonical keys stored in state, labels shown per language.

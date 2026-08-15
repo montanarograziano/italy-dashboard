@@ -66,3 +66,44 @@ models:
         tests: [not_null]
       - name: citizenship_code
         tests: [not_null]
+
+  - name: mart_climate_annual
+    description: Annual temperature per province capital, with CLINO anomalies.
+    columns:
+      - name: province_code
+        tests: [not_null]
+      - name: year
+        tests: [not_null]
+      - name: t_mean
+        tests: [not_null]
+
+  - name: mart_climate_monthly
+    description: Monthly temperature per province capital, with CLINO anomalies.
+    columns:
+      - name: province_code
+        tests: [not_null]
+      - name: year
+        tests: [not_null]
+      - name: month
+        tests: [not_null]
+
+  - name: mart_crime_climate
+    description: >
+      Region x year panel of summer temperature anomaly against violent
+      offender counts, with two-way demeaned columns. Ecological, annual,
+      underpowered — association only.
+    columns:
+      - name: region_code
+        tests: [not_null]
+      - name: year
+        tests: [not_null]
+      - name: ln_offenders
+        tests: [not_null]
+
+  - name: mart_climate_region
+    description: Region-level annual climate, unweighted mean of member capitals.
+    columns:
+      - name: region_code
+        tests: [not_null]
+      - name: year
+        tests: [not_null]

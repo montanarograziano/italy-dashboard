@@ -1,8 +1,10 @@
 # Datasets
 
-All from ISTAT's SDMX API (`esploradati.istat.it/SDMXWS/rest`), free and keyless.
-Coverage below reflects what the API actually returns — often shallower than the
-phenomenon itself (see [Methodology](07-methodology.md#history-depth)).
+Everything except temperature comes from ISTAT's SDMX API
+(`esploradati.istat.it/SDMXWS/rest`), free and keyless. Coverage below reflects
+what the API actually returns, often shallower than the phenomenon itself (see
+[Methodology](07-methodology.md#history-depth)). Temperature comes from a
+different, non-ISTAT source: see below.
 
 ## crime_offenders — the primary dataset
 
@@ -47,6 +49,117 @@ year. Coverage **~2012–2025** after chaining.
 Placeholder for household disposable income per capita by region, needed by the
 income↔crime view. Find the dataflow with `just discover "reddito disponibile"`,
 set `dataflow_id` in the registry, then `just refresh income_regional`.
+
+## weather_daily: temperature (non-ISTAT)
+
+**Source** [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api),
+ERA5-Land reanalysis, 0.1° (≈11 km), **1950 to present**. Free, no API key,
+**non-commercial licence**: if this dashboard ever becomes commercial, switch
+to Copernicus CDS ERA5-Land or Open-Meteo's paid tier.
+
+One point per province capital city (106 capitals, `dbt/seeds/province_capitals.csv`),
+daily `temperature_2m_max/min/mean`. `models=era5_land` is pinned explicitly:
+Open-Meteo's default "best match" switches models across a long series and
+would inject discontinuities indistinguishable from real climate signal.
+
+Fetch with `just refresh-weather`, or `just refresh-weather ITC45` for one city.
+As of this writing no full backfill has completed in any development
+environment — only a single-city check against the real API, used to
+cross-validate the CDS path (Torino; the two sources agree within 0.07 C).
+Development environments still carry synthetic sample data (see
+`ingestion/sample_data.py`), so no chart or number driven by this dataset
+should be read as an observed climate result yet.
+
+### A full backfill takes several days, on purpose
+
+The first backfill is **106 cities × 8 decade chunks = 848 requests**, each one
+asking for roughly 3,650 days × 3 daily variables. Open-Meteo's free tier
+allows about **10,000 weighted calls per day**, and it weights a call by how
+much data it returns, so those 848 requests are worth far more than 848 against
+that budget. **One run will not finish it.** The expected workflow is:
+
+1. Run `just refresh-weather`.
+2. It stops with `HTTP 429` and logs how many cities it got through.
+3. Run exactly the same command the next day. Repeat until it completes.
+
+This is safe because **raw JSON is cached per city, per coordinate, per decade**
+under `data/raw/weather/`, written the moment each chunk arrives. A resumed run
+re-reads those files and downloads only the chunks that are still missing, so
+no day's work is repeated and no request is spent twice. Nothing is written to
+`data/weather_daily.parquet` until every city is complete, so a half-finished
+backfill cannot reach the marts.
+
+The coordinate is part of the cache key deliberately. When the null gate tells
+you to nudge a city inland and refetch it, the cache must not replay the old
+coordinate's decades next to the new coordinate's: that would splice two
+locations into one series and fake a step change in the trend. Moving a city
+simply misses the cache and refetches it whole.
+
+Feeds `mart_climate_daily`, `mart_climate_monthly`, `mart_climate_annual`,
+`mart_climate_region` and `mart_crime_climate`.
+
+### Bulk backfill via Copernicus CDS
+
+`ingestion/cds.py` is a second, independent fetcher for the same underlying
+data: ERA5-Land, same 0.1 degree grid, same 106 capitals, same
+`data/weather_daily.parquet` snapshot. Use it instead of `ingestion/weather.py`
+when a full or near-full history backfill would otherwise take many days
+against Open-Meteo's free-tier quota; use Open-Meteo for the day-to-day
+incremental top-up, since it needs no account and no licence for
+non-commercial use.
+
+Prerequisites, one-time:
+
+1. A free account at [cds.climate.copernicus.eu](https://cds.climate.copernicus.eu)
+   and acceptance of the ERA5-Land licence, both done once in the CDS web UI.
+2. An API key saved to `~/.cdsapirc`, read automatically by `cdsapi.Client()`.
+   Never hardcode or log this key.
+3. The optional `cds` extra, not installed by default so a normal
+   `uv sync` stays light: `uv sync --extra cds` (pulls in `cdsapi`, `xarray`,
+   `netcdf4`).
+
+Fetch with `just refresh-weather-cds` (1950 up to the last fully published month) or
+`just refresh-weather-cds 1950 1979` for one year range. Downloads bulk
+NetCDF from the `derived-era5-land-daily-statistics` dataset, one request per
+(year, daily statistic) — mean, minimum, maximum — cached under
+`data/raw/cds/` so a re-run only requests chunks that never finished (CDS
+requests are server-side queued and can take minutes to hours). Point
+extraction (nearest ERA5-Land grid cell to each capital) happens locally with
+xarray after download; a capital whose nearest cell is more than 0.15 degrees
+away fails the run loudly rather than silently sampling the wrong place. The
+same `MAX_NULL_RATE` gate as the Open-Meteo path applies before the snapshot
+is written, extended to all three temperature columns: the three statistics
+are three separate downloads here, so `t_min` can come back empty while
+`t_mean` is perfect, and each column is gated on its own. The three chunks of
+a year must also cover exactly the same dates, otherwise the run stops: pairing
+them positionally when they do not would attach each day's minimum and maximum
+to another day's mean.
+
+**Where the CDS path stops.** ERA5-Land is published with a lag (the same
+`PUBLICATION_LAG_DAYS` the Open-Meteo path uses). A CDS request is a
+year x month x day cross product, so it cannot stop mid-month; the fetcher
+therefore requests only calendar months that have entirely ended on or before
+that boundary, and leaves the remaining tail (at most ~37 days) to
+`just refresh-weather`. A partially covered year is cached under a filename
+that names its last day (`2026_daily_mean_through_20260731.nc`), so a rerun
+next month downloads a longer chunk instead of replaying a truncated year, and
+a rerun this month costs no queued requests at all.
+
+**Status.** The request shape and the point extraction **have** been validated
+against a real CDS response (one data variable `t2m`, dims
+`(valid_time, latitude, longitude)`, Kelvin) and cross-checked against the
+Open-Meteo path for Torino, where the two agree within 0.07 C. A **full
+backfill has not completed yet**, so the queueing, timeout and resume
+behaviour of a 228-chunk run is still unexercised at scale. Every test in
+`tests/unit/test_cds.py` is offline, against synthetic NetCDF fixtures and a
+fake client; no test makes a real request.
+
+### Why not ISTAT
+
+ISTAT publishes *Temperatura e precipitazione dei comuni capoluogo di provincia*,
+but the machine-readable series for all capitals covers 2006 onwards only; the
+1971-2022 series exists for about 27 regional capitals and is published as PDF
+and Excel, not through the SDMX API. Neither reaches 1950 at province grain.
 
 ## Adding a dataset
 
