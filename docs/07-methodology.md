@@ -158,7 +158,17 @@ see [Datasets](04-datasets.md#weather_daily-temperature-non-istat).
 **Real data has not been fetched yet.** Only synthetic sample temperatures
 exist in development environments so far (`ingestion/sample_data.py`); no
 number in this section or the next describes an observed result, only what the
-pipeline computes once real data lands.
+pipeline computes once real data lands. This applies equally to both
+fetchers: the per-point Open-Meteo path (`ingestion/weather.py`) and the bulk
+Copernicus CDS path (`ingestion/cds.py`, see
+[Datasets](04-datasets.md#bulk-backfill-via-copernicus-cds)). Both write the
+same `data/weather_daily.parquet` snapshot through the same null-rate gate, so
+neither is more or less trustworthy once real data lands; the CDS path adds
+one more check the Open-Meteo path does not need, since it samples a bulk grid
+rather than one point per request: the distance between each capital's
+coordinate and its nearest ERA5-Land cell is logged and gated at 0.15 degrees,
+so a wrong bounding box or a bad seed coordinate fails the run instead of
+silently sampling the wrong place.
 
 ## Crime and temperature
 

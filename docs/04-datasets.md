@@ -96,6 +96,43 @@ simply misses the cache and refetches it whole.
 Feeds `mart_climate_daily`, `mart_climate_monthly`, `mart_climate_annual`,
 `mart_climate_region` and `mart_crime_climate`.
 
+### Bulk backfill via Copernicus CDS
+
+`ingestion/cds.py` is a second, independent fetcher for the same underlying
+data: ERA5-Land, same 0.1 degree grid, same 106 capitals, same
+`data/weather_daily.parquet` snapshot. Use it instead of `ingestion/weather.py`
+when a full or near-full history backfill would otherwise take many days
+against Open-Meteo's free-tier quota; use Open-Meteo for the day-to-day
+incremental top-up, since it needs no account and no licence for
+non-commercial use.
+
+Prerequisites, one-time:
+
+1. A free account at [cds.climate.copernicus.eu](https://cds.climate.copernicus.eu)
+   and acceptance of the ERA5-Land licence, both done once in the CDS web UI.
+2. An API key saved to `~/.cdsapirc`, read automatically by `cdsapi.Client()`.
+   Never hardcode or log this key.
+3. The optional `cds` extra, not installed by default so a normal
+   `uv sync` stays light: `uv sync --extra cds` (pulls in `cdsapi`, `xarray`,
+   `netcdf4`).
+
+Fetch with `just refresh-weather-cds` (1950 to this year) or
+`just refresh-weather-cds 1950 1979` for one year range. Downloads bulk
+NetCDF from the `derived-era5-land-daily-statistics` dataset, one request per
+(year, daily statistic) — mean, minimum, maximum — cached under
+`data/raw/cds/` so a re-run only requests chunks that never finished (CDS
+requests are server-side queued and can take minutes to hours). Point
+extraction (nearest ERA5-Land grid cell to each capital) happens locally with
+xarray after download; a capital whose nearest cell is more than 0.15 degrees
+away fails the run loudly rather than silently sampling the wrong place. The
+same `MAX_NULL_RATE` gate as the Open-Meteo path applies before the snapshot
+is written.
+
+As with the Open-Meteo path, **the real CDS download has not been exercised
+in any environment**: no CDS credentials exist here and the licence has not
+been accepted, so only the offline point-extraction logic is tested (a
+synthetic NetCDF fixture), never a live request.
+
 ### Why not ISTAT
 
 ISTAT publishes *Temperatura e precipitazione dei comuni capoluogo di provincia*,

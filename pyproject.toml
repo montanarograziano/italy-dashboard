@@ -13,6 +13,17 @@ dependencies = [
     "dbt-duckdb>=1.9,<2",
 ]
 
+[project.optional-dependencies]
+# Bulk ERA5-Land backfill via Copernicus CDS (ingestion/cds.py). Not part of
+# the core install: only someone doing a bulk temperature backfill needs a
+# CDS account, an accepted licence, and these packages. Install with:
+#   uv sync --extra cds
+cds = [
+    "cdsapi>=0.7,<1",
+    "xarray>=2024.1,<2026",
+    "netcdf4>=1.6,<2",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8",
