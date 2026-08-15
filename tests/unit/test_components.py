@@ -167,6 +167,89 @@ def test_scatter_chart_zero_lines_render_beneath_the_scatter_data():
     assert rendered.index("RechartsReferenceLine") < rendered.index("'RechartsScatter'")
 
 
+def test_scatter_chart_single_series_has_no_legend():
+    """One series means the legend restates the card heading and nothing else.
+
+    `line_chart` and `area_compare_chart` already gate on `len(series) >= 2`;
+    `scatter_chart` emitted one unconditionally, which is what put a redundant
+    legend under both climate-crime scatters.
+    """
+    assert "Legend" not in _scatter(zero_lines=False)
+
+
+def test_scatter_chart_two_series_keeps_its_legend():
+    """The gate must not cost the multi-series case its legend: with two
+    series the colours are the ONLY thing telling the groups apart."""
+    rendered = str(
+        c.scatter_chart(
+            [
+                (SCATTER_POINTS, "Italians", theme.series(1)),
+                (SCATTER_POINTS, "Foreigners", theme.series(2)),
+            ],
+            x_key="x",
+            y_key="y",
+        ).render()
+    )
+    assert "Legend" in rendered
+
+
+def _nodes(tree, name: str) -> list[dict]:
+    """Every rendered node called `name`, found anywhere in the tree.
+
+    A page's charts sit inside `rx.cond`/`rx.match` branches, which the render
+    dict carries under keys other than `children`, so this walks every nested
+    dict and list rather than only the `children` lists. Walking the tree, not
+    substring-searching `str(...)`, is what makes "does THIS chart have a
+    legend" answerable on a page that holds several charts.
+    """
+    found = []
+    stack = [tree]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if node.get("name") == name:
+                found.append(node)
+            stack.extend(node.values())
+        elif isinstance(node, (list, tuple)):
+            stack.extend(node)
+    return found
+
+
+def test_climate_crime_scatters_render_and_carry_no_legend():
+    """Pins the real page, not just the helper: both cards hold a single-series
+    scatter whose series name IS the card heading, so a legend there is pure
+    restatement."""
+    from italy_dashboard.pages.climate_crime import climate_crime_page
+
+    tree = climate_crime_page().render()
+    charts = _nodes(tree, "RechartsScatterChart")
+    assert len(charts) == 2, "both climate-crime scatters must still render"
+    for chart in charts:
+        assert _nodes(chart, "RechartsScatter"), "the scatter lost its data"
+        assert not _nodes(chart, "RechartsLegend"), "single-series scatter kept a legend"
+
+
+def test_crime_income_scatter_keeps_its_legend():
+    """The crime page's income scatter carries two series (Italians vs
+    foreigners), where colour is the ONLY thing separating the groups, so the
+    gate must not take its legend away."""
+    from italy_dashboard.pages.crime import crime_page
+
+    charts = _nodes(crime_page().render(), "RechartsScatterChart")
+    assert len(charts) == 1
+    assert _nodes(charts[0], "RechartsLegend")
+
+
+def test_crime_multi_series_line_charts_keep_their_legends():
+    """The 2- and 3-series branches of the crime trend chart are compiled
+    up-front by `rx.match`, so their legends are observable statically."""
+    from italy_dashboard.pages.crime import crime_page
+
+    line_charts = _nodes(crime_page().render(), "RechartsLineChart")
+    with_legend = [ch for ch in line_charts if _nodes(ch, "RechartsLegend")]
+    assert len(with_legend) >= 2, f"only {len(with_legend)} of {len(line_charts)} kept a legend"
+
+
 def test_climate_crime_panel_scatter_has_zero_lines_but_raw_scatter_does_not():
     """Pins the real page wiring, not just the `scatter_chart` API: the panel
     scatter (two-way demeaned, centred on zero by construction) must carry the

@@ -534,6 +534,10 @@ def scatter_chart(
         if label_key
         else []
     )
+    # Legend only at >= 2 series, matching `line_chart`/`area_compare_chart`.
+    # A single-series scatter's legend just restates the card heading, which is
+    # exactly what the climate-crime page was showing.
+    legend = [rx.recharts.legend()] if len(series) >= 2 else []
     return rx.recharts.scatter_chart(
         *zero_ref_lines,
         *scatters,
@@ -562,7 +566,7 @@ def scatter_chart(
         # `stroke_width` is not a declared `CartesianGrid` field; see `_grid()`.
         rx.recharts.cartesian_grid(stroke=theme.gridline(), custom_attrs={"strokeWidth": 1}),
         _tooltip(),
-        rx.recharts.legend(),
+        *legend,
         width="100%",
         height=height,
         margin={"top": 8, "right": 16, "bottom": 8, "left": 8},
