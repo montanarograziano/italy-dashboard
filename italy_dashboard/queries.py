@@ -12,6 +12,8 @@ from typing import Any
 
 import duckdb
 
+from italy_dashboard import palette
+
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -713,13 +715,18 @@ def climate_annual_series(city: str) -> list[Row]:
 
 
 def climate_stripes(city: str) -> list[Row]:
-    """Anomaly against the 1981-2010 normal, per year — the warming-stripes series.
+    """Anomaly against the 1981-2010 normal per year, with its diverging colour.
+
+    The colour is the data here: warming stripes are a diverging encoding, so
+    each bar carries its own step of the ramp. The fill is a CSS custom
+    property rather than a hex, because a per-datum colour still has to follow
+    the light/dark mode and cannot be a build-time constant.
 
     Partial years are excluded (see MIN_DAYS_FOR_A_FULL_YEAR): a stripe for a
     year that is only eight months old is the deepest red on the chart for
     calendar reasons, not climate ones.
     """
-    return _query(
+    rows = _query(
         f"""
         SELECT year AS period, anomaly_1981_2010 AS anomaly
         FROM {CLIMATE_ANNUAL}
@@ -729,6 +736,9 @@ def climate_stripes(city: str) -> list[Row]:
         """,
         [city],
     )
+    for r in rows:
+        r["fill"] = f"var(--div-{palette.diverging_bucket(float(r['anomaly']))})"
+    return rows
 
 
 def warming_rate_ranking(top_n: int = 20) -> list[Row]:

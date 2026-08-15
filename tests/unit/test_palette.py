@@ -153,3 +153,25 @@ def test_css_vars_cover_every_diverging_step():
     for i in range(7):
         assert f"--div-{i}:" in css
     assert ".dark" in css or "[data-theme" in css
+
+
+def test_diverging_bucket_maps_sign_to_the_right_arm():
+    mid = palette.DIVERGING_STEPS // 2
+    assert palette.diverging_bucket(0.0) == mid
+    assert palette.diverging_bucket(-1.5) < mid
+    assert palette.diverging_bucket(1.5) > mid
+
+
+def test_diverging_bucket_clamps_instead_of_wrapping():
+    assert palette.diverging_bucket(-99.0) == 0
+    assert palette.diverging_bucket(99.0) == palette.DIVERGING_STEPS - 1
+
+
+def test_diverging_bucket_is_monotonic():
+    values = [palette.diverging_bucket(a / 10) for a in range(-40, 41)]
+    assert values == sorted(values)
+
+
+def test_diverging_bucket_rejects_a_non_positive_range():
+    with pytest.raises(ValueError):
+        palette.diverging_bucket(0.5, half_range=0)

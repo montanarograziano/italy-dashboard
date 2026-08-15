@@ -641,3 +641,17 @@ def test_partial_years_are_excluded_from_every_climate_series(partial_year_annua
 
     ranking = q.warming_rate_ranking()
     assert ranking == [{"name": "Testville", "value": 0.0}]  # flat, not warming
+
+
+def test_climate_stripes_carry_a_diverging_fill(climate_db):
+    rows = q.climate_stripes("Roma")
+    if not rows:
+        pytest.skip("no anomalies in this fixture: the CLINO guard nulls them")
+    assert {"period", "anomaly", "fill"} == set(rows[0])
+    for r in rows:
+        assert r["fill"].startswith("var(--div-")
+    # colour must track the value: the warmest year cannot share the coldest's step
+    warmest = max(rows, key=lambda r: r["anomaly"])
+    coldest = min(rows, key=lambda r: r["anomaly"])
+    if warmest["anomaly"] > coldest["anomaly"]:
+        assert warmest["fill"] != coldest["fill"]

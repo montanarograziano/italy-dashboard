@@ -4,12 +4,12 @@ import reflex as rx
 
 from italy_dashboard import theme
 from italy_dashboard.components import (
-    bar_chart,
     card,
     data_table,
     h_bar_chart,
     line_chart,
     shell,
+    stripe_chart,
 )
 from italy_dashboard.i18n import t
 from italy_dashboard.state import ClimateState
@@ -65,7 +65,11 @@ def climate_page() -> rx.Component:
                 card(
                     t("stripes_title"),
                     t("stripes_sub"),
-                    bar_chart(ClimateState.stripes, "anomaly", "period", theme.SERIES_2),
+                    stripe_chart(ClimateState.stripes),
+                    data_table(
+                        ClimateState.stripes,
+                        [("period", t("year")), ("anomaly", t("anomaly"))],
+                    ),
                 ),
                 card(
                     t("ranking_title"),

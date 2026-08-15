@@ -226,6 +226,36 @@ def bar_chart(
     )
 
 
+def stripe_chart(data: ChartData, height: int = 140) -> rx.Component:
+    """Warming stripes: one bar per year, coloured by its own anomaly.
+
+    Squat by design and axis-free apart from the year: the form's whole job is
+    to be read as a colour field, and gridlines fight that. The table view in
+    the surrounding card carries the exact numbers.
+
+    `rx.recharts.cell` is passed as a POSITIONAL child of `rx.recharts.bar`,
+    not via a `children=` keyword: `Bar.create(*children, **props)` forwards
+    `**props` straight into `Component._create(children, **props)`, so a
+    `children` keyword collides with the positional `children` argument and
+    raises `TypeError: got multiple values for argument 'children'`.
+    """
+    return rx.recharts.bar_chart(
+        rx.recharts.bar(
+            rx.foreach(data, lambda row: rx.recharts.cell(fill=row["fill"])),
+            data_key="anomaly",
+            fill=theme.series(1),
+            is_animation_active=False,
+        ),
+        _x_axis(),
+        rx.recharts.graphing_tooltip(),
+        data=data,
+        bar_category_gap=0,
+        width="100%",
+        height=height,
+        margin={"top": 4, "right": 8, "bottom": 4, "left": 8},
+    )
+
+
 def h_bar_chart(
     data: ChartData,
     data_key: str,
