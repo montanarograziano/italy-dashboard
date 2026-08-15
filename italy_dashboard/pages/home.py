@@ -8,8 +8,8 @@ from italy_dashboard.state import HomeState
 
 def home_page() -> rx.Component:
     return shell(
-        rx.heading(t("home_title"), size="6", color=theme.INK_PRIMARY),
-        rx.text(t("home_subtitle"), color=theme.INK_SECONDARY),
+        rx.heading(t("home_title"), size="6", color=theme.ink_primary()),
+        rx.text(t("home_subtitle"), color=theme.ink_secondary()),
         rx.flex(
             stat_tile(t("kpi_crime"), HomeState.kpi_crime, t("kpi_crime_note")),
             stat_tile(t("kpi_population"), HomeState.kpi_population, t("kpi_population_note")),

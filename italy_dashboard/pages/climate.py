@@ -18,7 +18,7 @@ from italy_dashboard.state import ClimateState
 
 def _city_select() -> rx.Component:
     return rx.hstack(
-        rx.text(t("city"), color=theme.INK_SECONDARY, font_size="0.9em"),
+        rx.text(t("city"), color=theme.ink_secondary(), font_size="0.9em"),
         rx.select(
             ClimateState.city_options,
             value=ClimateState.city,
@@ -33,7 +33,7 @@ def _city_select() -> rx.Component:
 def climate_page() -> rx.Component:
     return shell(
         rx.hstack(
-            rx.heading(t("climate_title"), size="6", color=theme.INK_PRIMARY),
+            rx.heading(t("climate_title"), size="6", color=theme.ink_primary()),
             rx.spacer(),
             _city_select(),
             width="100%",
@@ -48,9 +48,9 @@ def climate_page() -> rx.Component:
                     line_chart(
                         ClimateState.annual,
                         [
-                            ("t_max", t("t_max"), theme.SERIES_2),
-                            ("t_mean", t("t_mean"), theme.SERIES_1),
-                            ("t_min", t("t_min"), theme.SERIES_3),
+                            ("t_max", t("t_max"), theme.series(2)),
+                            ("t_mean", t("t_mean"), theme.series(1)),
+                            ("t_min", t("t_min"), theme.series(3)),
                         ],
                     ),
                     data_table(
@@ -75,7 +75,7 @@ def climate_page() -> rx.Component:
                 card(
                     t("ranking_title"),
                     t("ranking_sub"),
-                    h_bar_chart(ClimateState.ranking, "value", "name", theme.SERIES_1),
+                    h_bar_chart(ClimateState.ranking, "value", "name", theme.series(1)),
                     data_table(
                         ClimateState.ranking,
                         [("name", t("city")), ("value", t("degrees_per_decade"))],
@@ -87,9 +87,9 @@ def climate_page() -> rx.Component:
                     line_chart(
                         ClimateState.thresholds,
                         [
-                            ("hot_days", t("hot_days"), theme.SERIES_2),
-                            ("tropical_nights", t("tropical_nights"), theme.SERIES_1),
-                            ("frost_days", t("frost_days"), theme.SERIES_3),
+                            ("hot_days", t("hot_days"), theme.series(2)),
+                            ("tropical_nights", t("tropical_nights"), theme.series(1)),
+                            ("frost_days", t("frost_days"), theme.series(3)),
                         ],
                     ),
                 ),
@@ -99,8 +99,8 @@ def climate_page() -> rx.Component:
                     area_compare_chart(
                         ClimateState.distribution,
                         [
-                            ("early", t("dist_early"), theme.SERIES_1),
-                            ("late", t("dist_late"), theme.SERIES_2),
+                            ("early", t("dist_early"), theme.series(1)),
+                            ("late", t("dist_late"), theme.series(2)),
                         ],
                     ),
                 ),

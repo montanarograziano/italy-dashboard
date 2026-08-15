@@ -32,12 +32,12 @@ def _lang_toggle() -> rx.Component:
             cursor="pointer",
             font_size="0.85em",
             font_weight=rx.cond(AppState.lang == code, "700", "400"),
-            color=rx.cond(AppState.lang == code, theme.INK_PRIMARY, theme.INK_MUTED),
+            color=rx.cond(AppState.lang == code, theme.ink_primary(), theme.ink_muted()),
         )
 
     return rx.hstack(
         chip("en", "EN"),
-        rx.text("·", color=theme.INK_MUTED, font_size="0.85em"),
+        rx.text("·", color=theme.ink_muted(), font_size="0.85em"),
         chip("it", "IT"),
         spacing="2",
         align="center",
@@ -46,14 +46,14 @@ def _lang_toggle() -> rx.Component:
 
 def navbar() -> rx.Component:
     return rx.hstack(
-        rx.heading("Italy Dashboard", size="5", color=theme.INK_PRIMARY),
+        rx.heading("Italy Dashboard", size="5", color=theme.ink_primary()),
         rx.spacer(),
         *[
             rx.link(
                 t(key),
                 href=href,
-                color=theme.INK_SECONDARY,
-                _hover={"color": theme.INK_PRIMARY},
+                color=theme.ink_secondary(),
+                _hover={"color": theme.ink_primary()},
                 font_size="0.95em",
             )
             for key, href in NAV_LINKS
@@ -64,8 +64,8 @@ def navbar() -> rx.Component:
         align="center",
         width="100%",
         padding="1em 1.5em",
-        background=theme.SURFACE,
-        border_bottom=f"1px solid {theme.BORDER}",
+        background=theme.surface(),
+        border_bottom=theme.border_css(),
     )
 
 
@@ -91,7 +91,7 @@ def shell(*children: rx.Component) -> rx.Component:
             margin="0 auto",
             padding="1.5em",
         ),
-        background=theme.PAGE_BG,
+        background=theme.page_bg(),
         min_height="100vh",
         font_family=theme.FONT,
     )
@@ -102,14 +102,14 @@ def card(
 ) -> rx.Component:
     return rx.box(
         rx.vstack(
-            rx.heading(title, size="4", color=theme.INK_PRIMARY),
-            rx.text(subtitle, color=theme.INK_MUTED, font_size="0.85em"),
+            rx.heading(title, size="4", color=theme.ink_primary()),
+            rx.text(subtitle, color=theme.ink_muted(), font_size="0.85em"),
             *children,
             spacing="3",
             width="100%",
         ),
-        background=theme.SURFACE,
-        border=f"1px solid {theme.BORDER}",
+        background=theme.surface(),
+        border=theme.border_css(),
         border_radius="10px",
         padding="1.25em",
         width="100%",
@@ -119,13 +119,13 @@ def card(
 def stat_tile(label: str | rx.Var, value: rx.Var | str, note: str | rx.Var) -> rx.Component:
     return rx.box(
         rx.vstack(
-            rx.text(label, color=theme.INK_SECONDARY, font_size="0.85em"),
-            rx.heading(value, size="7", color=theme.INK_PRIMARY),
-            rx.text(note, color=theme.INK_MUTED, font_size="0.75em"),
+            rx.text(label, color=theme.ink_secondary(), font_size="0.85em"),
+            rx.heading(value, size="7", color=theme.ink_primary()),
+            rx.text(note, color=theme.ink_muted(), font_size="0.75em"),
             spacing="1",
         ),
-        background=theme.SURFACE,
-        border=f"1px solid {theme.BORDER}",
+        background=theme.surface(),
+        border=theme.border_css(),
         border_radius="10px",
         padding="1.25em",
         flex="1",
@@ -135,7 +135,7 @@ def stat_tile(label: str | rx.Var, value: rx.Var | str, note: str | rx.Var) -> r
 
 def region_select(value: rx.Var | str, on_change: Any) -> rx.Component:
     return rx.hstack(
-        rx.text(t("region"), color=theme.INK_SECONDARY, font_size="0.9em"),
+        rx.text(t("region"), color=theme.ink_secondary(), font_size="0.9em"),
         rx.select(
             AppState.regions,
             value=value,
@@ -159,7 +159,7 @@ def _grid() -> rx.Component:
     # is also 1, but it is inert: `custom_attrs={"strokeWidth": ...}` is the
     # form that actually reaches the component.
     return rx.recharts.cartesian_grid(
-        stroke=theme.GRIDLINE, vertical=False, custom_attrs={"strokeWidth": 1}
+        stroke=theme.gridline(), vertical=False, custom_attrs={"strokeWidth": 1}
     )
 
 
@@ -183,7 +183,7 @@ def _tooltip() -> rx.Component:
     return rx.recharts.graphing_tooltip(
         content_style={
             "background": theme.surface(),
-            "border": f"1px solid {theme.gridline()}",
+            "border": theme.tooltip_border_css(),
             "borderRadius": "8px",
             "fontSize": "12px",
             "color": theme.ink_primary(),
@@ -195,24 +195,24 @@ def _tooltip() -> rx.Component:
 def _x_axis(data_key: str = "period") -> rx.Component:
     return rx.recharts.x_axis(
         data_key=data_key,
-        stroke=theme.AXIS,
+        stroke=theme.axis(),
         tick_line=False,
-        custom_attrs={"fontSize": "12px", "fill": theme.INK_MUTED},
+        custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
     )
 
 
 def _y_axis() -> rx.Component:
     return rx.recharts.y_axis(
-        stroke=theme.AXIS,
+        stroke=theme.axis(),
         axis_line=False,
         tick_line=False,
-        custom_attrs={"fontSize": "12px", "fill": theme.INK_MUTED},
+        custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
     )
 
 
 def line_chart(
     data: ChartData,
-    series: list[tuple[str, str | rx.Var, str]],  # (data_key, label, color)
+    series: list[tuple[str, str | rx.Var, str | rx.Var]],  # (data_key, label, color)
     height: int = 300,
     brush: bool = False,
 ) -> rx.Component:
@@ -255,7 +255,7 @@ def line_chart(
 
 def area_compare_chart(
     data: ChartData,
-    series: list[tuple[str, str | rx.Var, str]],  # (data_key, label, color)
+    series: list[tuple[str, str | rx.Var, str | rx.Var]],  # (data_key, label, color)
     height: int = 300,
 ) -> rx.Component:
     """Two or more overlapping distributions as translucent areas.
@@ -302,7 +302,7 @@ def bar_chart(
     data: ChartData,
     data_key: str,
     x_key: str,
-    color: str,
+    color: str | rx.Var,
     height: int = 300,
 ) -> rx.Component:
     return rx.recharts.bar_chart(
@@ -395,7 +395,7 @@ def h_bar_chart(
     data: ChartData,
     data_key: str,
     y_key: str,
-    color: str,
+    color: str | rx.Var,
     height: int = 380,
 ) -> rx.Component:
     """Horizontal bars: readable labels for long category names."""
@@ -403,22 +403,22 @@ def h_bar_chart(
         rx.recharts.bar(data_key=data_key, fill=color, radius=[0, 4, 4, 0]),
         rx.recharts.x_axis(
             type_="number",
-            stroke=theme.AXIS,
+            stroke=theme.axis(),
             axis_line=False,
             tick_line=False,
-            custom_attrs={"fontSize": "12px", "fill": theme.INK_MUTED},
+            custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
         ),
         rx.recharts.y_axis(
             data_key=y_key,
             type_="category",
             width=220,
-            stroke=theme.AXIS,
+            stroke=theme.axis(),
             tick_line=False,
-            custom_attrs={"fontSize": "12px", "fill": theme.INK_MUTED},
+            custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
         ),
         # `stroke_width` is not a declared `CartesianGrid` field; see `_grid()`.
         rx.recharts.cartesian_grid(
-            stroke=theme.GRIDLINE, horizontal=False, custom_attrs={"strokeWidth": 1}
+            stroke=theme.gridline(), horizontal=False, custom_attrs={"strokeWidth": 1}
         ),
         _tooltip(),
         data=data,
@@ -431,7 +431,7 @@ def h_bar_chart(
 
 
 def scatter_chart(
-    series: list[tuple[rx.Var | list, str | rx.Var, str]],  # (data, label, color)
+    series: list[tuple[rx.Var | list, str | rx.Var, str | rx.Var]],  # (data, label, color)
     x_key: str,
     y_key: str,
     x_label: str | rx.Var = "",
@@ -489,23 +489,23 @@ def scatter_chart(
             data_key=x_key,
             type_="number",
             name=x_label,
-            stroke=theme.AXIS,
+            stroke=theme.axis(),
             tick_line=False,
             domain=["auto", "auto"],
-            custom_attrs={"fontSize": "12px", "fill": theme.INK_MUTED},
+            custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
         ),
         rx.recharts.y_axis(
             data_key=y_key,
             type_="number",
             name=y_label,
-            stroke=theme.AXIS,
+            stroke=theme.axis(),
             axis_line=False,
             tick_line=False,
             domain=["auto", "auto"],
-            custom_attrs={"fontSize": "12px", "fill": theme.INK_MUTED},
+            custom_attrs={"fontSize": "12px", "fill": theme.ink_muted()},
         ),
         # `stroke_width` is not a declared `CartesianGrid` field; see `_grid()`.
-        rx.recharts.cartesian_grid(stroke=theme.GRIDLINE, custom_attrs={"strokeWidth": 1}),
+        rx.recharts.cartesian_grid(stroke=theme.gridline(), custom_attrs={"strokeWidth": 1}),
         _tooltip(),
         rx.recharts.legend(),
         width="100%",

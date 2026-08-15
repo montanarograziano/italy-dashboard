@@ -15,7 +15,7 @@ from italy_dashboard.state import ClimateCrimeState
 
 def climate_crime_page() -> rx.Component:
     return shell(
-        rx.heading(t("climate_crime_title"), size="6", color=theme.INK_PRIMARY),
+        rx.heading(t("climate_crime_title"), size="6", color=theme.ink_primary()),
         rx.cond(
             ClimateCrimeState.mart_ready,
             rx.vstack(
@@ -31,7 +31,7 @@ def climate_crime_page() -> rx.Component:
                     t("cc_panel_title"),
                     t("cc_panel_sub"),
                     scatter_chart(
-                        [(ClimateCrimeState.panel_points, t("cc_panel_title"), theme.SERIES_1)],
+                        [(ClimateCrimeState.panel_points, t("cc_panel_title"), theme.series(1))],
                         x_key="x",
                         y_key="y",
                         # Doubly-demeaned axes get their own labels: +0.3 here
@@ -48,7 +48,7 @@ def climate_crime_page() -> rx.Component:
                     t("cc_raw_title"),
                     t("cc_raw_sub"),
                     scatter_chart(
-                        [(ClimateCrimeState.raw_points, t("cc_raw_title"), theme.SERIES_2)],
+                        [(ClimateCrimeState.raw_points, t("cc_raw_title"), theme.series(2))],
                         x_key="x",
                         y_key="y",
                         x_label=t("cc_x_raw"),

@@ -11,7 +11,7 @@ alone cannot tell a diverging encoding from the single-hue bug it replaced.
 from __future__ import annotations
 
 from italy_dashboard import components as c
-from italy_dashboard import theme
+from italy_dashboard import palette, theme
 from italy_dashboard.state import ClimateState
 
 
@@ -56,7 +56,7 @@ SCATTER_POINTS = [
 def _scatter(zero_lines: bool) -> str:
     return str(
         c.scatter_chart(
-            [(SCATTER_POINTS, "Panel", theme.SERIES_1)],
+            [(SCATTER_POINTS, "Panel", theme.series(1))],
             x_key="x",
             y_key="y",
             zero_lines=zero_lines,
@@ -78,11 +78,17 @@ def test_scatter_chart_zero_lines_false_omits_reference_lines():
 
 
 def test_scatter_chart_zero_lines_use_chrome_colour_not_a_series_colour():
+    """The reference lines must resolve through the SAME colour-mode
+    conditional `theme.axis()` produces everywhere else, not a bare hex — and
+    never the series' own colour. `"resolvedColorMode"` only appears in the
+    render if `theme.axis()` (an `rx.color_mode_cond` Var) built the `stroke`,
+    never if a plain string (a bare constant, or a hardcoded hex) did.
+    """
     rendered = _scatter(zero_lines=True)
     start = rendered.index("RechartsReferenceLine")
     props = rendered[start : start + 200]
-    assert theme.AXIS in props  # chrome colour from theme.axis()
-    assert theme.SERIES_1 not in props  # never the data series' own colour
+    assert "resolvedColorMode" in props  # chrome resolves via colour-mode cond
+    assert palette.CATEGORICAL_LIGHT[0] not in props  # never the series' own colour
 
 
 def test_scatter_chart_zero_lines_render_beneath_the_scatter_data():
@@ -122,7 +128,7 @@ ROWS = [
 def test_area_compare_chart_builds_and_has_a_legend():
     comp = c.area_compare_chart(
         ROWS,
-        [("early", "1951-1980", theme.SERIES_1), ("late", "1996-2025", theme.SERIES_2)],
+        [("early", "1951-1980", theme.series(1)), ("late", "1996-2025", theme.series(2))],
     )
     rendered = str(comp.render())
     assert rendered
@@ -145,7 +151,7 @@ def test_area_compare_chart_fills_stay_translucent_not_opaque():
     """
     comp = c.area_compare_chart(
         ROWS,
-        [("early", "1951-1980", theme.SERIES_1), ("late", "1996-2025", theme.SERIES_2)],
+        [("early", "1951-1980", theme.series(1)), ("late", "1996-2025", theme.series(2))],
     )
     rendered = str(comp.render())
     assert rendered.count("fillOpacity:0.28") == 2
@@ -193,12 +199,18 @@ def test_tooltip_is_styled_with_surface_tokens():
     test's segment-scoped assertions would catch that where a bare substring
     search on the whole render would not.
     """
-    rendered = str(c.line_chart(ROWS, [("value", "V", theme.SERIES_1)]).render())
+    rendered = str(c.line_chart(ROWS, [("value", "V", theme.series(1))]).render())
     segment = _content_style_segment(rendered)
     # Mode-aware: theme.surface()/theme.gridline()/theme.ink_primary() compile
     # to rx.color_mode_cond, which emits a `resolvedColorMode` check. A bare
-    # light-mode constant (theme.SURFACE etc.) would never produce this.
+    # hardcoded hex (what a reverted call site would emit) would never produce
+    # this string at all.
     assert "resolvedColorMode" in segment
+    # The border is itself a colour-mode-conditional VALUE (via
+    # `theme.tooltip_border_css()`), not a plain string built by interpolating
+    # a Var into an f-string (`f"1px solid {theme.gridline()}"` bakes the
+    # Var's repr into the string instead, see theme.py's module docstring).
+    assert '"border"] : ((resolvedColorMode' in segment
     # A value only our helper sets; absent from the recharts/Reflex default.
     assert "fontSize" in segment
     # If styling had landed in the generic style fallback instead of the real
@@ -206,15 +218,48 @@ def test_tooltip_is_styled_with_surface_tokens():
     assert "wrapperStyle" not in rendered
 
 
+# ------------------------------------------------ dark-mode chrome (chart chrome
+# must FLIP with the mode, not just build without error)
+#
+# Rendering a page proves the tree builds; it says nothing about whether a
+# colour actually varies with the mode. `rx.color_mode_cond` compiles to a
+# `resolvedColorMode ? light : dark` ternary in the JS output, so its presence
+# in a chrome prop is the signature that distinguishes "this colour reacts to
+# the toggle" from "this colour is nailed to one hex forever". A gridline,
+# axis line or tick label built from a bare `theme.GRIDLINE`/`theme.AXIS`
+# constant (or an equivalent hardcoded hex) would render fine and NEVER emit
+# this string, which is exactly the bug this migration closes.
+
+
+def test_grid_and_axes_resolve_through_color_mode_cond_not_a_hardcoded_hex():
+    rendered = str(c.line_chart(ROWS, [("value", "V", theme.series(1))]).render())
+    grid_start = rendered.index("RechartsCartesianGrid")
+    grid_segment = rendered[grid_start : grid_start + 200]
+    x_axis_start = rendered.index("RechartsXAxis")
+    x_axis_segment = rendered[x_axis_start : x_axis_start + 300]
+    y_axis_start = rendered.index("RechartsYAxis")
+    y_axis_segment = rendered[y_axis_start : y_axis_start + 300]
+
+    assert "resolvedColorMode" in grid_segment  # gridline: theme.gridline()
+    assert "resolvedColorMode" in x_axis_segment  # axis line + tick fill
+    assert "resolvedColorMode" in y_axis_segment
+
+    # Never the light-mode hex alone, with no conditional around it: that
+    # shape is what a revert to `theme.GRIDLINE`/`theme.AXIS` (or a hardcoded
+    # equivalent) would produce.
+    assert 'stroke:"#e1e0d9"' not in rendered
+    assert 'stroke:"#c3c2b7"' not in rendered
+
+
 def test_line_chart_with_brush_builds():
-    assert c.line_chart(ROWS, [("value", "V", theme.SERIES_1)], brush=True).render()
+    assert c.line_chart(ROWS, [("value", "V", theme.series(1))], brush=True).render()
 
 
 def test_line_chart_brush_is_off_by_default():
-    rendered = str(c.line_chart(ROWS, [("value", "V", theme.SERIES_1)]).render())
+    rendered = str(c.line_chart(ROWS, [("value", "V", theme.series(1))]).render())
     assert "RechartsBrush" not in rendered
 
 
 def test_line_chart_brush_true_adds_a_brush():
-    rendered = str(c.line_chart(ROWS, [("value", "V", theme.SERIES_1)], brush=True).render())
+    rendered = str(c.line_chart(ROWS, [("value", "V", theme.series(1))], brush=True).render())
     assert "RechartsBrush" in rendered
