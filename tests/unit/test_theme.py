@@ -57,6 +57,24 @@ def test_removed_bare_constants_are_not_attributes_of_theme():
     assert isinstance(theme.FONT, str)
 
 
+def test_theme_exposes_no_public_str_constants_besides_font():
+    """Closes a gap `test_no_module_references_the_removed_bare_constants`
+    cannot: that test greps for the RETIRED NAMES, so it says nothing about
+    someone reintroducing the same bug under a NEW name (e.g. a fresh
+    `GRID_LIGHT = "#e1e0d9"` constant, used at a call site with no
+    `theme.GRIDLINE` text anywhere). This asserts on SHAPE instead of name:
+    the only public module-level `str` attribute `theme` may expose is
+    `FONT`, which is colour-mode-invariant and was never part of the bug.
+    Any other bare colour constant, whatever it is called, fails this.
+    """
+    public_str_attrs = {
+        name: value
+        for name, value in vars(theme).items()
+        if not name.startswith("_") and isinstance(value, str)
+    }
+    assert public_str_attrs == {"FONT": theme.FONT}
+
+
 def test_no_module_references_the_removed_bare_constants():
     """A future `theme.GRIDLINE`-shaped call site would silently pin a chart
     to light mode again. This scans every module under `italy_dashboard/` (a

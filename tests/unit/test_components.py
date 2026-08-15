@@ -10,6 +10,11 @@ alone cannot tell a diverging encoding from the single-hue bug it replaced.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
+import pytest
+import reflex as rx
+
 from italy_dashboard import components as c
 from italy_dashboard import palette, theme
 from italy_dashboard.state import ClimateState
@@ -229,26 +234,62 @@ def test_tooltip_is_styled_with_surface_tokens():
 # axis line or tick label built from a bare `theme.GRIDLINE`/`theme.AXIS`
 # constant (or an equivalent hardcoded hex) would render fine and NEVER emit
 # this string, which is exactly the bug this migration closes.
+#
+# Parameterised over every helper that renders its own grid/axis chrome,
+# checked INDEPENDENTLY rather than through one representative (`line_chart`)
+# by proxy: `line_chart`, `bar_chart`, `composed_bar_line_chart` and
+# `area_compare_chart` build their chrome via the shared `_grid()`/`_x_axis()`/
+# `_y_axis()` helpers, but `h_bar_chart` and `scatter_chart` construct their
+# `x_axis`/`y_axis`/`cartesian_grid` INLINE — the same pattern that hid two of
+# the three inert `stroke_width` sites in the prior task. A single test built
+# only around `line_chart` would pass by coincidence of a shared code path and
+# say nothing about the inline builders, which is exactly where a future edit
+# lands without ever touching `_grid()`.
+
+CHART_CHROME_HELPERS: dict[str, Callable[[], rx.Component]] = {
+    "line_chart": lambda: c.line_chart(ROWS, [("value", "V", theme.series(1))]),
+    "bar_chart": lambda: c.bar_chart(ROWS, data_key="value", x_key="period", color=theme.series(1)),
+    "h_bar_chart": lambda: c.h_bar_chart(
+        ROWS, data_key="value", y_key="period", color=theme.series(1)
+    ),
+    "scatter_chart": lambda: c.scatter_chart(
+        [(SCATTER_POINTS, "Panel", theme.series(1))], x_key="x", y_key="y"
+    ),
+    "composed_bar_line_chart": lambda: c.composed_bar_line_chart(
+        ROWS, bar_key="value", bar_label="Bars", line_key="early", line_label="Trend"
+    ),
+    "area_compare_chart": lambda: c.area_compare_chart(
+        ROWS,
+        [("early", "1951-1980", theme.series(1)), ("late", "1996-2025", theme.series(2))],
+    ),
+}
 
 
-def test_grid_and_axes_resolve_through_color_mode_cond_not_a_hardcoded_hex():
-    rendered = str(c.line_chart(ROWS, [("value", "V", theme.series(1))]).render())
-    grid_start = rendered.index("RechartsCartesianGrid")
-    grid_segment = rendered[grid_start : grid_start + 200]
-    x_axis_start = rendered.index("RechartsXAxis")
-    x_axis_segment = rendered[x_axis_start : x_axis_start + 300]
-    y_axis_start = rendered.index("RechartsYAxis")
-    y_axis_segment = rendered[y_axis_start : y_axis_start + 300]
+def _chrome_segments(rendered: str, tag: str, window: int = 300) -> list[str]:
+    """Every occurrence of `tag` in `rendered`, each with its trailing props."""
+    segments = []
+    start = 0
+    while (idx := rendered.find(tag, start)) != -1:
+        segments.append(rendered[idx : idx + window])
+        start = idx + len(tag)
+    return segments
 
-    assert "resolvedColorMode" in grid_segment  # gridline: theme.gridline()
-    assert "resolvedColorMode" in x_axis_segment  # axis line + tick fill
-    assert "resolvedColorMode" in y_axis_segment
+
+@pytest.mark.parametrize("name", sorted(CHART_CHROME_HELPERS))
+def test_chart_chrome_resolves_through_color_mode_cond_not_a_hardcoded_hex(name: str):
+    rendered = str(CHART_CHROME_HELPERS[name]().render())
+
+    for tag in ("RechartsCartesianGrid", "RechartsXAxis", "RechartsYAxis"):
+        segments = _chrome_segments(rendered, tag)
+        assert segments, f"{name}: no {tag} in render"
+        for segment in segments:
+            assert "resolvedColorMode" in segment, f"{name}: {tag} chrome is not mode-aware"
 
     # Never the light-mode hex alone, with no conditional around it: that
     # shape is what a revert to `theme.GRIDLINE`/`theme.AXIS` (or a hardcoded
     # equivalent) would produce.
-    assert 'stroke:"#e1e0d9"' not in rendered
-    assert 'stroke:"#c3c2b7"' not in rendered
+    assert 'stroke:"#e1e0d9"' not in rendered, f"{name}: hardcoded gridline hex"
+    assert 'stroke:"#c3c2b7"' not in rendered, f"{name}: hardcoded axis hex"
 
 
 def test_line_chart_with_brush_builds():
