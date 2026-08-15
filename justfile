@@ -115,6 +115,11 @@ test-integration:
 test-live:
     uv run pytest -m live
 
+# Run the browser rendering tests (needs `uv sync --extra browser` and
+# `uv run playwright install chromium`; boots a real prod-mode app instance)
+test-browser:
+    uv run pytest tests/browser -m browser
+
 # Lint + typecheck + tests: what CI should run
 check: lint typecheck test
 

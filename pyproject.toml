@@ -24,6 +24,17 @@ cds = [
     "netcdf4>=1.6,<2",
 ]
 
+# Browser rendering tests (tests/browser/): assertions on computed styles a
+# real browser paints, which no Reflex render-TREE test can see (recharts
+# resolves several props, like an axis tick's `fill`, in ways the Python-side
+# component tree cannot reflect). Only someone running that suite needs a
+# Chromium download. Install with:
+#   uv sync --extra browser
+#   uv run playwright install chromium
+browser = [
+    "pytest-playwright>=0.5,<1",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8",
@@ -95,5 +106,6 @@ asyncio_mode = "auto"
 markers = [
     "integration: end-to-end pipeline tests (still offline)",
     "live: tests that hit the real ISTAT API (deselected by default)",
+    "browser: browser-rendering tests against a real Chromium (needs the `browser` extra + `playwright install chromium`, deselected by default)",
 ]
-addopts = "-m 'not live'"
+addopts = "-m 'not live and not browser'"
