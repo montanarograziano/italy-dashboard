@@ -102,7 +102,10 @@ def _run(kind: str, colors: tuple[str, ...], mode: str, surface: str) -> dict:
     """
     out = subprocess.run(
         ["node", "--input-type=module", "-e", script],
-        capture_output=True, text=True, timeout=60, check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
     )
     return json.loads(out.stdout)
 
@@ -198,10 +201,22 @@ CATEGORICAL_DARK = ("#2072d0", "#de5c27", "#00995f")
 # Blue and orange are the poles, reusing the categorical hues so the palette
 # reads as one system rather than two unrelated schemes.
 DIVERGING_LIGHT = (
-    "#1f5fa8", "#2a78d6", "#8ab8ea", "#b2b2b2", "#ff7d44", "#eb6834", "#cc5e34",
+    "#1f5fa8",
+    "#2a78d6",
+    "#8ab8ea",
+    "#b2b2b2",
+    "#ff7d44",
+    "#eb6834",
+    "#cc5e34",
 )
 DIVERGING_DARK = (
-    "#005acb", "#2072d0", "#4986d4", "#4c4d4c", "#ef7344", "#de5c27", "#c34f1e",
+    "#005acb",
+    "#2072d0",
+    "#4986d4",
+    "#4c4d4c",
+    "#ef7344",
+    "#de5c27",
+    "#c34f1e",
 )
 
 # Sequential: one hue, pale -> deep.
@@ -352,13 +367,13 @@ app.add_page(...)  # existing pages unchanged
 Reflex has no direct "raw CSS string" app argument in 0.9.8, so inject the block through a `rx.el.style` element in the shell instead. In `italy_dashboard/components.py`, inside `shell(...)`, add as the first child:
 
 ```python
-        rx.el.style(palette.diverging_css_vars()),
+(rx.el.style(palette.diverging_css_vars()),)
 ```
 
 Then add the mode toggle beside the language chips. In `components.py`, extend `navbar()` by inserting before `_lang_toggle()`:
 
 ```python
-        rx.color_mode.button(size="1"),
+(rx.color_mode.button(size="1"),)
 ```
 
 - [ ] **Step 7: Verify the mechanism actually works**
@@ -534,16 +549,18 @@ If `rx.recharts.bar` rejects a `children=` keyword in this Reflex version, pass 
 In `italy_dashboard/pages/climate.py`, replace the stripes card's `bar_chart(...)` call with:
 
 ```python
-                    stripe_chart(ClimateState.stripes),
+(stripe_chart(ClimateState.stripes),)
 ```
 
 and add `stripe_chart` to the import from `italy_dashboard.components`. Add a `data_table` beneath it so the exact anomalies remain readable:
 
 ```python
-                    data_table(
-                        ClimateState.stripes,
-                        [("period", t("year")), ("anomaly", t("anomaly"))],
-                    ),
+(
+    data_table(
+        ClimateState.stripes,
+        [("period", t("year")), ("anomaly", t("anomaly"))],
+    ),
+)
 ```
 
 - [ ] **Step 7: Run the tests**
@@ -671,11 +688,8 @@ def line_chart(
             )
         )
     if zero_line:
-        extras.append(
-            rx.recharts.reference_line(y=0, stroke=theme.axis(), stroke_width=1)
-        )
-    children = [*extras, *lines, _x_axis(), _y_axis(), _grid(),
-                rx.recharts.graphing_tooltip()]
+        extras.append(rx.recharts.reference_line(y=0, stroke=theme.axis(), stroke_width=1))
+    children = [*extras, *lines, _x_axis(), _y_axis(), _grid(), rx.recharts.graphing_tooltip()]
     if len(series) >= 2:
         children.append(rx.recharts.legend())
     return rx.recharts.line_chart(
@@ -871,13 +885,15 @@ Replace every bare `rx.recharts.graphing_tooltip()` in `line_chart`, `bar_chart`
 Then add the brush parameter to `line_chart`: add `brush: bool = False` to the signature, and before building the chart:
 
 ```python
-    if brush:
-        children.append(
-            rx.recharts.brush(
-                data_key="period", height=24, stroke=theme.axis(),
-                fill=theme.surface(),
-            )
+if brush:
+    children.append(
+        rx.recharts.brush(
+            data_key="period",
+            height=24,
+            stroke=theme.axis(),
+            fill=theme.surface(),
         )
+    )
 ```
 
 - [ ] **Step 4: Verify**
@@ -1080,11 +1096,13 @@ and inside `load`, after `self.ranking = ...`:
 In `italy_dashboard/pages/climate.py`, add a card after the stripes card:
 
 ```python
-                card(
-                    t("grid_title"),
-                    t("grid_sub"),
-                    small_multiples(ClimateState.stripes_grid),
-                ),
+(
+    card(
+        t("grid_title"),
+        t("grid_sub"),
+        small_multiples(ClimateState.stripes_grid),
+    ),
+)
 ```
 
 Add `small_multiples` to the imports. Add to `translations.py`, EN:
