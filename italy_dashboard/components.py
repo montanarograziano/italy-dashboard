@@ -6,7 +6,7 @@ from typing import Any
 
 import reflex as rx
 
-from italy_dashboard import theme
+from italy_dashboard import palette, theme
 from italy_dashboard.i18n import t
 from italy_dashboard.state import AppState
 
@@ -58,6 +58,7 @@ def navbar() -> rx.Component:
             )
             for key, href in NAV_LINKS
         ],
+        rx.color_mode.button(size="1"),
         _lang_toggle(),
         spacing="5",
         align="center",
@@ -79,6 +80,7 @@ def no_data_callout() -> rx.Component:
 
 def shell(*children: rx.Component) -> rx.Component:
     return rx.box(
+        rx.el.style(palette.diverging_css_vars()),
         navbar(),
         rx.vstack(
             rx.cond(AppState.data_ready, rx.fragment(), no_data_callout()),
