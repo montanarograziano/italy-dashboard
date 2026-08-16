@@ -2,8 +2,23 @@ FROM python:3.11-slim
 
 # uv (package manager) — copied from the official distroless image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
-# Caddy (single-port reverse proxy / static file server, see Caddyfile)
-COPY --from=caddy:2-alpine /usr/bin/caddy /usr/bin/caddy
+# Caddy (single-port reverse proxy / static file server, see Caddyfile).
+#
+# The upstream binary carries the file capability cap_net_bind_service=ep so it
+# can bind port 80 as an unprivileged user. That xattr survives COPY --from, and
+# execve() returns EPERM when a file's capabilities are not in the process's
+# bounding set. Render runs containers unprivileged with that capability
+# dropped, so the copied binary failed to start there with exit 126 while
+# working fine under Docker Desktop's more permissive default.
+#
+# Caddy does not need the capability here: it binds $PORT (10000), not 80.
+# Piping through cat rewrites the bytes into a fresh root-owned file and leaves
+# the xattrs behind; `cp` and `mv` would preserve them.
+COPY --from=caddy:2-alpine /usr/bin/caddy /tmp/caddy-with-caps
+RUN cat /tmp/caddy-with-caps > /usr/bin/caddy \
+    && chmod 0755 /usr/bin/caddy \
+    && chown root:root /usr/bin/caddy \
+    && rm -f /tmp/caddy-with-caps
 
 WORKDIR /app
 
