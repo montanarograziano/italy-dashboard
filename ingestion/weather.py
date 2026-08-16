@@ -3,6 +3,7 @@
 Usage:
     python -m ingestion.weather refresh          # every province capital
     python -m ingestion.weather refresh ITC45    # one province (after a coord fix)
+    python -m ingestion.weather normalize        # rebuild the snapshot from cache alone
 
 Raw JSON is cached per city, per COORDINATE, per decade under
 data/raw/weather/, so an interrupted run resumes instead of re-downloading 76
@@ -272,11 +273,95 @@ async def cmd_refresh(only: str | None = None, data_dir: Path = DATA_DIR) -> int
     return 0
 
 
+def cmd_normalize(data_dir: Path = DATA_DIR) -> int:
+    """Rebuild the snapshot from cached decade chunks alone. NO network calls.
+
+    `cmd_refresh` only writes the snapshot once every one of the 106 capitals
+    clears the null gate, so a backfill stopped by the API quota can leave a
+    fully-populated cache and zero rows published. This is the weather-side
+    equivalent of `ingestion.fetch normalize`: it reads only what is already
+    on disk under data/raw/weather/ and assembles whatever it can from it.
+
+    A city is included only if EVERY decade chunk it should have (per
+    `decade_chunks(START_DATE, ...)`) is already cached: a city missing a
+    decade has a gap in the middle of its history, which would silently
+    distort that city's per-decade warming slope. A city that clears the
+    completeness check but breaches MAX_NULL_RATE is excluded too, but on its
+    own: unlike `cmd_refresh`, one bad city does not block the rest, because
+    this command is explicitly assembling a partial view already.
+    """
+    capitals = load_capitals()
+    raw_dir = data_dir / "raw" / "weather"
+    end = date.today() - timedelta(days=PUBLICATION_LAG_DAYS)
+    expected_starts = [start for start, _ in decade_chunks(START_DATE, end)]
+
+    all_rows: list[dict] = []
+    included: list[str] = []
+    incomplete: list[str] = []
+    null_gated: list[tuple[str, float]] = []
+
+    for cap in capitals:
+        rows: list[dict] = []
+        missing_decade = False
+        for start in expected_starts:
+            cache = _cache_path(raw_dir, cap.province_code, cap.lat, cap.lon, start)
+            if not cache.exists():
+                missing_decade = True
+                break
+            payload = json.loads(cache.read_text())
+            rows.extend(payload_to_rows(cap.province_code, payload))
+        if missing_decade:
+            incomplete.append(cap.province_code)
+            continue
+        rate = null_rate(rows)
+        if rate > MAX_NULL_RATE:
+            null_gated.append((cap.province_code, rate))
+            continue
+        all_rows.extend(r for r in rows if r["t_mean"] is not None)
+        included.append(cap.province_code)
+
+    logger.info(
+        "normalize: %d/%d cities included (%s); %d skipped for incomplete decades (%s); "
+        "%d skipped by the null gate (%s)",
+        len(included),
+        len(capitals),
+        ", ".join(included) or "none",
+        len(incomplete),
+        ", ".join(incomplete) or "none",
+        len(null_gated),
+        ", ".join(code for code, _ in null_gated) or "none",
+    )
+    for code, rate in null_gated:
+        logger.warning(
+            "[%s] excluded: %.1f%% of cached days are null (limit %.1f%%)",
+            code,
+            100 * rate,
+            100 * MAX_NULL_RATE,
+        )
+
+    if not all_rows:
+        logger.error(
+            "normalize produced nothing: no cached city is both complete across all "
+            "%d expected decades and within the null gate. Run `refresh` to populate "
+            "the cache first.",
+            len(expected_starts),
+        )
+        return 1
+
+    write_snapshot(all_rows, data_dir)
+    return 0
+
+
 def main(argv: list[str]) -> int:
-    if not argv or argv[0] != "refresh":
+    if not argv:
         print(__doc__)
         return 2
-    return asyncio.run(cmd_refresh(argv[1] if len(argv) > 1 else None))
+    if argv[0] == "refresh":
+        return asyncio.run(cmd_refresh(argv[1] if len(argv) > 1 else None))
+    if argv[0] == "normalize":
+        return cmd_normalize()
+    print(__doc__)
+    return 2
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from typing import Any, ClassVar, TypedDict, cast
 import reflex as rx
 
 from italy_dashboard import queries as q
-from italy_dashboard.translations import SPLIT_LABEL_TO_KEY, SPLIT_LABELS
+from italy_dashboard.translations import EN, IT, SPLIT_LABEL_TO_KEY, SPLIT_LABELS
 
 Row = dict[str, Any]
 
@@ -23,6 +23,34 @@ class GridItem(TypedDict):
 
     city: str
     rows: list[Row]
+
+
+def _coverage_text(
+    lang: str,
+    capitals: str,
+    capitals_total: str,
+    regions: str,
+    regions_total: str,
+    year_start: str,
+    year_end: str,
+) -> str:
+    """Format the "Coverage: N of M capitals, ..." line for one language.
+
+    The numbers come from `queries.climate_coverage()` and are language
+    invariant; only the sentence template (`translations.EN`/`IT`) varies.
+    Reflex Vars cannot be `.format()`-ed the way a plain Python string can, so
+    this runs inside a `@rx.var` computed property (backend, plain values),
+    not inside a page's render tree.
+    """
+    template = IT["climate_coverage"] if lang == "it" else EN["climate_coverage"]
+    return template.format(
+        capitals=capitals,
+        capitals_total=capitals_total,
+        regions=regions,
+        regions_total=regions_total,
+        year_start=year_start,
+        year_end=year_end,
+    )
 
 
 class AppState(rx.State):
@@ -467,10 +495,39 @@ class ClimateState(AppState):
     distribution: list[Row] = []
     mart_ready: bool = False
 
+    # Coverage: how much of Italy mart_climate_annual actually has data for
+    # (see queries.climate_coverage). Populated even when the mart is empty,
+    # so the totals (from the seed) always show.
+    capitals_included: str = "0"
+    capitals_total: str = "0"
+    regions_included: str = "0"
+    regions_total: str = "0"
+    year_start: str = "—"
+    year_end: str = "—"
+
+    @rx.var
+    def coverage_text(self) -> str:
+        return _coverage_text(
+            self.lang,
+            self.capitals_included,
+            self.capitals_total,
+            self.regions_included,
+            self.regions_total,
+            self.year_start,
+            self.year_end,
+        )
+
     @rx.event
     def load(self):
         self.load_shared()
         self.mart_ready = q.climate_ready()
+        coverage = q.climate_coverage()
+        self.capitals_included = coverage["capitals"]
+        self.capitals_total = coverage["capitals_total"]
+        self.regions_included = coverage["regions"]
+        self.regions_total = coverage["regions_total"]
+        self.year_start = coverage["year_start"]
+        self.year_end = coverage["year_end"]
         if not self.mart_ready:
             return
         self.city_options = q.climate_cities()
@@ -509,10 +566,40 @@ class ClimateCrimeState(AppState):
     stat_n: str = "0"
     mart_ready: bool = False
 
+    # Coverage: see ClimateState. This page's whole argument is that the raw
+    # scatter recovers a north-south confound; with partial, mostly-northern
+    # coverage that confound may not appear, so this is surfaced prominently
+    # rather than as a footnote (see cc_coverage_note in translations.py).
+    capitals_included: str = "0"
+    capitals_total: str = "0"
+    regions_included: str = "0"
+    regions_total: str = "0"
+    year_start: str = "—"
+    year_end: str = "—"
+
+    @rx.var
+    def coverage_text(self) -> str:
+        return _coverage_text(
+            self.lang,
+            self.capitals_included,
+            self.capitals_total,
+            self.regions_included,
+            self.regions_total,
+            self.year_start,
+            self.year_end,
+        )
+
     @rx.event
     def load(self):
         self.load_shared()
         self.mart_ready = q.crime_climate_ready()
+        coverage = q.climate_coverage()
+        self.capitals_included = coverage["capitals"]
+        self.capitals_total = coverage["capitals_total"]
+        self.regions_included = coverage["regions"]
+        self.regions_total = coverage["regions_total"]
+        self.year_start = coverage["year_start"]
+        self.year_end = coverage["year_end"]
         if not self.mart_ready:
             return
         scatter = q.crime_climate_scatter()

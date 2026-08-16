@@ -32,3 +32,6 @@ site/
 
 # bridge transfer leftovers
 _to_delete/
+
+# Agent scratch: plans, ledgers and task reports. Never shipped code.
+.superpowers/

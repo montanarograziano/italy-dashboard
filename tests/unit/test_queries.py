@@ -771,3 +771,32 @@ def test_climate_stripes_grid_returns_one_entry_per_city(climate_db):
     assert len(grid) <= 6
     assert {"city", "rows"} == set(grid[0])
     assert all(r["fill"].startswith("var(--div-") for r in grid[0]["rows"])
+
+
+# ------------------------------------------------------- climate coverage
+
+
+def test_climate_coverage_reports_only_seed_totals_without_a_mart(missing_db):
+    # Denominators come from dbt/seeds/province_capitals.csv (106 capitals,
+    # 21 NUTS2 regions), never a hardcoded 106/21, so they still show up even
+    # with no mart_climate_annual on disk at all.
+    assert q.climate_coverage() == {
+        "capitals": "0",
+        "capitals_total": "106",
+        "regions": "0",
+        "regions_total": "21",
+        "year_start": "—",
+        "year_end": "—",
+    }
+
+
+def test_climate_coverage_counts_whats_actually_in_the_mart(climate_db):
+    # climate_db's synthetic snapshot covers 20 of the 106 capitals (see
+    # ingestion.sample_data.SAMPLE_CAPITALS), spanning 12 of the 21 regions.
+    coverage = q.climate_coverage()
+    assert coverage["capitals_total"] == "106"
+    assert coverage["regions_total"] == "21"
+    assert coverage["capitals"] == "20"
+    assert coverage["regions"] == "12"
+    assert coverage["year_start"] == "1981"
+    assert coverage["year_end"] == "2024"

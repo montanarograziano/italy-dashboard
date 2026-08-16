@@ -34,9 +34,16 @@ that's a slice-picker regression — see the tests in `tests/unit/test_queries.p
 if there are still no hits, the dataset may live outside the SDMX API (e.g. only
 on dati.istat.it or Serie Storiche).
 
-**Docker shows suspiciously smooth charts** — the image bakes synthetic sample
-data as a fallback; check that the `data/` volume mount is in place before
-trusting anything.
+**Docker shows suspiciously smooth charts**: you built the image after running
+`just sample` instead of `just refresh`. The Docker image bakes in whatever
+`data/marts` and `data/*.parquet` contained on the checkout at build time (see
+[Deployment](12-deployment.md)), so a synthetic-data build looks smooth on
+purpose. Rebuild after `just refresh` for real data.
+
+**Docker build fails with "data/marts has no parquet files"**: expected, the
+image no longer generates sample data as a fallback. Run `just sample` (dev
+data) or `just refresh` (real data) so `data/marts/*.parquet` exists, then
+retry the build.
 
 **Numbers changed after a refresh** — ISTAT revises history; the pipeline is
 idempotent for identical inputs, but inputs legitimately change upstream.

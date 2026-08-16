@@ -44,6 +44,12 @@ def climate_page() -> rx.Component:
         rx.cond(
             ClimateState.mart_ready,
             rx.vstack(
+                rx.text(
+                    ClimateState.coverage_text,
+                    color=theme.ink_secondary(),
+                    font_size="0.9em",
+                    font_weight="600",
+                ),
                 card(
                     t("warming_title"),
                     t("warming_sub"),

@@ -1,0 +1,33 @@
+# Single-port entry point for Render's free tier (one exposed port, TLS
+# terminated by Render itself). Caddy serves the exported static frontend and
+# reverse-proxies the handful of routes Reflex's backend actually owns.
+#
+# Route list verified against the installed reflex==0.9.8 backend
+# (reflex_base/constants/event.py `Endpoint`, reflex/app.py `_add_default_endpoints`
+# / `_add_optional_endpoints`):
+#   /_event/*  - the Socket.IO/websocket endpoint (state sync, mounted with a
+#                catch-all path, so it must be proxied as a prefix)
+#   /ping      - trivial liveness probe, also used as the Render health check
+#   /_upload   - file upload endpoint (registered only if rx.upload() is used;
+#                this app doesn't use it today, but proxying it is harmless
+#                and keeps the Caddyfile correct if that changes)
+# Everything else is served from the pre-exported static frontend bundle.
+{
+	auto_https off
+}
+
+:{$PORT} {
+	@backend path /_event/* /ping /_upload
+
+	handle @backend {
+		reverse_proxy localhost:8000
+	}
+
+	handle {
+		root * /srv/frontend
+		try_files {path} /index.html
+		file_server
+	}
+
+	encode gzip
+}
