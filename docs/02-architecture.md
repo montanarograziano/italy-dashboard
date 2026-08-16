@@ -27,6 +27,18 @@ host, inside Docker, and in CI. This replaced an earlier design where a `.duckdb
 file persisted views with absolute host paths — which broke the moment Docker
 mounted it.
 
+**The runtime snapshots are committed; the rest are not.** `data/` was ignored
+wholesale on the reasoning that any snapshot could be rebuilt with one command.
+That stopped being true when temperature arrived: the weather backfill is days
+of rate-limited fetching, so a lost snapshot is a lost week, and the deployment
+builds from a clean clone where nothing regenerable is present anyway. So the
+14 parquet files the running app actually queries (about 12 MB) are tracked,
+and everything else still is not: `data/raw/`, `data/dbt.duckdb`, and the dbt
+inputs that only the transformation step reads, including
+`data/weather_daily.parquet`. The container never runs dbt, it reads pre-built
+marts, so shipping its inputs would be dead weight. Refreshing data is now a
+commit, which is the cost of making the deployment reproducible.
+
 **Two transformation paths, one owner each.** The generic `normalize` step in
 `ingestion/` maps any ISTAT dataset onto a fixed 6-column schema
 (`territory, territory_name, category, category_name, period, value`) — good

@@ -3,6 +3,11 @@
 .web
 *.py[cod]
 # Data snapshots (regenerate with: python -m ingestion.fetch refresh)
+# Snapshots are normally regenerable and stay out of git. The exception below
+# exists because the deployment builds from a clean clone (Render), and the
+# weather half of the data now takes days of rate-limited fetching to rebuild,
+# so "just re-run the pipeline" is no longer a cheap recovery. See
+# docs/02-architecture.md.
 data/*
 !data/.gitkeep
 
@@ -35,3 +40,15 @@ _to_delete/
 
 # Agent scratch: plans, ledgers and task reports. Never shipped code.
 .superpowers/
+
+# Tracked exception: exactly the parquet the running app queries, nothing else.
+# dbt inputs (weather_daily, the raw normalized ISTAT snapshots) stay ignored:
+# the container never runs dbt, it reads pre-built marts.
+!data/.gitkeep
+!data/population_resident.parquet
+!data/population_foreign.parquet
+!data/labor_unemployment.parquet
+!data/economy_inflation.parquet
+!data/marts/
+data/marts/*
+!data/marts/*.parquet
