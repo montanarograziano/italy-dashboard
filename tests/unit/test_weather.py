@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import csv
-from datetime import date
+import json
+import logging
+from datetime import date, timedelta
 from itertools import pairwise
 from pathlib import Path
 
@@ -411,3 +413,96 @@ async def test_an_aborted_run_keeps_its_cache_and_resumes(tmp_path, monkeypatch)
         "ITC45",
         "ITE43",
     }
+
+
+# --------------------------------------------------------------------------
+# cmd_normalize: assembling a snapshot from the raw cache alone, offline.
+# --------------------------------------------------------------------------
+
+
+def _expected_starts() -> list[date]:
+    end = date.today() - timedelta(days=weather.PUBLICATION_LAG_DAYS)
+    return [start for start, _ in weather.decade_chunks(weather.START_DATE, end)]
+
+
+def _write_cache(raw_dir: Path, cap: Capital, start: date, payload: dict) -> None:
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    cache = weather._cache_path(raw_dir, cap.province_code, cap.lat, cap.lon, start)
+    cache.write_text(json.dumps(payload))
+
+
+def _patch_capitals(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Capital, Capital]:
+    seed = write_seed(tmp_path)
+    real_load_capitals = weather.load_capitals
+    monkeypatch.setattr(weather, "load_capitals", lambda: real_load_capitals(seed))
+    return Capital("ITC45", "Milano", *MILANO_COORD), Capital("ITE43", "Roma", *ROMA_COORD)
+
+
+def test_cmd_normalize_includes_a_city_with_every_decade_cached(tmp_path, monkeypatch):
+    milano, roma = _patch_capitals(monkeypatch, tmp_path)
+    raw_dir = tmp_path / "raw" / "weather"
+    for start in _expected_starts():
+        _write_cache(raw_dir, milano, start, clean_payload([f"{start.year}-06-01"]))
+        _write_cache(raw_dir, roma, start, clean_payload([f"{start.year}-06-01"]))
+
+    rc = weather.cmd_normalize(data_dir=tmp_path)
+
+    assert rc == 0
+    df = pl.read_parquet(tmp_path / weather.SNAPSHOT_NAME)
+    assert set(df["province_code"].to_list()) == {"ITC45", "ITE43"}
+
+
+def test_cmd_normalize_excludes_a_city_missing_one_decade(tmp_path, monkeypatch, caplog):
+    milano, roma = _patch_capitals(monkeypatch, tmp_path)
+    raw_dir = tmp_path / "raw" / "weather"
+    starts = _expected_starts()
+    for start in starts:
+        _write_cache(raw_dir, roma, start, clean_payload([f"{start.year}-06-01"]))
+    for start in starts[:-1]:  # Milano is missing its most recent decade chunk
+        _write_cache(raw_dir, milano, start, clean_payload([f"{start.year}-06-01"]))
+
+    with caplog.at_level(logging.INFO):
+        rc = weather.cmd_normalize(data_dir=tmp_path)
+
+    assert rc == 0
+    df = pl.read_parquet(tmp_path / weather.SNAPSHOT_NAME)
+    assert set(df["province_code"].to_list()) == {"ITE43"}
+    assert "ITC45" in caplog.text  # the summary names the skipped city
+
+
+def test_cmd_normalize_excludes_a_city_that_breaches_the_null_gate(tmp_path, monkeypatch, caplog):
+    milano, roma = _patch_capitals(monkeypatch, tmp_path)
+    raw_dir = tmp_path / "raw" / "weather"
+    for start in _expected_starts():
+        _write_cache(raw_dir, milano, start, all_null_payload([f"{start.year}-06-01"]))
+        _write_cache(raw_dir, roma, start, clean_payload([f"{start.year}-06-01"]))
+
+    with caplog.at_level(logging.INFO):
+        rc = weather.cmd_normalize(data_dir=tmp_path)
+
+    assert rc == 0
+    df = pl.read_parquet(tmp_path / weather.SNAPSHOT_NAME)
+    assert set(df["province_code"].to_list()) == {"ITE43"}
+    assert "ITC45" in caplog.text  # the summary names the null-gated city
+
+
+def test_cmd_normalize_empty_cache_returns_nonzero_and_writes_nothing(tmp_path, monkeypatch):
+    _patch_capitals(monkeypatch, tmp_path)
+
+    rc = weather.cmd_normalize(data_dir=tmp_path)
+
+    assert rc == 1
+    assert not (tmp_path / weather.SNAPSHOT_NAME).exists()
+
+
+def test_cmd_normalize_snapshot_matches_weather_columns(tmp_path, monkeypatch):
+    milano, _roma = _patch_capitals(monkeypatch, tmp_path)
+    raw_dir = tmp_path / "raw" / "weather"
+    for start in _expected_starts():
+        _write_cache(raw_dir, milano, start, clean_payload([f"{start.year}-06-01"]))
+
+    rc = weather.cmd_normalize(data_dir=tmp_path)
+
+    assert rc == 0
+    df = pl.read_parquet(tmp_path / weather.SNAPSHOT_NAME)
+    assert df.columns == weather.WEATHER_COLUMNS

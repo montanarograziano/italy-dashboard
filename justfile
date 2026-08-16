@@ -60,6 +60,12 @@ refresh-weather-cds *years:
 normalize *dataset:
     uv run python -m ingestion.fetch normalize {{dataset}}
 
+# Rebuild the weather snapshot from cached decade chunks alone (no download),
+# so a quota-limited backfill is usable before all 106 capitals finish
+normalize-weather:
+    uv run python -m ingestion.weather normalize
+    just transform
+
 # Serve the project documentation locally (zensical, hot reload)
 docs:
     uv run zensical serve
