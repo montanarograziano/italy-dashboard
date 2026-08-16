@@ -19,6 +19,21 @@ def climate_crime_page() -> rx.Component:
         rx.cond(
             ClimateCrimeState.mart_ready,
             rx.vstack(
+                # Coverage first, before either scatter: the raw view's whole
+                # argument is a north-south confound, and partial, mostly-
+                # northern coverage can hide it and look like a null result
+                # instead. This is the honest mitigation, not a footnote.
+                rx.callout(
+                    rx.vstack(
+                        rx.text(ClimateCrimeState.coverage_text, font_weight="700"),
+                        rx.text(t("cc_coverage_note"), font_size="0.9em"),
+                        spacing="1",
+                        align="start",
+                    ),
+                    icon="triangle_alert",
+                    color_scheme="amber",
+                    width="100%",
+                ),
                 rx.hstack(
                     stat_tile(t("cc_stat_panel"), ClimateCrimeState.stat_panel, t("cc_y_panel")),
                     stat_tile(t("cc_stat_raw"), ClimateCrimeState.stat_raw, t("cc_y_raw")),

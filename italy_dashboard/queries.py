@@ -26,6 +26,11 @@ NATIONAL = "Italia (totale)"
 
 MARTS_DIR = DATA_DIR / "marts"
 
+# The ground truth for "how many capitals/regions COULD exist", read live
+# rather than hardcoded (106 capitals, 21 NUTS2 regions today) so the
+# denominators in climate_coverage() stay correct if the seed changes.
+SEED_PATH = PROJECT_ROOT / "dbt" / "seeds" / "province_capitals.csv"
+
 ALL = "All"
 
 
@@ -692,6 +697,60 @@ def climate_cities() -> list[str]:
         "WHERE capital_city IS NOT NULL ORDER BY name"
     )
     return [r["name"] for r in rows]
+
+
+def climate_coverage() -> dict[str, str]:
+    """How much of Italy the temperature snapshot actually covers.
+
+    A quota-limited ERA5-Land backfill (see `ingestion.weather normalize`)
+    can leave the mart populated for a fraction of the country indefinitely.
+    Every climate page reads this so a partial snapshot says so instead of
+    silently looking complete: it is what tells a reader of the crime-climate
+    page that a tidy null result there may just mean too few, too-northern
+    regions are in yet, not that the confound is gone.
+
+    Totals come from the province_capitals SEED (not a hardcoded 106/21) so
+    they stay correct if the seed grows or shrinks; counts come from what is
+    actually DISTINCT in the mart, which is exactly what a partial backfill
+    changes.
+    """
+    out = {
+        "capitals": "0",
+        "capitals_total": "0",
+        "regions": "0",
+        "regions_total": "0",
+        "year_start": "—",
+        "year_end": "—",
+    }
+    con = duckdb.connect()
+    try:
+        totals = con.execute(
+            f"SELECT count(*), count(DISTINCT region_code) FROM read_csv_auto('{SEED_PATH}')"
+        ).fetchone()
+    finally:
+        con.close()
+    if totals is not None:
+        out["capitals_total"] = str(totals[0])
+        out["regions_total"] = str(totals[1])
+
+    if not climate_ready():
+        return out
+    rows = _query(
+        f"""
+        SELECT count(DISTINCT province_code) AS capitals,
+               count(DISTINCT region_code) AS regions,
+               MIN(CAST(year AS INTEGER)) AS year_start,
+               MAX(CAST(year AS INTEGER)) AS year_end
+        FROM {CLIMATE_ANNUAL}
+        """
+    )
+    if rows and rows[0]["capitals"]:
+        r = rows[0]
+        out["capitals"] = str(r["capitals"])
+        out["regions"] = str(r["regions"])
+        out["year_start"] = str(r["year_start"])
+        out["year_end"] = str(r["year_end"])
+    return out
 
 
 ROLLING_YEARS_BEFORE = 4

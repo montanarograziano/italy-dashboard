@@ -176,6 +176,12 @@ EN: dict[str, str] = {
         "No temperature data yet. Run  just refresh-weather  (or  just sample  "
         "for synthetic dev data), then reload."
     ),
+    # {capitals} of {capitals_total} / {regions} of {regions_total} / a year span
+    # are substituted in ClimateState.coverage_text and ClimateCrimeState.coverage_text.
+    "climate_coverage": (
+        "Coverage: {capitals} of {capitals_total} capitals, {regions} of "
+        "{regions_total} regions, {year_start}-{year_end}"
+    ),
     "nav_climate_crime": "Climate × Crime",  # noqa: RUF001
     "climate_crime_title": "Summer heat and violent crime",
     "cc_raw_title": "Naive view: raw cross-section",
@@ -198,6 +204,11 @@ EN: dict[str, str] = {
     "cc_stat_panel": "Panel",
     "cc_stat_n": "Observations",
     "cc_obs_note": "region-years, shared by both views",
+    "cc_coverage_note": (
+        "With partial, mostly-northern coverage the confound this page relies on "
+        "may not show up yet — a tidy null result below can mean too few, "
+        "too-northern regions, not that the confound is gone."
+    ),
     "cc_caveat": (
         "Association only. This is an ECOLOGICAL comparison: it is region-level "
         "and says nothing about individuals. It is ANNUAL, while the "
@@ -380,6 +391,10 @@ IT: dict[str, str] = {
         "Nessun dato di temperatura. Esegui  just refresh-weather  (oppure  just sample  "
         "per dati sintetici di sviluppo), poi ricarica."
     ),
+    "climate_coverage": (
+        "Copertura: {capitals} di {capitals_total} capoluoghi, {regions} di "
+        "{regions_total} regioni, {year_start}-{year_end}"
+    ),
     "nav_climate_crime": "Clima × Criminalità",  # noqa: RUF001
     "climate_crime_title": "Caldo estivo e criminalità violenta",
     "cc_raw_title": "Vista ingenua: sezione trasversale grezza",
@@ -402,6 +417,12 @@ IT: dict[str, str] = {
     "cc_stat_panel": "Panel",
     "cc_stat_n": "Osservazioni",
     "cc_obs_note": "regione-anno, comuni a entrambe le viste",
+    "cc_coverage_note": (
+        "Con una copertura parziale e per lo più settentrionale, il fattore "
+        "confondente su cui si basa questa pagina potrebbe non emergere ancora: "
+        "un risultato nullo qui sotto può significare troppe poche regioni, "
+        "troppo a nord, non che il fattore confondente sia scomparso."
+    ),
     "cc_caveat": (
         "Solo associazione. Confronto ECOLOGICO: è a livello regionale e non "
         "dice nulla sugli individui. È ANNUALE, mentre la letteratura su caldo "
