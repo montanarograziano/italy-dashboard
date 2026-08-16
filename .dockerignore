@@ -1,0 +1,29 @@
+# Keep the build context small and the growing weather backfill out of it.
+# Only data/*.parquet and data/marts/ are ever COPYed into the image (see
+# Dockerfile); everything else under data/ is dbt/ingestion input, not a
+# runtime dependency, and data/raw/weather/ in particular is being written to
+# by a live backfill and is hundreds of MB.
+data/raw
+data/dbt.duckdb
+data/.gitkeep
+
+.venv/
+.web/
+.states/
+.pytest_cache/
+.ruff_cache/
+.pyrefly_cache/
+__pycache__/
+*.pyc
+
+.git/
+.claude/
+.superpowers/
+_to_delete/
+site/
+.zensical/
+notebooks/
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+logs/

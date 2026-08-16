@@ -126,6 +126,24 @@ def _wait_until_serving(proc: subprocess.Popen[str], base_url: str, output: list
     )
 
 
+def _wait_until_reachable(base_url: str) -> None:
+    """Poll an already-running server (no subprocess of our own to watch)."""
+    deadline = time.monotonic() + _STARTUP_TIMEOUT_S
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(base_url, timeout=2) as response:
+                if response.status < 500:
+                    return
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            last_error = exc
+        time.sleep(_POLL_INTERVAL_S)
+    raise TimeoutError(
+        f"{base_url} never became reachable within {_STARTUP_TIMEOUT_S}s "
+        f"(last connection error: {last_error!r})"
+    )
+
+
 def _terminate(proc: subprocess.Popen[str]) -> None:
     """Kill the whole process group, not just the immediate child.
 
@@ -203,7 +221,18 @@ def app_server(_require_chromium: None) -> Iterator[str]:
     Session-scoped on purpose: a prod build (see module docstring) is real
     wall-clock cost, and none of these tests mutate server-side state in a
     way that would require a fresh instance per test.
+
+    Set `BROWSER_TEST_BASE_URL` to point these tests at an already-running
+    server instead (e.g. the Render deployment's single-port Docker
+    container), rather than spawning a `reflex run` subprocess: this is how
+    the Docker deployment verification proves the websocket path survives
+    Caddy's proxy, since a chart only renders a data-driven element like an
+    axis tick if the state connection actually came up.
     """
+    if base_url := os.environ.get("BROWSER_TEST_BASE_URL"):
+        _wait_until_reachable(base_url)
+        yield base_url
+        return
     _ensure_sample_data()
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"

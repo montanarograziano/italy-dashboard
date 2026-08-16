@@ -1,0 +1,33 @@
+# Render Blueprint for the single-port Docker deployment.
+# https://render.com/docs/blueprint-spec
+#
+# No secrets here, and none are needed: the app only ever reads the public
+# ISTAT/Open-Meteo snapshot baked into the image at build time (see
+# Dockerfile). See docs/12-deployment.md for the full picture, including the
+# free-tier caveats (cold starts, websocket disconnects on spin-down, 512 MB
+# RAM) and the data-baking constraint (this image must be built from a
+# checkout that already has data/marts populated; there is no fetch-on-deploy
+# step).
+services:
+  - name: italy-dashboard
+    type: web
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # /ping is Reflex's own liveness endpoint, proxied by Caddy straight to
+    # the backend (see Caddyfile): a 200 here means the whole chain (Caddy,
+    # then the backend process) is actually up, not just that Caddy itself
+    # is serving static files.
+    healthCheckPath: /ping
+    envVars:
+      # Render sets PORT=10000 for every web service automatically and Caddy
+      # listens on `:{$PORT}` (see Caddyfile), so nothing needs to be
+      # configured here for that. REFLEX_API_URL is deliberately NOT set as a
+      # runtime env var: it's baked into the exported frontend at Docker
+      # BUILD time (a `docker build --build-arg API_URL=...`), which Render's
+      # Blueprint envVars cannot influence, and the Dockerfile's default
+      # already resolves correctly for this single-origin, TLS-terminated
+      # topology. See the Dockerfile comment above `ARG API_URL` for why.
+      - key: PYTHONUNBUFFERED
+        value: "1"

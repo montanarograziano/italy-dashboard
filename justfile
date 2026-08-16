@@ -133,13 +133,19 @@ check: lint typecheck test
 compile:
     uv run reflex export --frontend-only --no-zip
 
-# Build the Docker image
+# Build the Docker image. Bakes in the data/ snapshot that exists on THIS
+# checkout at build time (see Dockerfile): run `just refresh`/`just sample`
+# first if data/marts is empty; the build fails loudly rather than shipping
+# an empty dashboard.
 docker-build:
     docker build -t italy-dashboard .
 
-# Run the Docker image with data/ mounted from the host (builds first if needed)
-docker-run: docker-build
-    docker run -p 3000:3000 -p 8000:8000 -v $(pwd)/data:/app/data italy-dashboard
+# Build and run the production image locally on a single port: the same
+# shape as the Render deploy (Caddy + backend behind one $PORT, static
+# frontend baked in, no host data mount, no dev/hot-reload). Serves
+# http://localhost:10000 once Caddy and the backend are both up.
+docker-serve: docker-build
+    docker run --rm -p 10000:10000 italy-dashboard
 
 # Remove caches and build artifacts (keeps data/ and .venv)
 clean:

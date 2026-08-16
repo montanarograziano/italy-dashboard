@@ -43,3 +43,4 @@ avoids it.
 - [Architecture](02-architecture.md) — how the pieces fit
 - [Data pipeline](03-data-pipeline.md) — fetch, normalize, transform
 - [Methodology & caveats](07-methodology.md) — read this before quoting any number
+- [Deployment](12-deployment.md): Render, single-port Docker, free-tier caveats
