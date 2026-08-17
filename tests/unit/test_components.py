@@ -586,6 +586,17 @@ CHART_CHROME_HELPERS: dict[str, Callable[[], rx.Component]] = {
     "h_bar_chart": lambda: c.h_bar_chart(
         ROWS, data_key="value", y_key="period", color=theme.series(1)
     ),
+    # A distinct variant, not a substitute for the one above: `highlight`
+    # builds an entirely separate code path (a per-row `Cell` foreach) that
+    # the plain call never touches, and this codebase has already shipped a
+    # `wrapperStyle` leak three times in a helper's shared path while an
+    # inline-built variant slipped past the net (stroke_width, a hardcoded
+    # hex, and this one) — see test_no_chart_helper_swallows_a_prop_into_
+    # wrapper_style's docstring. "1990" matches one of ROWS's own "period"
+    # values, so the Cell foreach's comparison has something real to match.
+    "h_bar_chart_highlight": lambda: c.h_bar_chart(
+        ROWS, data_key="value", y_key="period", color=theme.series(1), highlight="1990"
+    ),
     "scatter_chart": lambda: c.scatter_chart(
         [(SCATTER_POINTS, "Panel", theme.series(1))], x_key="x", y_key="y"
     ),

@@ -604,6 +604,16 @@ class ClimateState(AppState):
         )
 
     @rx.var
+    def is_city_scope(self) -> bool:
+        """Whether a single city, rather than a region or Italia, is
+        selected. Used by the distribution card (city-only: see
+        queries.climate_distribution_windows's docstring) to show an
+        explanatory line instead of its em-dash placeholder when the scope
+        is too broad for a daily histogram to exist at all.
+        """
+        return self.city != q.ALL
+
+    @rx.var
     def highlighted_city(self) -> str:
         """The city to call out in the cross-city ranking/grid, or "" (never
         a real city name) when nothing should be highlighted.
@@ -613,7 +623,25 @@ class ClimateState(AppState):
         there — see `components.h_bar_chart`/`small_multiples`'s own
         docstrings for how an empty string disables their highlight.
         """
-        return self.city if self.city != q.ALL else ""
+        return self.city if self.is_city_scope else ""
+
+    @rx.var
+    def city_outside_ranking_note(self) -> str:
+        """ "{city} is not among the top 20..." when a city is selected but
+        absent from `ranking`, else "" (nothing to say).
+
+        `climate_stripes_grid`'s top 12 is a strict subset of `ranking`'s top
+        20 (both order by the same warming rate), so a city outside the
+        ranking entirely gets NO visual acknowledgement anywhere on the page:
+        neither the ranking's outline nor the grid's ring. Without this note
+        that reads as a broken feature; with it, it reads as "not in the top
+        20" — a real, distinguishable state, not a bug.
+        """
+        if not self.is_city_scope:
+            return ""
+        if any(r["name"] == self.city for r in self.ranking):
+            return ""
+        return _format_translation(self.lang, "city_outside_ranking", city=self.city)
 
     @rx.var
     def selected_scope_title(self) -> str:
@@ -629,7 +657,17 @@ class ClimateState(AppState):
     @rx.event
     def load(self):
         self.load_shared()
-        self.mart_ready = q.climate_ready()
+        # BOTH marts, not just climate_ready(): the default scope is now
+        # Italia (region scope), so an older snapshot that has
+        # mart_climate_annual but predates mart_climate_region would
+        # otherwise report ready, collapse region_options to just ["Italia"],
+        # and silently render every "Selected scope" card empty with no
+        # callout — the only way out being to pick a city by hand. Gating on
+        # both is an all-or-nothing trade-off (it also hides the four
+        # city-capable cards on that same old snapshot, even though they
+        # would work), accepted deliberately: a page that claims ready and
+        # renders nothing is worse than one that honestly says it isn't.
+        self.mart_ready = q.climate_ready() and q.climate_region_ready()
         coverage = q.climate_coverage()
         self.capitals_included = coverage["capitals"]
         self.capitals_total = coverage["capitals_total"]

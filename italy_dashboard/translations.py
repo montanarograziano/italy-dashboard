@@ -149,6 +149,12 @@ EN: dict[str, str] = {
     # because the entity name is a runtime value (see _format_translation).
     "selected_scope_title": "Selected scope: {name}",
     "across_italy_section": "Across Italy",
+    # {city} is the selected city, substituted in
+    # ClimateState.city_outside_ranking_note. Templated for the same reason
+    # as selected_scope_title.
+    "city_outside_ranking": (
+        "{city} is not among the top 20 fastest-warming cities, so it isn't highlighted below."
+    ),
     "warming_title": "Annual temperature",
     "warming_sub": (
         "Annual mean (thin line), the min-max band each year (shaded), and a "
@@ -182,6 +188,10 @@ EN: dict[str, str] = {
     ),
     "dist_early": "{early_lo}-{early_hi}",
     "dist_late": "{late_lo}-{late_hi}",
+    "distribution_city_only": (
+        "Daily histograms need a single city: the regional mart holds yearly "
+        "aggregates, not daily readings. Pick a city above to see it."
+    ),
     "anomaly": "Anomaly (C)",
     "degrees_per_decade": "C / decade",
     "no_climate": (
@@ -374,6 +384,11 @@ IT: dict[str, str] = {
     # Vedi il commento nella tabella EN: {name} è un valore a runtime.
     "selected_scope_title": "Ambito selezionato: {name}",
     "across_italy_section": "In tutta Italia",
+    # Vedi il commento nella tabella EN: {city} è un valore a runtime.
+    "city_outside_ranking": (
+        "{city} non è tra le prime 20 città che si scaldano più in fretta, "
+        "quindi non è evidenziata qui sotto."
+    ),
     "warming_title": "Temperatura annuale",
     "warming_sub": (
         "Media annuale (linea sottile), la fascia minimo-massimo di ogni anno "
@@ -404,6 +419,11 @@ IT: dict[str, str] = {
     ),
     "dist_early": "{early_lo}-{early_hi}",
     "dist_late": "{late_lo}-{late_hi}",
+    "distribution_city_only": (
+        "Gli istogrammi giornalieri richiedono una singola città: il mart "
+        "regionale contiene aggregati annuali, non dati giornalieri. "
+        "Seleziona una città qui sopra per vederlo."
+    ),
     "anomaly": "Anomalia (C)",
     "degrees_per_decade": "C / decennio",
     "no_climate": (

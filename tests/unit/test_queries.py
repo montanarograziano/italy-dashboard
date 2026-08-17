@@ -403,9 +403,25 @@ def test_region_rate_ranking_defaults_to_latest_year(rates_mart):
 
 def test_climate_not_ready_without_a_snapshot(missing_db):
     assert q.climate_ready() is False
+    assert q.climate_region_ready() is False
     assert q.climate_cities() == []
     assert q.climate_annual_series("Roma") == []
     assert q.warming_rate_ranking() == []
+
+
+def test_climate_region_ready_true_once_the_dbt_build_runs(climate_db):
+    assert q.climate_ready() is True
+    assert q.climate_region_ready() is True
+
+
+def test_climate_region_ready_false_on_an_annual_only_snapshot(annual_only_climate_mart):
+    """The exact shape a pre-region-mart snapshot has: mart_climate_annual
+    exists, mart_climate_region does not. `climate_ready()` alone (the old
+    gate) cannot see this; `climate_region_ready()` is the new check
+    ClimateState.mart_ready needs now that the default scope is Italia.
+    """
+    assert q.climate_ready() is True
+    assert q.climate_region_ready() is False
 
 
 def test_climate_cities_are_the_sample_capitals(climate_db):

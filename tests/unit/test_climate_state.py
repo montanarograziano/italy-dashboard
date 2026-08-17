@@ -24,6 +24,22 @@ def test_default_scope_is_italia_the_broadest_level(climate_db):
     assert state.city == q.ALL
 
 
+def test_mart_ready_is_false_without_the_region_mart(annual_only_climate_mart):
+    """The scenario ClimateState.mart_ready's comment describes: an older
+    snapshot with mart_climate_annual but no mart_climate_region. Before this
+    gate existed, `mart_ready` would have been True here (climate_ready()
+    alone only checks the annual mart), region_options would collapse to
+    just ["Italia"], and every "Selected scope" card would query a table
+    that does not exist and render empty with no callout to explain why.
+    """
+    assert q.climate_ready() is True
+    assert q.climate_region_ready() is False
+
+    state = _fresh()
+    state.load()
+    assert state.mart_ready is False
+
+
 def test_region_options_and_city_options_are_populated_on_load(climate_db):
     state = _fresh()
     state.load()
@@ -101,11 +117,63 @@ def test_distribution_is_populated_at_city_scope(climate_db):
     assert state.distribution == q.climate_distribution("Torino")
 
 
+def test_is_city_scope_tracks_whether_a_city_is_selected(climate_db):
+    state = _fresh()
+    state.load()
+    assert state.is_city_scope is False  # default: Italia
+
+    state.set_region("Piemonte")
+    assert state.is_city_scope is False  # a region, still not a city
+
+    state.set_city("Torino")
+    assert state.is_city_scope is True
+
+    state.set_region("Piemonte")  # region change resets city to q.ALL
+    assert state.is_city_scope is False
+
+
 # --------------------------------------------------------- highlighted_city
 #
 # The cross-city ranking/grid must acknowledge the selection ONLY when a
 # single city is what's selected — region and Italia scope select many
 # cities at once, so nothing should be singled out there.
+
+
+# ----------------------------------------------- city_outside_ranking_note
+#
+# `climate_stripes_grid`'s top 12 is a strict subset of `ranking`'s top 20
+# (both order by the same warming rate), so a city outside the ranking
+# entirely gets NO visual acknowledgement anywhere on the page — neither the
+# ranking's outline nor the grid's ring. These tests set `ranking` directly
+# (a plain state field) rather than going through a real query, since the
+# 20-capital synthetic snapshot puts every one of its cities inside a top-20
+# ranking by construction and could never exercise the "absent" branch.
+
+
+def test_city_outside_ranking_note_is_empty_when_the_city_is_in_the_ranking():
+    state = _fresh()
+    state.ranking = [{"name": "Torino", "value": 0.5}, {"name": "Milano", "value": 0.4}]
+    state.city = "Torino"
+    assert state.city_outside_ranking_note == ""
+
+
+def test_city_outside_ranking_note_names_the_city_when_absent():
+    state = _fresh()
+    state.ranking = [{"name": "Torino", "value": 0.5}, {"name": "Milano", "value": 0.4}]
+    state.city = "Palermo"
+    assert state.city_outside_ranking_note == (
+        "Palermo is not among the top 20 fastest-warming cities, so it isn't highlighted below."
+    )
+
+
+def test_city_outside_ranking_note_is_empty_at_region_and_italia_scope():
+    """Not a city selection at all: this note must stay silent, distinct
+    from the "in the ranking" case above, even though both return "".
+    """
+    state = _fresh()
+    state.ranking = [{"name": "Torino", "value": 0.5}]
+    state.city = q.ALL
+    assert state.city_outside_ranking_note == ""
 
 
 def test_highlighted_city_is_the_city_at_city_scope(climate_db):

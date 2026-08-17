@@ -102,20 +102,30 @@ def _selected_scope_section() -> rx.Component:
         ),
         card(
             t("distribution_title"),
-            # Not `t(...)`: these three labels are templates filled with the
-            # selected city's derived windows, so they resolve in
-            # ClimateState rather than in the render tree. At region/Italia
-            # scope ClimateState._refresh leaves `distribution` empty and
-            # these windows at "—" — mart_climate_region has no daily rows to
-            # draw a histogram from, so this card falls back to the same
-            # empty state a too-short city record already gets, on purpose.
-            ClimateState.distribution_sub,
-            area_compare_chart(
-                ClimateState.distribution,
-                [
-                    ("early", ClimateState.dist_early_label, theme.series(1)),
-                    ("late", ClimateState.dist_late_label, theme.series(2)),
-                ],
+            # Not `t(...)` on the true branch: those three labels are
+            # templates filled with the selected city's derived windows, so
+            # they resolve in ClimateState rather than in the render tree.
+            # The false branch is a DIFFERENT empty reason from a too-short
+            # city record's em-dash placeholder: mart_climate_region has no
+            # daily rows at all, so region/Italia scope can never draw this
+            # histogram, and the default scope is now Italia — this is what
+            # every visitor sees on first paint unless they pick a city, so
+            # it says why in plain words instead of showing "—-— against —-—".
+            rx.cond(
+                ClimateState.is_city_scope,
+                ClimateState.distribution_sub,
+                t("distribution_city_only"),
+            ),
+            rx.cond(
+                ClimateState.is_city_scope,
+                area_compare_chart(
+                    ClimateState.distribution,
+                    [
+                        ("early", ClimateState.dist_early_label, theme.series(1)),
+                        ("late", ClimateState.dist_late_label, theme.series(2)),
+                    ],
+                ),
+                rx.fragment(),
             ),
         ),
     )
@@ -132,6 +142,21 @@ def _across_italy_section() -> rx.Component:
     """
     return rx.fragment(
         _section_heading(t("across_italy_section")),
+        # Distinguishes "not in the top 20" from "the highlight is broken":
+        # climate_stripes_grid's top 12 is a strict subset of the ranking's
+        # top 20, so a city outside the ranking entirely gets NO visual
+        # acknowledgement below at all. Empty ("") for every other case
+        # (region/Italia scope, or a city that IS in the ranking) — see
+        # ClimateState.city_outside_ranking_note's own docstring.
+        rx.cond(
+            ClimateState.city_outside_ranking_note != "",
+            rx.text(
+                ClimateState.city_outside_ranking_note,
+                color=theme.ink_muted(),
+                font_size="0.85em",
+            ),
+            rx.fragment(),
+        ),
         card(
             t("ranking_title"),
             t("ranking_sub"),

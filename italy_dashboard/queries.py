@@ -797,6 +797,16 @@ def climate_ready() -> bool:
     return (MARTS_DIR / f"{CLIMATE_ANNUAL}.parquet").exists()
 
 
+def climate_region_ready() -> bool:
+    """Whether the region/Italia scope has data of its own, independent of
+    `climate_ready()`. An older snapshot can carry `mart_climate_annual`
+    without yet having `mart_climate_region` (the region mart was added
+    later); see `ClimateState.mart_ready`'s comment for why the page gates
+    on both together now that the default scope is Italia.
+    """
+    return (MARTS_DIR / f"{CLIMATE_REGION}.parquet").exists()
+
+
 def climate_cities() -> list[str]:
     rows = _query(
         f"SELECT DISTINCT capital_city AS name FROM {CLIMATE_ANNUAL} "
