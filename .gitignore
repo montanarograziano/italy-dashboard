@@ -16,6 +16,10 @@ data/*
 .states/
 assets/external/
 
+# Static (TypeScript) frontend
+web/node_modules/
+web/dist/
+
 # Python
 __pycache__/
 *.pyc

@@ -152,6 +152,10 @@ generate-shared:
     uv run python scripts/generate_palette.py
     uv run python scripts/generate_conformance_expected.py
 
+# Run the Python-versus-TypeScript conformance suite (needs `cd web && npm install`)
+test-conformance:
+    uv run pytest tests/browser/test_conformance.py -m browser -v
+
 # Remove caches and build artifacts (keeps data/ and .venv)
 clean:
     rm -rf .web .states .pytest_cache .ruff_cache
