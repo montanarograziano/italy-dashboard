@@ -226,3 +226,20 @@ def test_ported_cases_match_the_python_reference(results: dict):
         if actual != want:
             mismatches[case_id] = {"python": want, "typescript": actual}
     assert not mismatches, json.dumps(mismatches, indent=2)[:4000]
+
+
+def test_no_case_is_unported(results: dict):
+    """Every matrix case now has a TypeScript port, and must keep having one.
+
+    Until the port completed, `__unported__` was the honest state of partial
+    work and this suite counted it rather than hiding it. Now that every case
+    is ported, the same marker means the opposite thing: a case was added to
+    the matrix with no TypeScript counterpart, which is exactly the divergence
+    this suite exists to prevent. Failing here costs a build; discovering it in
+    the UI costs a wrong number on a public dashboard.
+    """
+    unported = sorted(k for k, v in results.items() if _is_unported(v))
+    assert not unported, (
+        f"{len(unported)} of {len(results)} cases have no TypeScript port: "
+        f"{unported}. Port them, or remove them from shared/conformance/cases.json."
+    )
