@@ -837,6 +837,162 @@ def test_climate_stripes_grid_returns_one_entry_per_city(climate_db):
     assert all(r["fill"].startswith("var(--div-") for r in grid[0]["rows"])
 
 
+# ---------------------------------------- climate: region / Italia scope
+#
+# mart_climate_region carries 'IT' ('Italia') as just another region_code
+# (see dbt/models/marts/mart_climate_region.sql's own header), so these
+# functions take a plain region_name and never special-case Italia in SQL.
+# The synthetic climate_db snapshot's 20 capitals (ingestion.sample_data.
+# SAMPLE_CAPITALS) span 12 real regions; Piemonte (Torino + Cuneo) is used
+# below as a region with more than one member capital.
+
+
+def test_climate_region_options_starts_with_italia(climate_db):
+    regions = q.climate_region_options()
+    assert regions[0] == q.ITALIA
+    assert "Piemonte" in regions
+    assert "IT" not in regions  # the code, not the name, must never leak here
+    assert regions[1:] == sorted(regions[1:])
+
+
+def test_climate_city_options_cascade_from_region(climate_db):
+    all_cities = q.climate_city_options(q.ITALIA)
+    assert all_cities[0] == q.ALL
+    assert len(all_cities) == 1 + len(q.climate_cities())
+
+    piemonte_cities = q.climate_city_options("Piemonte")
+    assert piemonte_cities == [q.ALL, "Cuneo", "Torino"]
+
+
+def test_climate_region_annual_series_has_min_mean_max_per_year(climate_db):
+    rows = q.climate_region_annual_series("Piemonte")
+    assert rows
+    assert {"period", "t_mean", "t_min", "t_max", "t_band", "t_rolling"} == set(rows[0])
+    assert [r["period"] for r in rows] == sorted(r["period"] for r in rows)
+    assert all(r["t_min"] <= r["t_mean"] <= r["t_max"] for r in rows)
+
+
+def test_climate_region_annual_series_italia_is_the_national_row(climate_db):
+    rows = q.climate_region_annual_series(q.ITALIA)
+    assert rows, "the national 'IT' row must be reachable through region_name = 'Italia'"
+
+
+def test_climate_region_unknown_name_returns_empty_not_an_error(climate_db):
+    assert q.climate_region_annual_series("Nonexistentia") == []
+    assert q.climate_region_stripes("Nonexistentia") == []
+    assert q.climate_region_threshold_days("Nonexistentia") == []
+
+
+def test_climate_region_stripes_carry_a_diverging_fill(climate_db):
+    rows = q.climate_region_stripes("Piemonte")
+    if not rows:
+        pytest.skip("no anomalies in this fixture: the CLINO guard nulls them")
+    assert {"period", "anomaly", "fill"} == set(rows[0])
+    for r in rows:
+        assert r["fill"].startswith("var(--div-")
+
+
+def test_climate_region_threshold_days_are_non_negative(climate_db):
+    rows = q.climate_region_threshold_days("Piemonte")
+    assert rows
+    assert {"period", "hot_days", "tropical_nights", "frost_days"} == set(rows[0])
+    assert all(r["hot_days"] >= 0 and r["frost_days"] >= 0 for r in rows)
+
+
+def test_climate_region_functions_degrade_gracefully_without_a_snapshot(missing_db):
+    assert q.climate_region_options() == [q.ITALIA]
+    assert q.climate_city_options() == [q.ALL]
+    assert q.climate_region_annual_series(q.ITALIA) == []
+    assert q.climate_region_stripes(q.ITALIA) == []
+    assert q.climate_region_threshold_days(q.ITALIA) == []
+
+
+@pytest.fixture
+def partial_year_region_mart(sample_db):
+    """A region (and the 'IT' row) with 12 complete years plus one partial one.
+
+    mart_climate_region carries no `days_observed` of its own — it is already
+    an aggregate over capitals, unlike mart_climate_annual, which tracks it
+    per province (see mart_climate_region.sql). The region-scope completeness
+    guard is derived by joining back to mart_climate_annual, so this fixture
+    populates BOTH marts, mirroring partial_year_annual_mart above exactly.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+
+    def annual_row(year: str, t_mean: float, days: int, anomaly: float) -> dict:
+        return {
+            "province_code": "IT999",
+            "province_name": "Testville",
+            "capital_city": "Testville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": year,
+            "t_mean": t_mean,
+            "t_min_mean": t_mean - 5.0,
+            "t_max_mean": t_mean + 5.0,
+            "days_observed": days,
+            "anomaly_1981_2010": anomaly,
+        }
+
+    annual_rows = [annual_row(str(year), 15.0, 365, 0.0) for year in range(2010, 2022)]
+    annual_rows.append(annual_row("2022", 21.0, 210, 6.0))
+    pl.DataFrame(annual_rows).write_parquet(marts / "mart_climate_annual.parquet")
+
+    def region_row(region_code: str, region_name: str, year: str, t_mean: float, anomaly) -> dict:
+        return {
+            "region_code": region_code,
+            "region_name": region_name,
+            "year": year,
+            "t_mean": t_mean,
+            "t_min_mean": t_mean - 5.0,
+            "t_max_mean": t_mean + 5.0,
+            "hot_days": 0.0,
+            "tropical_nights": 0.0,
+            "frost_days": 0.0,
+            "provinces_covered": 1,
+            "anomaly_1971_2000": None,
+            "anomaly_1981_2010": anomaly,
+        }
+
+    region_rows = [
+        region_row(code, name, str(year), 15.0, 0.0)
+        for code, name in (("ITZ9", "Testregion"), ("IT", "Italia"))
+        for year in range(2010, 2022)
+    ]
+    region_rows += [
+        region_row("ITZ9", "Testregion", "2022", 21.0, 6.0),
+        region_row("IT", "Italia", "2022", 21.0, 6.0),
+    ]
+    pl.DataFrame(region_rows).write_parquet(marts / "mart_climate_region.parquet")
+    return marts
+
+
+def test_partial_years_are_excluded_from_region_scope_too(partial_year_region_mart):
+    """The city-scope guarantee (test_partial_years_are_excluded_from_every_
+    climate_series above) must hold at region and Italia scope as well, even
+    though mart_climate_region has no days_observed column of its own.
+    """
+    for region in ("Testregion", q.ITALIA):
+        years = [r["period"] for r in q.climate_region_annual_series(region)]
+        assert "2022" not in years, region
+        assert len(years) == 12, region
+
+        stripe_years = [r["period"] for r in q.climate_region_stripes(region)]
+        assert "2022" not in stripe_years, region
+
+
+def test_distribution_is_empty_at_region_and_italy_scope(climate_daily_mart):
+    """mart_climate_region has no daily rows (see queries.climate_distribution's
+    docstring): a region or Italia name never matches a capital_city, so the
+    card's existing empty state fires instead of a crash or invented data.
+    """
+    assert q.climate_distribution_windows("Piemonte") is None
+    assert q.climate_distribution("Piemonte") == []
+    assert q.climate_distribution_windows(q.ITALIA) is None
+    assert q.climate_distribution(q.ITALIA) == []
+
+
 # ------------------------------------------------------- climate coverage
 
 
