@@ -103,6 +103,80 @@ def test_small_multiples_builds_against_the_real_state_var():
     assert c.small_multiples(ClimateState.stripes_grid).render()
 
 
+# ------------------------------- h_bar_chart / small_multiples: highlight
+#
+# The climate page's cross-city ranking and grid must ACKNOWLEDGE a selected
+# city (an outlined bar, a ringed panel) without recolouring it: every bar
+# and panel here is the same kind of entity, so a new hue would misleadingly
+# claim a categorical difference that is not there.
+
+RANKING_ROWS = [
+    {"name": "Torino", "value": 0.42},
+    {"name": "Milano", "value": 0.35},
+]
+
+
+def test_h_bar_chart_without_highlight_renders_no_cells():
+    """The default (no `highlight` argument) must render exactly as before
+    this parameter existed — the shape crime.py's four ranking charts, which
+    never pass `highlight`, still rely on.
+    """
+    rendered = str(
+        c.h_bar_chart(RANKING_ROWS, data_key="value", y_key="name", color=theme.series(1)).render()
+    )
+    assert "RechartsCell" not in rendered
+
+
+def test_h_bar_chart_highlight_adds_a_cell_per_row_with_no_wrapper_style():
+    rendered = str(
+        c.h_bar_chart(
+            RANKING_ROWS,
+            data_key="value",
+            y_key="name",
+            color=theme.series(1),
+            highlight="Torino",
+        ).render()
+    )
+    assert "RechartsCell" in rendered
+    assert "wrapperStyle" not in rendered
+
+
+def test_h_bar_chart_highlight_stroke_is_bound_to_the_row_not_a_constant():
+    """Both branches of the per-row stroke conditional must be visible: the
+    literal highlight VALUE (proving the comparison is wired to `highlight`,
+    not always-on) and the `"none"` fallback every non-matching row gets.
+    """
+    rendered = str(
+        c.h_bar_chart(
+            RANKING_ROWS,
+            data_key="value",
+            y_key="name",
+            color=theme.series(1),
+            highlight="Torino",
+        ).render()
+    )
+    assert "Torino" in rendered
+    assert '"none"' in rendered
+
+
+def test_small_multiples_without_highlight_adds_no_selection_ring():
+    """The default must render exactly as before this parameter existed.
+
+    `"2px solid"` is used ONLY by the selection ring (card/tooltip chrome
+    elsewhere in the tree uses 1px borders — see theme.border_css /
+    tooltip_border_css), so its absence here means no ring markup was built
+    at all, not merely that no panel happens to match.
+    """
+    rendered = str(c.small_multiples(GRID_ITEMS).render())
+    assert "2px solid" not in rendered
+
+
+def test_small_multiples_highlight_rings_the_matching_panel_only():
+    rendered = str(c.small_multiples(GRID_ITEMS, highlight="Roma").render())
+    assert "2px solid transparent" in rendered  # the non-selected panel(s)
+    assert "resolvedColorMode" in rendered  # the selected panel's mode-aware ring
+
+
 # ------------------------------------------------ scatter_chart zero_lines
 #
 # The climate-crime PANEL scatter plots two-way demeaned values that centre on

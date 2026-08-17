@@ -144,6 +144,11 @@ EN: dict[str, str] = {
     "change_pct": "Change (%)",
     # climate page
     "city": "City",
+    # {name} is the selected city, or else the selected region, or else
+    # "Italia" — substituted in ClimateState.selected_scope_title. Templated
+    # because the entity name is a runtime value (see _format_translation).
+    "selected_scope_title": "Selected scope: {name}",
+    "across_italy_section": "Across Italy",
     "warming_title": "Annual temperature",
     "warming_sub": (
         "Annual mean (thin line), the min-max band each year (shaded), and a "
@@ -366,6 +371,9 @@ IT: dict[str, str] = {
     "inflation_sub": "Variazione media annua dell'indice generale (%)",
     "change_pct": "Variazione (%)",
     "city": "Città",
+    # Vedi il commento nella tabella EN: {name} è un valore a runtime.
+    "selected_scope_title": "Ambito selezionato: {name}",
+    "across_italy_section": "In tutta Italia",
     "warming_title": "Temperatura annuale",
     "warming_sub": (
         "Media annuale (linea sottile), la fascia minimo-massimo di ogni anno "
