@@ -113,7 +113,7 @@ export async function climateMonthHeatmap(city: string) {
 // which combined with a LIMIT changes which cities even make the top N (see
 // this file's warming_rate_top12 case, which cuts through a four-way tie at
 // 0.36 among Bergamo/Lodi/Monza/Novara/Torino).
-export async function warmingRateRanking(topN: number) {
+export async function warmingRateRanking(topN: number = 20) {
   return runSql(
     `SELECT capital_city AS name,
             ROUND(10.0 * regr_slope(t_mean, CAST(year AS INTEGER)), 2) AS value
