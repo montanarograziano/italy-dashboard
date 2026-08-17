@@ -199,6 +199,7 @@ def test_the_matrix_covers_the_dynamic_mart_engine(monkeypatch: pytest.MonkeyPat
 
 STATIC_TS = REPO_ROOT / "web" / "src" / "queries" / "static.ts"
 HARNESS_TS = REPO_ROOT / "web" / "src" / "conformance" / "harness.ts"
+QUERIES_DIR = REPO_ROOT / "web" / "src" / "queries"
 
 
 def _snake(camel: str) -> str:
@@ -245,21 +246,57 @@ def test_the_ported_sql_uses_the_same_full_year_threshold_as_python():
     NUMBER is not, and no case can be added to close that, because no year in
     the data sits between the two clusters.
 
-    Pinned as a source-level contract instead: the inlined port of
-    `_annual_windowed` must carry Python's constant, not a number of its own.
-    The exact-count assertion is what stops a second, different threshold being
-    added elsewhere in the file and hiding behind the first.
+    Originally pinned as a source-level contract over static.ts alone, back
+    when static.ts held every port. Tasks 4-5 moved seven of the eight
+    threshold uses into climate.ts and climateScope.ts, and the guard was not
+    widened with them -- so it silently covered 1 of 8 uses (final-branch
+    review finding 1). Scanning the whole directory, DERIVED from the
+    directory listing rather than a hardcoded file name (the same mistake
+    would recur the next time a module moved), closes that structurally
+    rather than by adding a name to a list:
+
+    1. Exactly one `MIN_DAYS_FOR_A_FULL_YEAR` DEFINITION may exist across
+       every .ts file here (climate.ts's `export const`), and it must equal
+       Python's constant -- so every other file is forced to IMPORT it
+       rather than grow a second, independently-driftable copy.
+    2. No bare `days_observed >= <number>` literal may exist anywhere in the
+       directory -- every comparison must interpolate the imported constant.
+       A stray literal is rejected even when its value happens to be
+       correct today, because a value that CAN be hardcoded silently drifts
+       from the one true definition; that is exactly what this test exists
+       to make impossible, not just detect after the fact.
     """
     from italy_dashboard import queries as q
 
-    thresholds = re.findall(r"days_observed\s*>=\s*(\d+)", STATIC_TS.read_text())
-    assert len(thresholds) == 1, (
-        f"expected exactly one days_observed threshold in {STATIC_TS.name}, found {thresholds}"
+    ts_files = sorted(QUERIES_DIR.glob("*.ts"))
+    assert ts_files, f"no .ts files found under {QUERIES_DIR}"
+
+    definitions: list[tuple[str, int]] = []
+    stray_literals: list[tuple[str, int]] = []
+    for path in ts_files:
+        text = path.read_text()
+        definitions += [
+            (path.name, int(n)) for n in re.findall(r"MIN_DAYS_FOR_A_FULL_YEAR\s*=\s*(\d+)", text)
+        ]
+        stray_literals += [
+            (path.name, int(n)) for n in re.findall(r"days_observed\s*>=\s*(\d+)", text)
+        ]
+
+    assert len(definitions) == 1, (
+        f"expected exactly one MIN_DAYS_FOR_A_FULL_YEAR definition across {QUERIES_DIR}, "
+        f"found {definitions}; every other file must import climate.ts's export "
+        "rather than declare its own copy"
     )
-    assert int(thresholds[0]) == q.MIN_DAYS_FOR_A_FULL_YEAR, (
-        f"the TypeScript port drops partial years at {thresholds[0]} days while Python "
-        f"uses MIN_DAYS_FOR_A_FULL_YEAR = {q.MIN_DAYS_FOR_A_FULL_YEAR}; the conformance "
-        "matrix cannot see the difference on this snapshot"
+    (def_file, def_value) = definitions[0]
+    assert def_value == q.MIN_DAYS_FOR_A_FULL_YEAR, (
+        f"{def_file} defines MIN_DAYS_FOR_A_FULL_YEAR = {def_value} while Python uses "
+        f"{q.MIN_DAYS_FOR_A_FULL_YEAR}; the conformance matrix cannot see this "
+        "difference on this snapshot"
+    )
+    assert not stray_literals, (
+        f"bare 'days_observed >= <number>' literal(s) found: {stray_literals}; every "
+        "comparison must interpolate the imported MIN_DAYS_FOR_A_FULL_YEAR constant "
+        "instead, or this guard cannot tell a correct hardcode from a wrong one"
     )
 
 

@@ -6,11 +6,8 @@ import incomeYearsSql from "../../../shared/queries/income_years.sql?raw";
 import incomeScatterSql from "../../../shared/queries/income_scatter.sql?raw";
 import { runSql } from "../db";
 import { signedFixed } from "../format";
+import { MIN_DAYS_FOR_A_FULL_YEAR } from "./climate";
 import { annualWindowed } from "./climateScope";
-
-// queries.py's MIN_DAYS_FOR_A_FULL_YEAR: a year needs this many observed days
-// before climate_distribution_windows.sql counts it as complete.
-const MIN_DAYS_FOR_A_FULL_YEAR = 360;
 
 // Matches italy_dashboard.queries.inflation_series
 export async function inflationSeries() {
@@ -59,15 +56,15 @@ export async function incomeCorrelations(year: string): Promise<Record<string, s
 // caller, so it is not a candidate for shared/queries/ per that directory's
 // "only genuinely static SQL" rule) and hands it to the shared helper.
 //
-// 360 is queries.py's MIN_DAYS_FOR_A_FULL_YEAR, kept as a literal (not an
-// imported constant) so this file's own threshold stays textually greppable
-// -- see test_the_ported_sql_uses_the_same_full_year_threshold_as_python,
-// which scans this file's source for exactly one such literal.
+// MIN_DAYS_FOR_A_FULL_YEAR is imported from climate.ts, the ONE place it is
+// defined -- see test_the_ported_sql_uses_the_same_full_year_threshold_as_python,
+// which scans every file in this directory and fails on a second definition
+// or a bare numeric literal here, not just a wrong one.
 export async function climateAnnualSeries(city: string) {
   return annualWindowed(
     `SELECT year AS period, t_mean, t_min_mean AS t_min, t_max_mean AS t_max
      FROM mart_climate_annual
-     WHERE capital_city = ? AND days_observed >= 360`,
+     WHERE capital_city = ? AND days_observed >= ${MIN_DAYS_FOR_A_FULL_YEAR}`,
     [city],
   );
 }
