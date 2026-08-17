@@ -83,6 +83,7 @@ from italy_dashboard import queries as q
 
 EXPECTED_QUERIES = {
     "climate_distribution",
+    "climate_distribution_windows",
     "crime_climate_scatter",
     "crime_climate_stats",
     "income_correlations",
@@ -585,6 +586,8 @@ Create `shared/conformance/cases.json`. Include at minimum: every function that 
   {"id": "climate_annual_unknown_city", "function": "climate_annual_series", "args": ["Atlantis"]},
   {"id": "climate_stripes_torino", "function": "climate_stripes", "args": ["Torino"]},
   {"id": "climate_thresholds_torino", "function": "climate_threshold_days", "args": ["Torino"]},
+  {"id": "climate_distribution_windows_torino", "function": "climate_distribution_windows", "args": ["Torino"]},
+  {"id": "climate_distribution_windows_unknown", "function": "climate_distribution_windows", "args": ["Atlantis"]},
   {"id": "climate_distribution_torino", "function": "climate_distribution", "args": ["Torino"]},
   {"id": "warming_rate_top5", "function": "warming_rate_ranking", "args": [5]},
   {"id": "climate_coverage", "function": "climate_coverage", "args": []},
@@ -607,6 +610,19 @@ collapsing four cases into duplicates of the deliberate empty-result case.
 Torino (`ITC11`) is fourth in code order, so it is present in any snapshot large
 enough to be worth testing, and it carries the full 76-year history the
 distribution and stripes cases need.
+
+**`climate_distribution_windows` is the eighth shared query.** It was added
+outside this plan, by work that derives each city's two distribution windows
+from its own record instead of hardcoding `(1951, 1980)` and `(1996, 2025)`.
+Two consequences for this plan:
+
+- `EXPECTED_QUERIES` in Task 1's test is an exhaustive set, so it lists eight.
+- `climate_distribution` now takes an optional pre-resolved `windows` tuple, so
+  the card's labels and its histogram cannot describe different windows. The
+  conformance matrix covers the windows function directly, including its
+  `None` path for a city with under two complete years, because a function
+  returning `None` rather than `[]` is a shape the TypeScript port could
+  plausibly get wrong.
 
 
 - [ ] **Step 4: Write the generator**
