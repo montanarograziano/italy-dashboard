@@ -21,4 +21,5 @@ def home_page() -> rx.Component:
             gap="1em",
             width="100%",
         ),
+        has_loaded=HomeState.has_loaded,
     )

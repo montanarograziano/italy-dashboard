@@ -8,7 +8,7 @@ the confound the lesson of the page rather than a footnote nobody reads.
 import reflex as rx
 
 from italy_dashboard import theme
-from italy_dashboard.components import card, scatter_chart, shell, stat_tile
+from italy_dashboard.components import card, data_gate, scatter_chart, shell, stat_tile
 from italy_dashboard.i18n import t
 from italy_dashboard.state import ClimateCrimeState
 
@@ -16,7 +16,8 @@ from italy_dashboard.state import ClimateCrimeState
 def climate_crime_page() -> rx.Component:
     return shell(
         rx.heading(t("climate_crime_title"), size="6", color=theme.ink_primary()),
-        rx.cond(
+        data_gate(
+            ClimateCrimeState.has_loaded,
             ClimateCrimeState.mart_ready,
             rx.vstack(
                 # Coverage first, before either scatter: the raw view's whole
@@ -83,4 +84,5 @@ def climate_crime_page() -> rx.Component:
                 width="100%",
             ),
         ),
+        has_loaded=ClimateCrimeState.has_loaded,
     )

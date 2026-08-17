@@ -23,4 +23,5 @@ def economy_page() -> rx.Component:
                 [("period", t("year")), ("value", t("change_pct"))],
             ),
         ),
+        has_loaded=EconomyState.has_loaded,
     )
