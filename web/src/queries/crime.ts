@@ -1,5 +1,5 @@
 import { runSql } from "../db";
-import { commaFixed, signedFixed } from "../format";
+import { commaFixed, pythonRound, signedFixed } from "../format";
 import { ALL, type Mart, martWhere } from "./martEngine";
 import { NATIONAL, populationTimeseries, unemploymentSeries } from "./economy";
 import { inflationSeries } from "./static";
@@ -149,7 +149,7 @@ export async function kpis(): Promise<Record<string, string>> {
 
   const unemp = await unemploymentSeries(NATIONAL);
   if (unemp.length > 0) {
-    out.unemployment = `${Number(unemp[unemp.length - 1]!.national).toFixed(1)}%`;
+    out.unemployment = `${pythonRound(Number(unemp[unemp.length - 1]!.national), 1).toFixed(1)}%`;
   }
 
   const infl = await inflationSeries();
@@ -307,7 +307,7 @@ export async function offendersKpis(
 
   const share = await offenderForeignShare(selections);
   if (share.length > 0) {
-    out.share = `${Number(share[share.length - 1]!.value).toFixed(1)}%`;
+    out.share = `${pythonRound(Number(share[share.length - 1]!.value), 1).toFixed(1)}%`;
   }
 
   const rates = await offenderRates(selections["region"] ?? ALL, selections["crime"] ?? ALL);
@@ -315,7 +315,7 @@ export async function offendersKpis(
   if (lastRate && lastRate.s1) {
     const s2 = Number(lastRate.s2);
     const s1 = Number(lastRate.s1);
-    out.rate_ratio = `${(s2 / s1).toFixed(1)}x`;
+    out.rate_ratio = `${pythonRound(s2 / s1, 1).toFixed(1)}x`;
   }
 
   return out;

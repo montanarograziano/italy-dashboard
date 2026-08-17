@@ -1,5 +1,6 @@
 import provinceCapitalsCsv from "../../../dbt/seeds/province_capitals.csv?raw";
 import { runSql } from "../db";
+import { pythonRound } from "../format";
 import { climateReady } from "./ready";
 
 // queries.py's MIN_DAYS_FOR_A_FULL_YEAR: a year needs this many observed days
@@ -20,18 +21,6 @@ export async function climateCities(): Promise<string[]> {
   return rows.map((r) => String(r.name));
 }
 
-// Python's round() is banker's rounding (round half to even); Math.round
-// rounds every half away from zero toward +Infinity, which disagrees exactly
-// at the .5 boundaries diverging_bucket can land on. Mirrors
-// italy_dashboard.palette's dependence on the built-in round().
-function bankersRound(x: number): number {
-  const floor = Math.floor(x);
-  const diff = x - floor;
-  const EPS = 1e-9;
-  if (Math.abs(diff - 0.5) < EPS) return floor % 2 === 0 ? floor : floor + 1;
-  return diff < 0.5 ? floor : floor + 1;
-}
-
 // Matches italy_dashboard.palette's DIVERGING_STEPS (len(DIVERGING_LIGHT), 7
 // colour stops) and diverging_bucket's default half_range (1.5 C).
 const DIVERGING_STEPS = 7;
@@ -39,10 +28,15 @@ const DIVERGING_HALF_RANGE = 1.5;
 
 // Matches italy_dashboard.palette.diverging_bucket: maps an anomaly in
 // degrees Celsius onto a diverging step index (0..6), clamped at the ends.
+// Python's round() is banker's rounding (round half to even); Math.round
+// rounds every half away from zero, which disagrees exactly at the .5
+// boundaries this can land on -- pythonRound (../format.ts) is the shared
+// round-half-to-even implementation every formatter in this app uses, not
+// a copy local to this file.
 function divergingBucket(anomaly: number): number {
   const mid = Math.floor(DIVERGING_STEPS / 2);
   const step = DIVERGING_HALF_RANGE / mid;
-  const index = mid + bankersRound(anomaly / step);
+  const index = mid + pythonRound(anomaly / step, 0);
   return Math.max(0, Math.min(DIVERGING_STEPS - 1, index));
 }
 
