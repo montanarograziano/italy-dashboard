@@ -126,6 +126,16 @@ export async function warmingRateRanking(topN: number = 20) {
   );
 }
 
+// italy_dashboard.queries.climate_stripes_grid (queries.py:1129) -- ranks
+// cities with warmingRateRanking(topN=limit), then attaches climateStripes()
+// per city for a small-multiples grid -- is DELIBERATELY NOT PORTED here.
+// It has no conformance case (an earlier plan ruled it out: Observable
+// Plot's native faceting replaces the hand-assembled grid, so plan 3's chart
+// builds the grid directly from warmingRateRanking + climateStripes rather
+// than through this composite). Recorded here, next to the function it
+// delegates to, so its absence reads as that decision rather than a hole
+// plan 3 discovers on its own.
+
 // The province_capitals seed's totals: how many capitals/regions COULD
 // exist, independent of how much of the climate mart is actually populated.
 // Matches the `count(*), count(DISTINCT region_code)` Python runs over the
