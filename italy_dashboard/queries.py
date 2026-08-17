@@ -1134,11 +1134,24 @@ def climate_stripes_grid(limit: int = 12) -> list[Row]:
 
 
 def climate_threshold_days(city: str) -> list[Row]:
+    """Days per year over/under each threshold: hot, tropical nights, frost.
+
+    Partial years are excluded (see MIN_DAYS_FOR_A_FULL_YEAR), like every other
+    annual climate series here. Threshold days are COUNTS, not means, so an
+    unfinished year does not merely wobble: a year ending in August has had its
+    whole summer and none of the following winter, which reads as a record high
+    on hot_days and a collapse in frost_days. On the current snapshot the
+    running year came out as the highest hot_days value in the entire series
+    (47.2 against 30.1 the year before) and a third down on frost days, from
+    222 of 365 days -- next to two cards in the same section that stop at the
+    last complete year by design, and against the rule
+    `docs/07-methodology.md` already states.
+    """
     return _query(
         f"""
         SELECT year AS period, hot_days, tropical_nights, frost_days
         FROM {CLIMATE_ANNUAL}
-        WHERE capital_city = ?
+        WHERE capital_city = ? AND days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
         ORDER BY year
         """,
         [city],
@@ -1146,17 +1159,19 @@ def climate_threshold_days(city: str) -> list[Row]:
 
 
 def climate_region_threshold_days(region: str = ITALIA) -> list[Row]:
-    """`climate_threshold_days`'s region/Italia counterpart.
-
-    No partial-year guard here, matching `climate_threshold_days` (city
-    scope), which also does not filter on `days_observed`.
+    """`climate_threshold_days`'s region/Italia counterpart, partial years and
+    all (see `climate_region_annual_series` for why Italia needs no special
+    case, and `_region_completeness_cte` for where completeness comes from at
+    this scope).
     """
     return _query(
         f"""
-        SELECT year AS period, hot_days, tropical_nights, frost_days
-        FROM {CLIMATE_REGION}
-        WHERE region_name = ?
-        ORDER BY year
+        WITH days AS ({_region_completeness_cte()})
+        SELECT r.year AS period, r.hot_days, r.tropical_nights, r.frost_days
+        FROM {CLIMATE_REGION} r
+        JOIN days d ON d.region_code = r.region_code AND d.year = r.year
+        WHERE r.region_name = ? AND d.days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
+        ORDER BY r.year
         """,
         [region],
     )

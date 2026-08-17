@@ -1055,41 +1055,58 @@ def partial_year_annual_mart(sample_db):
     is exactly zero. The partial year is 6 C warmer with 210 days of data,
     which is what a January-to-August year looks like on the real feed (the
     fetch always runs to today minus 7 days).
+
+    The threshold-day counts carry the same shape and are what make the partial
+    year visibly wrong rather than merely warm: a year that stops in August has
+    had all of its summer and none of the following winter, so hot days spike
+    and frost days collapse. `mart_climate_region` is written alongside from the
+    same numbers (one province, so region == national == the province), because
+    the region/Italia scope reaches those counts through a different query.
     """
     marts = sample_db / "marts"
     marts.mkdir(exist_ok=True)
-    rows = [
-        {
+
+    def annual(year: int, t_mean: float, days: int, hot: int, frost: int) -> dict:
+        return {
             "province_code": "IT999",
             "province_name": "Testville",
             "capital_city": "Testville",
             "region_code": "ITZ9",
             "region_name": "Testregion",
             "year": str(year),
-            "t_mean": 15.0,
-            "t_min_mean": 10.0,
-            "t_max_mean": 20.0,
-            "days_observed": 365,
-            "anomaly_1981_2010": 0.0,
+            "t_mean": t_mean,
+            "t_min_mean": t_mean - 5.0,
+            "t_max_mean": t_mean + 5.0,
+            "hot_days": hot,
+            "tropical_nights": hot,
+            "frost_days": frost,
+            "days_observed": days,
+            "anomaly_1981_2010": t_mean - 15.0,
         }
-        for year in range(2010, 2022)
-    ]
-    rows.append(
-        {
-            "province_code": "IT999",
-            "province_name": "Testville",
-            "capital_city": "Testville",
-            "region_code": "ITZ9",
-            "region_name": "Testregion",
-            "year": "2022",
-            "t_mean": 21.0,
-            "t_min_mean": 16.0,
-            "t_max_mean": 26.0,
-            "days_observed": 210,
-            "anomaly_1981_2010": 6.0,
-        }
-    )
+
+    rows = [annual(year, 15.0, 365, 20, 30) for year in range(2010, 2022)]
+    rows.append(annual(2022, 21.0, 210, 45, 8))
     pl.DataFrame(rows).write_parquet(marts / "mart_climate_annual.parquet")
+
+    pl.DataFrame(
+        [
+            {
+                "region_code": code,
+                "region_name": name,
+                "year": row["year"],
+                "t_mean": row["t_mean"],
+                "t_min_mean": row["t_min_mean"],
+                "t_max_mean": row["t_max_mean"],
+                "hot_days": float(row["hot_days"]),
+                "tropical_nights": float(row["tropical_nights"]),
+                "frost_days": float(row["frost_days"]),
+                "provinces_covered": 1,
+                "anomaly_1981_2010": row["anomaly_1981_2010"],
+            }
+            for row in rows
+            for code, name in (("ITZ9", "Testregion"), ("IT", q.ITALIA))
+        ]
+    ).write_parquet(marts / "mart_climate_region.parquet")
     return marts
 
 
@@ -1109,6 +1126,45 @@ def test_partial_years_are_excluded_from_every_climate_series(partial_year_annua
 
     ranking = q.warming_rate_ranking()
     assert ranking == [{"name": "Testville", "value": 0.0}]  # flat, not warming
+
+
+@pytest.mark.parametrize(
+    ("label", "rows_fn"),
+    [
+        ("city", lambda: q.climate_threshold_days("Testville")),
+        ("region", lambda: q.climate_region_threshold_days("Testregion")),
+        ("italia", lambda: q.climate_region_threshold_days(q.ITALIA)),
+    ],
+)
+def test_threshold_days_stop_at_the_last_complete_year(
+    partial_year_annual_mart, label: str, rows_fn
+):
+    """The threshold chart must end where its two sibling charts end.
+
+    It was the only annual climate series without the guard, so on the default
+    landing view the running year plotted as the highest hot-days value in the
+    whole series and a third down on frost days, from 222 of 365 days, next to
+    two cards that stop at the last complete year by design. A count is not
+    merely noisy when the year is unfinished: it is missing an entire season.
+
+    All three scopes are checked because they are three different queries (the
+    city one filters `mart_climate_annual` directly, the other two join
+    completeness back from it through `_region_completeness_cte`), and the
+    region/Italia scope is the DEFAULT one.
+    """
+    periods = [r["period"] for r in rows_fn()]
+    assert periods, f"{label} scope returned nothing at all"
+    assert "2022" not in periods, f"{label} scope plots the unfinished year: {periods}"
+    assert max(periods) == "2021"
+    # The excluded year really is in the mart, and really is the extreme point:
+    # without that, this test would pass against data that simply stops in 2021.
+    unguarded = q._query(
+        "SELECT year, hot_days, frost_days FROM mart_climate_annual "
+        "WHERE capital_city = 'Testville' ORDER BY year DESC LIMIT 1"
+    )
+    assert unguarded[0]["year"] == "2022"
+    assert unguarded[0]["hot_days"] > max(r["hot_days"] for r in rows_fn())
+    assert unguarded[0]["frost_days"] < min(r["frost_days"] for r in rows_fn())
 
 
 def test_climate_stripes_carry_a_diverging_fill(climate_db):

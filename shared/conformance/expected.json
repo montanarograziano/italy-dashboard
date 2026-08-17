@@ -5161,12 +5161,6 @@
         "hot_days": 30.1,
         "period": "2025",
         "tropical_nights": 37.8
-      },
-      {
-        "frost_days": 19.1,
-        "hot_days": 47.2,
-        "period": "2026",
-        "tropical_nights": 44.9
       }
     ],
     "climate_region_threshold_days_piemonte": [
@@ -5625,12 +5619,6 @@
         "hot_days": 27.9,
         "period": "2025",
         "tropical_nights": 24.1
-      },
-      {
-        "frost_days": 29.6,
-        "hot_days": 54.4,
-        "period": "2026",
-        "tropical_nights": 40.1
       }
     ],
     "climate_stripes_torino": [
@@ -6471,12 +6459,6 @@
         "hot_days": 28.0,
         "period": "2025",
         "tropical_nights": 20.0
-      },
-      {
-        "frost_days": 39.0,
-        "hot_days": 56.0,
-        "period": "2026",
-        "tropical_nights": 38.0
       }
     ],
     "crime_climate_ready": true,

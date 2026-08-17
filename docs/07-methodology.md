@@ -145,10 +145,14 @@ upstream gap should not void the whole normal.
 days, so the current year is incomplete for eleven months out of twelve, and a
 January-to-August year averages roughly 1 C warmer than the same year finished.
 `mart_climate_annual` publishes `days_observed`; the annual line, the warming
-stripes and the per-decade warming ranking all require at least 360 of them, so
-the current year appears only once it is over. Without that gate the unfinished
-year is a record-warm point on two charts and the last, highest-leverage point
-of every trend regression.
+stripes, the per-decade warming ranking and the threshold-days chart all
+require at least 360 of them, so the current year appears only once it is over.
+Without that gate the unfinished year is a record-warm point on two charts and
+the last, highest-leverage point of every trend regression. Threshold days are
+counts rather than means, so they are the worst of the four: a year that stops
+in August has had all of its summer and none of the following winter, which on
+the 2026 snapshot read as the highest hot-days value in the whole series and a
+third fewer frost days.
 
 **The distribution card splits the record in half; it does not compare two
 hand-picked windows.** The daily-maxima card contrasts an early window against a
