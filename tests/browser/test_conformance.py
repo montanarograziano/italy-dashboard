@@ -85,17 +85,37 @@ def vite_server():
 
 
 @pytest.fixture(scope="module")
-def results(vite_server: str, browser) -> dict:
-    """Every case's output, run once in the browser (see the module docstring
-    for why the browser is pytest-playwright's and not a private one).
+def harness_page(vite_server: str, browser):
+    """The loaded harness page (see the module docstring for why the browser is
+    pytest-playwright's and not a private one).
+
+    Waiting on `runConformance` is what makes this ready: the harness assigns it
+    last, so every other `window.*` entry point is in place by then.
     """
     page = browser.new_page()
     try:
         page.goto(f"{vite_server}/conformance/harness.html")
         page.wait_for_function("() => typeof window.runConformance === 'function'")
-        return page.evaluate("() => window.runConformance()")
+        yield page
     finally:
         page.close()
+
+
+@pytest.fixture(scope="module")
+def results(harness_page) -> dict:
+    return harness_page.evaluate("() => window.runConformance()")
+
+
+@pytest.fixture(scope="module")
+def implemented_functions(harness_page) -> list[str]:
+    """The functions the harness CLAIMS to have ported (harness.ts IMPLEMENTED)."""
+    return harness_page.evaluate("() => window.implementedFunctions()")
+
+
+@pytest.fixture(scope="module")
+def missing_parquet_probe(harness_page) -> dict:
+    """A connection booted with one parquet path that does not exist."""
+    return harness_page.evaluate("() => window.probeMissingParquet()")
 
 
 def test_no_case_errored(results: dict):
@@ -115,18 +135,80 @@ def test_every_case_is_accounted_for(results: dict):
     )
 
 
-def test_at_least_four_functions_are_ported(results: dict):
-    """Guards against the harness silently covering nothing.
+def test_every_ported_function_actually_produced_a_result(
+    results: dict, implemented_functions: list[str]
+):
+    """Guards against the harness silently covering less than it claims.
 
-    Counts distinct PORTED FUNCTIONS, not cases: several cases can exercise one
-    function (climate_annual_series alone has two in this matrix), so counting
-    cases would keep passing long after the function count dropped below four --
-    exactly the silent-shrink this test exists to catch.
+    Derived from the harness's own IMPLEMENTED map rather than from a number.
+    The floor used to be a hardcoded `>= 4` with exactly four functions ported,
+    so it was tight on the day it was written and stopped ratcheting the moment
+    a fifth landed -- a later regression from twenty ports back down to four
+    would have passed it. This version tightens automatically with every port,
+    and closes the same hole the old floor did (relabelling a broken port's
+    errors as `__unported__` now contradicts IMPLEMENTED).
+
+    IMPLEMENTED itself cannot shrink silently either: it is pinned against the
+    functions actually exported by `web/src/queries/static.ts` in
+    `tests/unit/test_conformance_cases.py`.
+
+    Compares distinct FUNCTIONS, not cases: several cases can exercise one
+    function (climate_annual_series has two in this matrix).
     """
-    ported_functions = {
-        CASE_FUNCTIONS[case_id] for case_id, v in results.items() if not _is_unported(v)
-    }
-    assert len(ported_functions) >= 4, f"only {len(ported_functions)} ported: {ported_functions}"
+    claimed = set(implemented_functions)
+    assert claimed, "the harness claims no ported functions at all"
+
+    matrix_functions = set(CASE_FUNCTIONS.values())
+    unmeasured = claimed - matrix_functions
+    assert not unmeasured, (
+        f"ported but no case in the matrix, so nothing measures them: {sorted(unmeasured)}"
+    )
+
+    produced = {CASE_FUNCTIONS[case_id] for case_id, v in results.items() if not _is_unported(v)}
+    assert produced == claimed, (
+        f"claimed ported {sorted(claimed)} but produced real results for {sorted(produced)}"
+    )
+
+
+def test_a_missing_parquet_does_not_break_unrelated_queries(missing_parquet_probe: dict):
+    """One absent dataset must cost exactly that dataset, not the whole app.
+
+    Registration is eager (DuckDB reads each parquet's footer to build the
+    view), so a single missing file used to abort the connection and therefore
+    every query: reproduced at 53 of 53 cases erroring. The static deploy
+    excludes `mart_climate_daily` by design, so the deployed app would have
+    failed to initialise at all.
+
+    Both halves matter. Tolerating the absence is only correct if a query that
+    NEEDS the missing table still fails -- otherwise this trades a loud failure
+    for a silently empty chart, which is worse.
+    """
+    probe = missing_parquet_probe
+    assert probe["failed"] == ["mart_absent_from_this_build"], probe
+    assert probe["presentTableRows"] > 0, (
+        f"a query on a present table returned nothing after a sibling parquet was missing: {probe}"
+    )
+    assert "mart_absent_from_this_build" in probe["missingTableError"], (
+        f"a query on the ABSENT table did not fail loudly: {probe}"
+    )
+
+
+def test_the_typescript_typechecks():
+    """`tsc` runs nowhere else, so a strict tsconfig is decorative without this.
+
+    Vite/esbuild strips types without checking them, so a blatant type error in
+    `web/` passed the entire suite. That matters most for
+    `noUncheckedIndexedAccess`, which is exactly the guard against the latent
+    `undefined` that conforms on today's snapshot and diverges on tomorrow's.
+    """
+    result = subprocess.run(
+        ["npm", "run", "--silent", "typecheck"],
+        cwd=ROOT / "web",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"tsc failed:\n{result.stdout}\n{result.stderr}"
 
 
 def test_ported_cases_match_the_python_reference(results: dict):

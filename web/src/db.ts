@@ -2,8 +2,11 @@ import * as duckdb from "@duckdb/duckdb-wasm";
 
 // The parquet files the app queries, registered as views named after their
 // stems so the shared SQL text works unchanged on both sides. This list mirrors
-// what italy_dashboard/queries.py globs; a name mismatch would make a shared
-// query fail here while passing in Python.
+// the committed snapshot italy_dashboard/queries.py reads; a name mismatch
+// would make a shared query fail here while passing in Python.
+//
+// A build is allowed to ship only SOME of these -- `registerParquetViews`
+// skips what is absent rather than failing to start (see its docstring).
 const PARQUET = [
   "economy_inflation",
   "labor_unemployment",
@@ -23,9 +26,51 @@ const PARQUET = [
 
 let connection: duckdb.AsyncDuckDBConnection | null = null;
 
-export async function getConnection(): Promise<duckdb.AsyncDuckDBConnection> {
-  if (connection) return connection;
+/** View names whose parquet could not be registered on the live connection.
+ * Empty in a complete build. A query touching one of these fails on an unknown
+ * table; every other query is unaffected. See `openConnection`. */
+export const unavailableTables = new Set<string>();
 
+/** Register one view per parquet path, tolerating files this build does not ship.
+ *
+ * Returns the view names that could NOT be registered. DuckDB reads each
+ * parquet's footer to build the view, so a missing file throws right here --
+ * and letting that escape would abort the whole connection and therefore EVERY
+ * query, including the ones that touch nothing but present files. That is not
+ * hypothetical: the design doc excludes `mart_climate_daily` (8.1 MB, one
+ * chart) from the static deploy, so the eager version would have failed to
+ * initialise at boot the moment the deploy honoured its own constraint.
+ *
+ * Skipping is not the same as hiding: the name is recorded and returned, the
+ * console says so, and a query that actually needs the table still fails.
+ */
+export async function registerParquetViews(
+  con: duckdb.AsyncDuckDBConnection,
+  paths: readonly string[],
+): Promise<string[]> {
+  const failed: string[] = [];
+  for (const path of paths) {
+    const view = path.split("/").pop()!;
+    const url = new URL(`/${path}.parquet`, window.location.origin).href;
+    try {
+      await con.query(`CREATE OR REPLACE VIEW ${view} AS SELECT * FROM read_parquet('${url}')`);
+    } catch (err) {
+      failed.push(view);
+      console.warn(`dataset not available in this build: ${view} (${String(err)})`);
+    }
+  }
+  return failed;
+}
+
+/** A fresh DuckDB-WASM connection with `paths` registered as views.
+ *
+ * Separate from `getConnection()`'s memoised singleton so the tolerance above
+ * can be exercised on the real boot path (see the conformance harness's
+ * `probeMissingParquet`) instead of only after a successful start.
+ */
+export async function openConnection(
+  paths: readonly string[],
+): Promise<{ con: duckdb.AsyncDuckDBConnection; failed: string[] }> {
   const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
   // `new Worker(bundle.mainWorker)` throws a SecurityError: browsers refuse to
   // construct a Worker directly from a cross-origin script URL (jsDelivr's
@@ -42,13 +87,13 @@ export async function getConnection(): Promise<duckdb.AsyncDuckDBConnection> {
   URL.revokeObjectURL(workerUrl);
 
   const con = await db.connect();
-  for (const path of PARQUET) {
-    const view = path.split("/").pop()!;
-    const url = new URL(`/${path}.parquet`, window.location.origin).href;
-    await con.query(
-      `CREATE OR REPLACE VIEW ${view} AS SELECT * FROM read_parquet('${url}')`,
-    );
-  }
+  return { con, failed: await registerParquetViews(con, paths) };
+}
+
+export async function getConnection(): Promise<duckdb.AsyncDuckDBConnection> {
+  if (connection) return connection;
+  const { con, failed } = await openConnection(PARQUET);
+  for (const view of failed) unavailableTables.add(view);
   connection = con;
   return con;
 }

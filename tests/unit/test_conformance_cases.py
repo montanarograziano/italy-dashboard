@@ -7,6 +7,7 @@ diverge, so these tests check the matrix itself, not just that it parses.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -194,6 +195,43 @@ def test_the_matrix_covers_the_dynamic_mart_engine(monkeypatch: pytest.MonkeyPat
         "probe's choice, so a probe-free port would conform everywhere; add a "
         "case on a mart where it does not (see mart_offenders)"
     )
+
+
+STATIC_TS = REPO_ROOT / "web" / "src" / "queries" / "static.ts"
+HARNESS_TS = REPO_ROOT / "web" / "src" / "conformance" / "harness.ts"
+
+
+def _snake(camel: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", camel).lower()
+
+
+def test_the_harness_registers_every_ported_typescript_function():
+    """`IMPLEMENTED` must track what is actually ported, in both directions.
+
+    The browser suite derives its coverage floor from `IMPLEMENTED` (see
+    `test_every_ported_function_actually_produced_a_result`), which only ratchets
+    if `IMPLEMENTED` itself cannot drift from reality: dropping an entry would
+    otherwise just move those cases to `__unported__` and stay green, which is
+    the silent shrink the old hardcoded `>= 4` floor was there to stop.
+
+    Anchored on `static.ts`'s exports because that is what "ported" means. The
+    name check is not cosmetic either: registering
+    `income_years: staticQueries.inflationSeries` would otherwise quietly point
+    two cases at one implementation.
+    """
+    exported = set(re.findall(r"^export async function (\w+)\(", STATIC_TS.read_text(), re.M))
+    registered = dict(re.findall(r"(\w+):\s*staticQueries\.(\w+)\s*,", HARNESS_TS.read_text()))
+
+    assert exported, f"no exported query functions found in {STATIC_TS}"
+    assert set(registered.values()) == exported, (
+        f"IMPLEMENTED registers {sorted(registered.values())} but static.ts exports "
+        f"{sorted(exported)}; every ported function must be measured by the harness"
+    )
+    for python_name, ts_name in registered.items():
+        assert _snake(ts_name) == python_name, (
+            f"IMPLEMENTED maps the Python function {python_name!r} to {ts_name!r}, "
+            f"which is the port of {_snake(ts_name)!r}"
+        )
 
 
 def test_committed_expected_matches_the_generator():
