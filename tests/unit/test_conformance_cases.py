@@ -10,6 +10,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 import generate_conformance_expected as gen
 
@@ -59,48 +61,13 @@ def test_the_matrix_covers_an_empty_result():
     )
 
 
+Mart = tuple[str, list[str]]
+
 # mart_options builds its own SQL directly and never calls _mart_where, so it
 # does not belong in this set despite living next to the other mart wrappers
 # (see italy_dashboard/queries.py's mart_options). These three are the only
 # public functions that reach the probe.
 _PROBE_FUNCTIONS = {"mart_trend", "mart_breakdown", "offender_foreign_share"}
-
-
-Mart = tuple[str, list[str]]
-
-
-def _free_dims(mart: Mart, selections: dict, skip: str | None) -> list[str]:
-    """Dimensions _mart_where would leave for the probe to decide between."""
-    _, dims = mart
-    return [d for d in dims if d != skip and selections.get(d, "All") == "All"]
-
-
-def _fixed_where_and_params(mart: Mart, selections: dict, skip: str | None) -> tuple[str, list]:
-    """Mirrors _mart_where's own fixed-clause construction for pinned
-    dimensions and the skip dimension (italy_dashboard/queries.py's
-    `_mart_where`), so the probe's combos query can be reconstructed and its
-    year-coverage measured directly. `_mart_where`'s return value alone can't
-    answer this: it only reports the winning combination, never whether any
-    other candidate would have scored differently.
-    """
-    _, dims = mart
-    scope = selections.get("_region_scope") or "region"
-    fixed: list[str] = []
-    params: list = []
-    for dim in dims:
-        selected = selections.get(dim, "All")
-        if dim == skip:
-            fixed.append(f"NOT {dim}_is_total")
-            if dim == "region":
-                fixed.append("region_level = 'region'")
-        elif selected != "All":
-            fixed.append(f"NOT {dim}_is_total")
-            fixed.append(f"{dim}_name = ?")
-            params.append(selected)
-            if dim == "region":
-                fixed.append("region_level = ?")
-                params.append(scope)
-    return " AND ".join(fixed) or "TRUE", params
 
 
 def _mart_where_inputs(case: dict) -> tuple[Mart, dict, str | None] | None:
@@ -124,7 +91,44 @@ def _mart_where_inputs(case: dict) -> tuple[Mart, dict, str | None] | None:
     return None
 
 
-def test_the_matrix_covers_the_dynamic_mart_engine():
+def _naive_all_totals_where(
+    mart: Mart, selections: dict, skip: str | None, monkeypatch: pytest.MonkeyPatch
+) -> tuple[str, list] | None:
+    """What _mart_where would return if a TypeScript port skipped the probe
+    entirely and always emitted `{dim}_is_total = true` for every free
+    dimension -- the exact port F1 constructed. `None` when there is no free
+    dimension for a probe-free port to get wrong.
+
+    Obtained by rigging _mart_where's OWN probe query to report a single,
+    all-true candidate, then calling the real function: this compares
+    `_mart_where`'s actual output against itself under a fake data condition,
+    rather than reimplementing its fixed/free-dimension WHERE construction a
+    second time to measure a proxy for the same thing (year-coverage
+    distinctness), which is what this replaced -- see the fix-round-2 report.
+    """
+    from italy_dashboard import queries as q
+
+    _, dims = mart
+    free = [d for d in dims if d != skip and selections.get(d, "All") == "All"]
+    if not free:
+        return None
+
+    real_query = q._query
+    stub_combo = dict.fromkeys((f"{d}_is_total" for d in free), True) | {"yc": 1}
+
+    def rigged(sql: str, params: list | None = None):
+        if "GROUP BY ALL" in sql:  # this is _mart_where's own combos probe
+            return [stub_combo]
+        return real_query(sql, params)
+
+    monkeypatch.setattr(q, "_query", rigged)
+    try:
+        return q._mart_where(mart, selections, skip=skip)
+    finally:
+        monkeypatch.setattr(q, "_query", real_query)
+
+
+def test_the_matrix_covers_the_dynamic_mart_engine(monkeypatch: pytest.MonkeyPatch):
     """_mart_where probes the data to choose an is_total flag combination.
 
     It is the single most likely thing to diverge in a reimplementation, and a
@@ -134,9 +138,8 @@ def test_the_matrix_covers_the_dynamic_mart_engine():
     emits the all-totals combination reproduces every mart_crime case in this
     matrix byte for byte (this bit for real; see the case added on
     mart_offenders and the git history of this test). What actually matters is
-    that at least one covered case sits on a mart/selection where the
-    combinations genuinely differ in year coverage, so a probe-free port is
-    provably distinguishable from the committed reference.
+    that at least one covered case's real _mart_where output is provably
+    distinguishable from what that exact probe-free port would produce.
     """
     from italy_dashboard import queries as q
 
@@ -147,30 +150,22 @@ def test_the_matrix_covers_the_dynamic_mart_engine():
         "_mart_where; mart_options builds its own SQL and never reaches it"
     )
 
-    non_degenerate = []
+    distinguishable = []
     for case in cases:
         inputs = _mart_where_inputs(case)
         if inputs is None:
             continue
         mart, selections, skip = inputs
-        free = _free_dims(mart, selections, skip)
-        if not free:
-            continue
-        where, params = _fixed_where_and_params(mart, selections, skip)
-        flag_cols = ", ".join(f"{d}_is_total" for d in free)
-        rows = q._query(
-            f"SELECT {flag_cols}, COUNT(DISTINCT year) AS yc "
-            f"FROM {mart[0]} WHERE {where} GROUP BY ALL",
-            params,
-        )
-        if len({r["yc"] for r in rows}) > 1:
-            non_degenerate.append(case["id"])
+        real = q._mart_where(mart, selections, skip=skip)
+        naive = _naive_all_totals_where(mart, selections, skip, monkeypatch)
+        if naive is not None and naive != real:
+            distinguishable.append(case["id"])
 
-    assert non_degenerate, (
-        "every mart_trend/mart_breakdown/offender_foreign_share case sits on a "
-        "mart where every is_total combination has identical year coverage, so "
-        "none of them can pin the probe's decision; add a case on a mart where "
-        "the combinations actually differ (see mart_offenders)"
+    assert distinguishable, (
+        "every probe-reaching case in the matrix sits on a mart/selection "
+        "where the all-totals combination is indistinguishable from the real "
+        "probe's choice, so a probe-free port would conform everywhere; add a "
+        "case on a mart where it does not (see mart_offenders)"
     )
 
 
