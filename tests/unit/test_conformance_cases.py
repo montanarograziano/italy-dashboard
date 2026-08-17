@@ -234,6 +234,35 @@ def test_the_harness_registers_every_ported_typescript_function():
         )
 
 
+def test_the_ported_sql_uses_the_same_full_year_threshold_as_python():
+    """`MIN_DAYS_FOR_A_FULL_YEAR` cannot be pinned by the conformance data.
+
+    `days_observed` is bimodal on this snapshot -- 222 for the running year, and
+    360 to 366 for every other -- so ANY threshold in [223, 364] reproduces
+    expected.json byte for byte. Measured: `>= 250` in the inlined TypeScript
+    still passes all four ported cases; only dropping the filter entirely fails.
+    So the likely error (omitting the guard) is caught by the matrix and a wrong
+    NUMBER is not, and no case can be added to close that, because no year in
+    the data sits between the two clusters.
+
+    Pinned as a source-level contract instead: the inlined port of
+    `_annual_windowed` must carry Python's constant, not a number of its own.
+    The exact-count assertion is what stops a second, different threshold being
+    added elsewhere in the file and hiding behind the first.
+    """
+    from italy_dashboard import queries as q
+
+    thresholds = re.findall(r"days_observed\s*>=\s*(\d+)", STATIC_TS.read_text())
+    assert len(thresholds) == 1, (
+        f"expected exactly one days_observed threshold in {STATIC_TS.name}, found {thresholds}"
+    )
+    assert int(thresholds[0]) == q.MIN_DAYS_FOR_A_FULL_YEAR, (
+        f"the TypeScript port drops partial years at {thresholds[0]} days while Python "
+        f"uses MIN_DAYS_FOR_A_FULL_YEAR = {q.MIN_DAYS_FOR_A_FULL_YEAR}; the conformance "
+        "matrix cannot see the difference on this snapshot"
+    )
+
+
 def test_committed_expected_matches_the_generator():
     """Regenerating must be a no-op unless the data or a query changed."""
     assert (SHARED / "expected.json").read_text() == gen.build()

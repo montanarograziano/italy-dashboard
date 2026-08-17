@@ -32,18 +32,37 @@ pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-# Three provinces, three regions:
-#   ITC11 (Piemonte / ITC1) and ITE43 (Lazio / ITE4) each cover the full
-#   1981-2010 baseline window (30 years) -> the guard must pass for both.
-#   ITF33 (Campania / ITF3) covers only 1981-2000 (20 years) -> fewer than
-#   25 years inside the window, so the guard must return NULL for it.
+# Five provinces, five regions, chosen to PIN the 25-of-30 threshold from both
+# sides rather than merely exercise it:
+#   ITC11 (Piemonte / ITC1) and ITE43 (Lazio / ITE4) cover the full 1981-2010
+#   window (30 years) -> the guard must pass.
+#   ITF33 (Campania / ITF3) covers 1981-2000 (20 years) -> must be NULL.
+#   ITF22 (Molise / ITF2) covers 1981-2004 (24 years) -> must be NULL. One year
+#   short is the whole point: with only the 20-year region, every threshold in
+#   (20, 30] conformed, so `>= 30` ("demand all 30", which the model's own
+#   header comment argues against) and `>= 21` both passed.
+#   ITE21 (Umbria / ITE2) covers 1981-2005 (25 years) -> must NOT be NULL,
+#   which closes the other side. 24 NULL and 25 non-null together admit exactly
+#   one threshold: 25.
 # t_mean is a deterministic linear function of the year so the expected
 # baseline/anomaly can be recomputed independently in Python below, rather
 # than hard-coded.
 PIEMONTE = ("ITC11", "ITC1", 1981, 2010, lambda y: 10.0 + 0.05 * (y - 1981))
 LAZIO = ("ITE43", "ITE4", 1981, 2010, lambda y: 15.0 + 0.03 * (y - 1981))
 CAMPANIA = ("ITF33", "ITF3", 1981, 2000, lambda y: 18.0 + 0.07 * (y - 1981))
-PROVINCES = [PIEMONTE, LAZIO, CAMPANIA]
+MOLISE = ("ITF22", "ITF2", 1981, 2004, lambda y: 16.0 + 0.04 * (y - 1981))
+UMBRIA = ("ITE21", "ITE2", 1981, 2005, lambda y: 14.0 + 0.06 * (y - 1981))
+PROVINCES = [PIEMONTE, LAZIO, CAMPANIA, MOLISE, UMBRIA]
+
+
+def national_t_mean(year: int) -> float:
+    """The unweighted mean across the capitals that HAVE data that year.
+
+    Recomputed from the province formulas, independent of the mart's own SQL.
+    """
+    values = [fn(year) for _p, _r, start, end, fn in PROVINCES if start <= year <= end]
+    return sum(values) / len(values)
+
 
 EXCLUDED_TESTS = [
     "assert_crime_climate_covers_available_climate",
@@ -119,36 +138,48 @@ def test_exactly_one_national_row_per_year_with_data(region_mart: pl.DataFrame) 
     assert len(national_years) == len(set(national_years))  # no year appears twice
 
 
+@pytest.mark.parametrize(
+    ("region_code", "years"),
+    [("ITF3", 20), ("ITF2", 24)],  # Campania, Molise
+)
 def test_short_region_series_gets_null_anomaly_not_a_partial_average(
-    region_mart: pl.DataFrame,
+    region_mart: pl.DataFrame, region_code: str, years: int
 ) -> None:
-    # Campania has only 20 years inside 1981-2010 (< 25): the guard must
-    # withhold the anomaly rather than average whatever 20 years exist.
-    campania = region_mart.filter(pl.col("region_code") == "ITF3")
-    assert campania.height == 20
-    assert campania["anomaly_1981_2010"].null_count() == 20
-    assert campania["anomaly_1971_2000"].null_count() == 20  # 0 years in that window too
+    # Fewer than 25 years inside 1981-2010: the guard must withhold the anomaly
+    # rather than average whatever years exist. Molise's 24 is the tight case --
+    # one year short -- and it is what stops the threshold drifting up to 30.
+    region = region_mart.filter(pl.col("region_code") == region_code)
+    assert region.height == years
+    assert region["anomaly_1981_2010"].null_count() == years
+    assert region["anomaly_1971_2000"].null_count() == years  # 0 years in that window too
     # t_mean itself is real data, only the anomaly is withheld
-    assert campania["t_mean"].null_count() == 0
+    assert region["t_mean"].null_count() == 0
 
 
-def test_full_region_series_gets_a_real_anomaly(region_mart: pl.DataFrame) -> None:
-    # Piemonte and Lazio each have the full 30 years inside 1981-2010 (>= 25):
-    # the guard must pass and every row gets a non-null anomaly.
-    for region_code in ("ITC1", "ITE4"):
-        region = region_mart.filter(pl.col("region_code") == region_code)
-        assert region.height == 30
-        assert region["anomaly_1981_2010"].null_count() == 0
+@pytest.mark.parametrize(
+    ("region_code", "years"),
+    [("ITC1", 30), ("ITE4", 30), ("ITE2", 25)],  # Piemonte, Lazio, Umbria
+)
+def test_full_region_series_gets_a_real_anomaly(
+    region_mart: pl.DataFrame, region_code: str, years: int
+) -> None:
+    # At least 25 years inside 1981-2010: the guard must pass and every row
+    # gets a non-null anomaly. Umbria sits exactly ON the threshold, which is
+    # what stops it drifting down (with only the 30-year regions here, `>= 21`
+    # and `>= 30` both conformed).
+    region = region_mart.filter(pl.col("region_code") == region_code)
+    assert region.height == years
+    assert region["anomaly_1981_2010"].null_count() == 0
 
 
 def test_national_t_mean_matches_independent_unweighted_mean_of_capitals(
     region_mart: pl.DataFrame,
 ) -> None:
     # Recompute the national t_mean straight from the province formulas
-    # (independent of the mart's own SQL) and compare, for a year all three
-    # capitals share.
+    # (independent of the mart's own SQL) and compare, for a year every capital
+    # shares.
     year = 1990
-    expected = round(sum(fn(year) for *_ignored, fn in [PIEMONTE, LAZIO, CAMPANIA]) / 3, 2)
+    expected = round(national_t_mean(year), 2)
     actual = region_mart.filter((pl.col("region_code") == "IT") & (pl.col("year") == str(year)))[
         "t_mean"
     ].item()
@@ -167,12 +198,6 @@ def test_national_anomaly_comes_from_the_national_series_not_from_regions(
     naive mean-of-available-regional-anomalies differ by a wide margin.
     """
     year = 1990
-
-    # True national series, recomputed independently in Python.
-    def national_t_mean(y: int) -> float:
-        values = [fn(y) for _p, _r, start, end, fn in PROVINCES if start <= y <= end]
-        return sum(values) / len(values)
-
     baseline_years = range(1981, 2011)
     expected_baseline = sum(national_t_mean(y) for y in baseline_years) / len(baseline_years)
     expected_anomaly = round(national_t_mean(year) - expected_baseline, 2)
