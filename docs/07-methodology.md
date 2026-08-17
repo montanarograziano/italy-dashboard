@@ -165,7 +165,7 @@ and the 1981-1995 hole read to viewers as missing data rather than as a choice.
 And they are **near-equal in span**, because the longer of two unequal windows
 is a blend of two climate states, which widens the late curve instead of
 translating it, understating the very shift the card exists to show (Milano's
-mean daily max moves +1.75 C on the half-split against +1.64 C if the middle
+mean daily max moves +1.74 C on the half-split against +1.65 C if the middle
 years are simply appended to the late window). Deriving rather than hardcoding
 also means the late window cannot silently fall a year behind the snapshot every
 January. Years short of `MIN_DAYS_FOR_A_FULL_YEAR` are excluded from the
