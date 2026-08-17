@@ -445,7 +445,12 @@ def mart_breakdown(
         SELECT {breakdown_dim}_name AS name, CAST(SUM(value) AS BIGINT) AS value
         FROM {table}, chosen
         WHERE year = chosen.y AND {where}
-        GROUP BY {breakdown_dim}_name ORDER BY value DESC
+        GROUP BY {breakdown_dim}_name
+        -- `name` is unique per group (it's the GROUP BY column), so it makes
+        -- the key total: without it, ties in `value` leave DuckDB's parallel
+        -- scan free to order (and, with LIMIT, even include/exclude) tied
+        -- rows differently between runs.
+        ORDER BY value DESC, name
         LIMIT {int(top_n)}
         """,
         [year, *params],
@@ -686,7 +691,9 @@ def region_rate_ranking(year: str | None, citizenship: str, crime: str) -> list[
         WHERE year = chosen.y AND {" AND ".join(clauses)}
         GROUP BY region_name
         HAVING ANY_VALUE(population) > 0
-        ORDER BY value DESC
+        -- `name` (region_name) is unique per group: a total order, so ties in
+        -- `value` don't leave row order to thread-scheduling chance.
+        ORDER BY value DESC, name
         """,
         params,
     )
@@ -1093,7 +1100,11 @@ def warming_rate_ranking(top_n: int = 20) -> list[Row]:
         WHERE t_mean IS NOT NULL AND days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
         GROUP BY capital_city
         HAVING COUNT(*) >= 10  -- a slope from a handful of years is noise
-        ORDER BY value DESC
+        -- `name` (capital_city) is unique per group: a total order. Without
+        -- it, DuckDB's parallel execution returns tied `value`s in whatever
+        -- order threads happened to finish, which varies run to run and,
+        -- combined with LIMIT, changes which cities even make the top N.
+        ORDER BY value DESC, name
         LIMIT {int(top_n)}
         """
     )

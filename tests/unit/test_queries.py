@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import time
 from datetime import date, timedelta
 
@@ -163,6 +165,66 @@ def test_crime_offence_breakdown_sorted_and_filtered(crime_mart):
     assert [r["name"] for r in rows] == ["theft", "fraud"]
     rows_lazio = q.crime_offence_breakdown({**ALL_SEL, "region": "Lazio"})
     assert rows_lazio[0]["value"] < rows[0]["value"]
+
+
+@pytest.fixture
+def breakdown_value_ties_mart(sample_db):
+    """mart_crime with two 3-way ties in `value`, offences inserted in an
+    order that is NOT alphabetical.
+
+    `mart_breakdown`'s `ORDER BY value DESC` alone is not a total order: for
+    equal values, DuckDB hands rows back in whatever order its grouping
+    happens to produce, which empirically is not this fixture's insertion
+    order either. The `, name` tiebreaker is what forces alphabetical order
+    among ties; without it, this fixture's non-alphabetical insertion order
+    survives and the test below fails.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    offences = [
+        ("zebra", 30.0),
+        ("mango", 30.0),
+        ("kiwi", 30.0),
+        ("delta", 10.0),
+        ("charlie", 10.0),
+        ("bravo", 10.0),
+    ]
+    rows = [
+        {
+            "year": "2023",
+            "region_code": "ITC4",
+            "region_name": "Lombardia",
+            "region_level": "region",
+            "offence_code": name.upper(),
+            "offence_name": name,
+            "sex_code": "9",
+            "sex_name": "total",
+            "age_code": "TOTAL",
+            "age_name": "total",
+            "region_is_total": False,
+            "offence_is_total": False,
+            "sex_is_total": True,
+            "age_is_total": True,
+            "value": value,
+        }
+        for name, value in offences
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_crime.parquet")
+    return marts
+
+
+def test_mart_breakdown_orders_ties_by_the_full_declared_key(breakdown_value_ties_mart):
+    """No two rows may share the complete (value, name) key, and the rows
+    must already come back sorted by it: value descending, name ascending
+    among ties. Comparing to Python's `sorted()` (not merely re-running the
+    query) is what catches a missing tiebreaker instead of passing whether
+    or not the bug is present.
+    """
+    sel = {"region": "Lombardia", "offence": q.ALL, "sex": q.ALL, "age": q.ALL}
+    rows = q.mart_breakdown(q.CRIME_MART, "offence", sel, top_n=10)
+    keys = [(r["value"], r["name"]) for r in rows]
+    assert len(set(keys)) == len(keys), "fixture key isn't unique; test can't discriminate"
+    assert keys == sorted(keys, key=lambda k: (-k[0], k[1]))
 
 
 def test_crime_mart_missing_degrades_gracefully(sample_db):
@@ -398,6 +460,136 @@ def test_region_rate_ranking_defaults_to_latest_year(rates_mart):
     assert q.region_rate_ranking(None, q.ALL, q.ALL) == q.region_rate_ranking("2024", q.ALL, q.ALL)
 
 
+@pytest.fixture
+def region_rate_value_ties_mart(sample_db):
+    """mart_offender_rates with two 3-way rate ties, regions inserted in an
+    order that is NOT alphabetical (see breakdown_value_ties_mart above for
+    why non-alphabetical insertion is what makes the tiebreaker test bite)."""
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    # (region_code, region_name, offenders, population): 1000*offenders/pop
+    # ties within each group. Codes match the NUTS2-shaped regex the query
+    # requires (^IT[A-Z][0-9]$).
+    regions = [
+        ("ITZ1", "Zeta", 300.0, 100_000.0),
+        ("ITY1", "Yankee", 300.0, 100_000.0),
+        ("ITX1", "Xray", 300.0, 100_000.0),
+        ("ITW1", "Whiskey", 100.0, 100_000.0),
+        ("ITV1", "Victor", 100.0, 100_000.0),
+        ("ITU1", "Uniform", 100.0, 100_000.0),
+    ]
+    rows = [
+        {
+            "year": "2024",
+            "region_code": rc,
+            "region_name": rn,
+            "crime_code": "THEFT",
+            "crime_name": "theft",
+            "crime_is_total": False,
+            "citizenship_code": "TOTAL",
+            "citizenship_name": "total",
+            "citizenship_is_total": True,
+            "offenders": offenders,
+            "population": population,
+            "rate_per_1000": 1000.0 * offenders / population,
+        }
+        for rc, rn, offenders, population in regions
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_offender_rates.parquet")
+    return marts
+
+
+def test_region_rate_ranking_orders_ties_by_the_full_declared_key(region_rate_value_ties_mart):
+    """Same guard as mart_breakdown's: no two rows may share the complete
+    (value, name) key, and rows must already come back in that order."""
+    rows = q.region_rate_ranking("2024", q.ALL, q.ALL)
+    keys = [(r["value"], r["name"]) for r in rows]
+    assert len(set(keys)) == len(keys), "fixture key isn't unique; test can't discriminate"
+    assert keys == sorted(keys, key=lambda k: (-k[0], k[1]))
+
+
+# ------------------------------------------------------- income vs crime (SQL)
+
+
+@pytest.fixture
+def income_scatter_ties_mart(sample_db):
+    """mart_crime_income with a real income tie: `income_per_capita` is a
+    REGIONAL figure (see dbt/models/marts/mart_crime_income.sql), so it
+    repeats across every citizenship row for one region — precisely the
+    scenario that makes shared/queries/income_scatter.sql's `ORDER BY
+    income` alone non-total. Two regions, two citizenship codes each, all
+    four rows inserted `ITL` before `FRG` (reverse of the fixed query's
+    alphabetical `code` tiebreak).
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = [
+        {
+            "year": "2023",
+            "region_code": "ITF1",
+            "region_name": "Lazio",
+            "citizenship_code": "ITL",
+            "citizenship_name": "italian",
+            "offenders": 10.0,
+            "population": 100.0,
+            "rate_per_1000": 2.0,
+            "income_mln": 1.0,
+            "income_per_capita": 40000.0,
+        },
+        {
+            "year": "2023",
+            "region_code": "ITF1",
+            "region_name": "Lazio",
+            "citizenship_code": "FRG",
+            "citizenship_name": "foreign",
+            "offenders": 10.0,
+            "population": 100.0,
+            "rate_per_1000": 5.0,
+            "income_mln": 1.0,
+            "income_per_capita": 40000.0,
+        },
+        {
+            "year": "2023",
+            "region_code": "ITG1",
+            "region_name": "Sicilia",
+            "citizenship_code": "ITL",
+            "citizenship_name": "italian",
+            "offenders": 10.0,
+            "population": 100.0,
+            "rate_per_1000": 1.0,
+            "income_mln": 1.0,
+            "income_per_capita": 30000.0,
+        },
+        {
+            "year": "2023",
+            "region_code": "ITG1",
+            "region_name": "Sicilia",
+            "citizenship_code": "FRG",
+            "citizenship_name": "foreign",
+            "offenders": 10.0,
+            "population": 100.0,
+            "rate_per_1000": 3.0,
+            "income_mln": 1.0,
+            "income_per_capita": 30000.0,
+        },
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_crime_income.parquet")
+    return marts
+
+
+def test_income_scatter_sql_orders_ties_by_the_full_declared_key(income_scatter_ties_mart):
+    """Runs the shared SQL file directly (not the `income_scatter()` Python
+    wrapper, which regroups rows by citizenship code and would hide the very
+    ordering this test exists to check): no two rows may share the complete
+    (income, region, code) key, and rows must already come back in that
+    order.
+    """
+    rows = q._query(q.load_sql("income_scatter"), ["2023"])
+    keys = [(r["income"], r["region"], r["code"]) for r in rows]
+    assert len(set(keys)) == len(keys), "fixture key isn't unique; test can't discriminate"
+    assert keys == sorted(keys)
+
+
 # ------------------------------------------------------------------ climate
 
 
@@ -551,6 +743,95 @@ def test_warming_rate_ranking_is_sorted_descending(climate_db):
     assert len(rows) == 5
     values = [r["value"] for r in rows]
     assert values == sorted(values, reverse=True)
+
+
+@pytest.fixture
+def warming_rate_ties_mart(sample_db):
+    """mart_climate_annual with two 3-way warming-rate ties, cities inserted
+    in an order that is NOT alphabetical.
+
+    Each group's cities share an IDENTICAL t_mean sequence over the same 12
+    years, so `regr_slope` ties EXACTLY, not merely after rounding — this is
+    the confirmed-biting site (see the measured 8-orderings-in-8-processes
+    defect at 0.36/0.31 in the real climate snapshot); this fixture pins the
+    same shape without needing a dbt build.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    years = list(range(2000, 2012))  # 12 years >= the HAVING COUNT(*) >= 10 floor
+
+    def city_rows(city: str, start_temp: float, step: float) -> list[dict]:
+        return [
+            {
+                "province_code": f"IT{abs(hash((city, i))) % 1000:03d}",
+                "province_name": city,
+                "capital_city": city,
+                "region_code": "ITZ9",
+                "region_name": "Testregion",
+                "year": str(year),
+                "t_mean": start_temp + step * i,
+                "t_min_mean": start_temp + step * i - 5.0,
+                "t_max_mean": start_temp + step * i + 5.0,
+                "days_observed": 365,
+                "anomaly_1981_2010": 0.0,
+            }
+            for i, year in enumerate(years)
+        ]
+
+    rows = []
+    # Fast-warming tie group, inserted zebra -> mango -> kiwi.
+    for city in ("Zebra City", "Mango City", "Kiwi City"):
+        rows += city_rows(city, 10.0, 0.5)
+    # Slow-warming tie group, inserted delta -> charlie -> bravo.
+    for city in ("Delta City", "Charlie City", "Bravo City"):
+        rows += city_rows(city, 10.0, 0.1)
+    pl.DataFrame(rows).write_parquet(marts / "mart_climate_annual.parquet")
+    return marts
+
+
+def test_warming_rate_ranking_orders_ties_by_the_full_declared_key(warming_rate_ties_mart):
+    """Same guard as mart_breakdown's and region_rate_ranking's: no two rows
+    may share the complete (value, name) key, and rows must already come
+    back in that order.
+    """
+    rows = q.warming_rate_ranking(top_n=10)
+    keys = [(r["value"], r["name"]) for r in rows]
+    assert len(set(keys)) == len(keys), "fixture key isn't unique; test can't discriminate"
+    assert keys == sorted(keys, key=lambda k: (-k[0], k[1]))
+
+
+def test_warming_rate_ranking_is_deterministic_across_processes(climate_db):
+    """Regression for the exact defect reported against this function: 8
+    separate processes returned 8 distinct orderings over the real climate
+    snapshot, with 5-wide tie groups at 0.36 and 0.31.
+
+    A single process — even a fresh one — can get lucky and land on the same
+    answer twice; `_query`'s result cache (see its docstring) would also
+    paper over the bug if this called the function twice in-process instead
+    of spawning genuinely separate interpreters. Each subprocess points a
+    brand-new process at the same on-disk snapshot `climate_db` already
+    built, so this only pays for the interpreter + query cost, not another
+    dbt build.
+    """
+    script = (
+        "from pathlib import Path\n"
+        "from italy_dashboard import queries as q\n"
+        f"q.DATA_DIR = Path({str(climate_db)!r})\n"
+        f"q.MARTS_DIR = Path({str(climate_db)!r}) / 'marts'\n"
+        "rows = q.warming_rate_ranking(top_n=20)\n"
+        "print(','.join(r['name'] for r in rows))\n"
+    )
+    orderings = set()
+    for _ in range(6):
+        proc = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        )
+        orderings.add(proc.stdout.strip())
+    assert len(orderings) == 1, f"non-deterministic ordering across processes: {orderings}"
 
 
 def test_threshold_days_are_non_negative_integers(climate_db):
