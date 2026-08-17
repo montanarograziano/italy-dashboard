@@ -1,10 +1,5 @@
 import { getConnection, runSql, unavailableTables } from "../db";
-
-// Mart tuple as defined in italy_dashboard.queries (`Mart = tuple[str,
-// list[str]]`): table name, dimension names. `martEngine.ts` (Task 6) will
-// own this type and re-export it for this file to import instead; until
-// then it is declared locally here.
-type Mart = [table: string, dims: string[]];
+import type { Mart } from "./martEngine";
 
 /** Whether `view` registered on the live connection.
  *

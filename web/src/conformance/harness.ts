@@ -5,6 +5,7 @@ import * as climate from "../queries/climate";
 import * as climateScope from "../queries/climateScope";
 import * as crimeClimate from "../queries/crimeClimate";
 import * as economy from "../queries/economy";
+import * as martEngine from "../queries/martEngine";
 import * as ready from "../queries/ready";
 import * as staticQueries from "../queries/static";
 
@@ -43,6 +44,10 @@ const IMPLEMENTED: Record<string, (...args: never[]) => Promise<unknown>> = {
   climate_region_annual_series: climateScope.climateRegionAnnualSeries,
   climate_region_stripes: climateScope.climateRegionStripes,
   climate_region_threshold_days: climateScope.climateRegionThresholdDays,
+  mart_options: martEngine.martOptions,
+  mart_years: martEngine.martYears,
+  mart_latest_year: martEngine.martLatestYear,
+  mart_province_options: martEngine.martProvinceOptions,
 };
 
 function normalise(value: unknown): unknown {
