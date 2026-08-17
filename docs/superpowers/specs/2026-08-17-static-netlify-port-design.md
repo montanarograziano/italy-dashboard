@@ -22,7 +22,7 @@ Measured against the current codebase rather than assumed:
 | | |
 |---|---|
 | `queries.py` | 1,152 lines, 49 public functions |
-| Query functions with **static** SQL | 15 |
+| Query functions with **static** SQL | 15 by inspection, **7** with genuinely extractable SQL (the rest interpolate a constant table name) |
 | Query functions that **build SQL dynamically** | 17 |
 | Charts | 36 across 7 pages |
 | Views blocked in Reflex by a missing Recharts mark | 1 (month-by-year heatmap) |
