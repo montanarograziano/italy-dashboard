@@ -377,6 +377,14 @@ def _mart_where(
         candidates = combos  # degrade gracefully rather than return nothing
     if not candidates:
         return " AND ".join([base_where, "FALSE"]), params
+    # `GROUP BY ALL`'s row order is unspecified, and DuckDB-WASM and native
+    # DuckDB have been observed to resolve ties differently (see the
+    # `mart_trend_pivot` port). Sorting by a deterministic key before max()
+    # makes "the first maximum on a tie" mean the same combination on both
+    # engines, instead of depending on scan order. A no-op on this snapshot
+    # (0 of 256 probe configurations tie), proven by the committed
+    # expected.json being byte-identical after this change.
+    candidates = sorted(candidates, key=lambda c: tuple(bool(c[f"{d}_is_total"]) for d in free))
     best = max(
         candidates,
         key=lambda c: (c["yc"], sum(bool(c[f"{d}_is_total"]) for d in free)),
