@@ -554,23 +554,53 @@ def stripe_chart(data: ChartData, height: int = 140) -> rx.Component:
     )
 
 
-def small_multiples(items: rx.Var | list, height: int = 90) -> rx.Component:
+def small_multiples(
+    items: rx.Var | list, height: int = 90, highlight: rx.Var | str | None = None
+) -> rx.Component:
     """A grid of stripe charts, one per city, on a shared colour scale.
 
     Small multiples work because every panel shares the scale: the reader
     compares panels, not axes. Panels are deliberately small and label-light;
     the card's table view carries exact values.
+
+    `highlight`, when given, names the city (`item["city"]`) to call out with
+    a ring around its panel and a bolder, darker label — the grid's
+    counterpart to `h_bar_chart`'s bar outline below, both meant to be driven
+    by the SAME selected-city Var so the two cross-city cards agree on what
+    they are pointing at. A never-matching value (e.g. `""`, no city is ever
+    named that) disables the ring without a separate on/off flag: nothing
+    highlights, but the border/font-weight props are still built, unlike
+    leaving `highlight` at its default `None`, which renders exactly as
+    before this parameter existed and is what every call site that never
+    wants highlighting should do.
     """
-    return rx.grid(
-        rx.foreach(
-            items,
-            lambda item: rx.vstack(
+
+    def panel(item) -> rx.Component:
+        if highlight is None:
+            return rx.vstack(
                 rx.text(item["city"], font_size="0.75em", color=theme.ink_secondary()),
                 stripe_chart(item["rows"], height=height),
                 spacing="1",
                 width="100%",
+            )
+        is_selected = item["city"] == highlight
+        return rx.vstack(
+            rx.text(
+                item["city"],
+                font_size="0.75em",
+                font_weight=rx.cond(is_selected, "700", "400"),
+                color=rx.cond(is_selected, theme.ink_primary(), theme.ink_secondary()),
             ),
-        ),
+            stripe_chart(item["rows"], height=height),
+            spacing="1",
+            width="100%",
+            padding="0.4em",
+            border=rx.cond(is_selected, theme.selection_border_css(), "2px solid transparent"),
+            border_radius="8px",
+        )
+
+    return rx.grid(
+        rx.foreach(items, panel),
         columns="3",
         spacing="4",
         width="100%",
@@ -583,10 +613,37 @@ def h_bar_chart(
     y_key: str,
     color: str | rx.Var,
     height: int = 380,
+    highlight: rx.Var | str | None = None,
 ) -> rx.Component:
-    """Horizontal bars: readable labels for long category names."""
+    """Horizontal bars: readable labels for long category names.
+
+    `highlight`, when given, names the value of `y_key` to call out (e.g. the
+    climate page's selected city in its cross-city warming-rate ranking) by
+    OUTLINING its bar rather than recolouring it: every bar here is the same
+    kind of entity (a warming rate), so a second hue would misleadingly claim
+    a categorical difference that is not there (see `band_trend_chart`'s
+    docstring for the same reasoning applied to a line/band). Each `Cell`
+    still needs `fill=color` explicitly: recharts assigns every `Cell` to its
+    bar in array order, so an unstyled one would silently fall back to
+    recharts' own default categorical palette instead of this chart's colour.
+    Left at its default `None`, no `Cell` children are built at all and the
+    chart renders exactly as before this parameter existed — the shape every
+    OTHER call site (crime.py's four rankings) still relies on.
+    """
+    bar_children: list[rx.Component] = []
+    if highlight is not None:
+        bar_children.append(
+            rx.foreach(
+                data,
+                lambda row: rx.recharts.cell(
+                    fill=color,
+                    stroke=rx.cond(row[y_key] == highlight, theme.ink_primary(), "none"),
+                    custom_attrs={"strokeWidth": 2},
+                ),
+            )
+        )
     return rx.recharts.bar_chart(
-        rx.recharts.bar(data_key=data_key, fill=color, radius=[0, 4, 4, 0]),
+        rx.recharts.bar(*bar_children, data_key=data_key, fill=color, radius=[0, 4, 4, 0]),
         rx.recharts.x_axis(
             type_="number",
             stroke=theme.axis(),

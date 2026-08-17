@@ -97,8 +97,12 @@ ignore = [
 # --------------------------------------------------------------- pyrefly
 
 [tool.pyrefly]
-project-includes = ["ingestion", "italy_dashboard", "tests"]
+project-includes = ["ingestion", "italy_dashboard", "scripts", "tests"]
 project-excludes = ["**/.venv", "**/.web", "**/node_modules"]
+# tests/unit/test_palette_artifacts.py imports generate_palette by inserting
+# scripts/ onto sys.path at runtime (it is a script, not a package); mirror
+# that here so pyrefly resolves the same import statically.
+search-path = ["scripts"]
 
 [tool.pyrefly.errors]
 # Reflex's descriptor-based state fields (reflex.Field.__get__/__set__) trip

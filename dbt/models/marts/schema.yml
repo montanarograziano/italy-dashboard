@@ -101,7 +101,10 @@ models:
         tests: [not_null]
 
   - name: mart_climate_region
-    description: Region-level annual climate, unweighted mean of member capitals.
+    description: >
+      Region-level annual climate, unweighted mean of member capitals, with
+      CLINO anomalies. Includes one national 'IT' / 'Italia' row per year,
+      the unweighted mean across all province capitals.
     columns:
       - name: region_code
         tests: [not_null]

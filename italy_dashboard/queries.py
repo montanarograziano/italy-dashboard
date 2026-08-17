@@ -6,6 +6,7 @@ size and safe across Reflex's async event handlers.
 
 from __future__ import annotations
 
+import functools
 import logging
 import threading
 from pathlib import Path
@@ -19,6 +20,25 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
+SHARED_SQL_DIR = PROJECT_ROOT / "shared" / "queries"
+
+
+@functools.cache
+def load_sql(name: str) -> str:
+    """The text of a shared SQL file, by filename stem.
+
+    Shared with the static frontend, which imports the same files through
+    Vite. Cached because the files cannot change while the process runs, and
+    because the Reflex app reads them on every page load.
+    """
+    path = SHARED_SQL_DIR / f"{name}.sql"
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"No shared query named {name!r}. Expected {path}. "
+            f"Available: {sorted(p.stem for p in SHARED_SQL_DIR.glob('*.sql'))}"
+        )
+    return path.read_text()
+
 
 Row = dict[str, Any]
 
@@ -79,6 +99,14 @@ def _snapshot_fingerprint() -> tuple[tuple[str, int, int], ...]:
     """Cheap identity for "what's on disk right now": (path, size, mtime_ns)
     per parquet file, sorted. Equal across two calls iff every file is
     unchanged; adding, removing, or rewriting any file changes it.
+
+    IN-PROCESS CACHE INVALIDATION ONLY. mtime, absolute paths and the glob over
+    every file on disk are all correct for that job (it must notice a rewrite
+    within one process, cheaply, including of files this layer only registers as
+    views) and all wrong for identifying a snapshot ACROSS machines: they differ
+    between two checkouts of the same commit. The conformance reference needs
+    the second thing and has its own function for it,
+    `scripts/generate_conformance_expected.tracked_snapshot_fingerprint`.
     """
     fingerprint = []
     for path in _parquet_files():
@@ -425,7 +453,12 @@ def mart_breakdown(
         SELECT {breakdown_dim}_name AS name, CAST(SUM(value) AS BIGINT) AS value
         FROM {table}, chosen
         WHERE year = chosen.y AND {where}
-        GROUP BY {breakdown_dim}_name ORDER BY value DESC
+        GROUP BY {breakdown_dim}_name
+        -- `name` is unique per group (it's the GROUP BY column), so it makes
+        -- the key total: without it, ties in `value` leave DuckDB's parallel
+        -- scan free to order (and, with LIMIT, even include/exclude) tied
+        -- rows differently between runs.
+        ORDER BY value DESC, name
         LIMIT {int(top_n)}
         """,
         [year, *params],
@@ -547,15 +580,7 @@ def inflation_series() -> list[Row]:
     2011-01, 2016-01 and 2026-01 all have values), so no base chaining is
     needed. The last point may average a partial year.
     """
-    return _query(
-        """
-        SELECT substr(period, 1, 4) AS period, ROUND(AVG(value), 1) AS value
-        FROM economy_inflation
-        WHERE territory = 'IT'
-        GROUP BY 1
-        ORDER BY 1
-        """
-    )
+    return _query(load_sql("inflation_series"))
 
 
 # ------------------------------------------------------------------ KPIs
@@ -674,7 +699,9 @@ def region_rate_ranking(year: str | None, citizenship: str, crime: str) -> list[
         WHERE year = chosen.y AND {" AND ".join(clauses)}
         GROUP BY region_name
         HAVING ANY_VALUE(population) > 0
-        ORDER BY value DESC
+        -- `name` (region_name) is unique per group: a total order, so ties in
+        -- `value` don't leave row order to thread-scheduling chance.
+        ORDER BY value DESC, name
         """,
         params,
     )
@@ -723,29 +750,14 @@ def offenders_kpis(selections: dict[str, str]) -> dict[str, str]:
 
 
 def income_years() -> list[str]:
-    rows = _query(
-        """
-        SELECT DISTINCT year FROM mart_crime_income
-        WHERE income_per_capita IS NOT NULL AND rate_per_1000 IS NOT NULL
-        ORDER BY year DESC
-        """
-    )
+    rows = _query(load_sql("income_years"))
     return [r["year"] for r in rows]
 
 
 def income_scatter(year: str) -> dict[str, list[Row]]:
     """Scatter points {income, rate, region} per citizenship for one year."""
     out: dict[str, list[Row]] = {"ITL": [], "FRG": []}
-    rows = _query(
-        """
-        SELECT citizenship_code AS code, region_name AS region,
-               income_per_capita AS income, rate_per_1000 AS rate
-        FROM mart_crime_income
-        WHERE year = ? AND income_per_capita IS NOT NULL AND rate_per_1000 IS NOT NULL
-        ORDER BY income
-        """,
-        [year],
-    )
+    rows = _query(load_sql("income_scatter"), [year])
     for r in rows:
         if r["code"] in out:
             out[r["code"]].append({"income": r["income"], "rate": r["rate"], "region": r["region"]})
@@ -754,17 +766,7 @@ def income_scatter(year: str) -> dict[str, list[Row]]:
 
 def income_correlations(year: str) -> dict[str, str]:
     """Pearson r between regional income and offender rate, per citizenship."""
-    rows = _query(
-        """
-        SELECT citizenship_code AS code,
-               ROUND(corr(income_per_capita, rate_per_1000), 2) AS r,
-               COUNT(*) AS n
-        FROM mart_crime_income
-        WHERE year = ? AND income_per_capita IS NOT NULL AND rate_per_1000 IS NOT NULL
-        GROUP BY citizenship_code
-        """,
-        [year],
-    )
+    rows = _query(load_sql("income_correlations"), [year])
     out = {"ITL": "—", "FRG": "—"}
     for r in rows:
         if r["code"] in out and r["r"] is not None and r["n"] >= 5:
@@ -780,10 +782,21 @@ def income_correlations(year: str) -> dict[str, str]:
 # for "the record high in Palermo".
 
 CLIMATE_ANNUAL = "mart_climate_annual"
+CLIMATE_REGION = "mart_climate_region"
+
+# mart_climate_region.sql's own national row: an 'IT' region_code carrying
+# region_name = 'Italia'. To this query layer it is JUST ANOTHER region_name
+# value (see that model's header comment), so every region-scope function
+# below takes a plain region_name and never branches on Italia specially —
+# passing ITALIA simply matches the 'IT' row's name like any other region's.
+ITALIA = "Italia"
 
 # Distribution chart: the first and last 30-year windows the series supports.
-EARLY_WINDOW = (1951, 1980)
-LATE_WINDOW = (1996, 2025)
+# Distribution chart: its two year windows are DERIVED PER CITY, by
+# shared/queries/climate_distribution_windows.sql. They used to be the literals
+# (1951, 1980) and (1996, 2025), which had two problems: the 1981-1995 hole read
+# as missing data to anyone looking at the card, and a hardcoded end year falls
+# behind the snapshot every January with nothing to catch it.
 
 # The fetch always runs to today minus 7 days, so the current year is a partial
 # year for eleven months out of twelve. Plotted as if complete it reads roughly
@@ -799,12 +812,55 @@ def climate_ready() -> bool:
     return (MARTS_DIR / f"{CLIMATE_ANNUAL}.parquet").exists()
 
 
+def climate_region_ready() -> bool:
+    """Whether the region/Italia scope has data of its own, independent of
+    `climate_ready()`. An older snapshot can carry `mart_climate_annual`
+    without yet having `mart_climate_region` (the region mart was added
+    later); see `ClimateState.mart_ready`'s comment for why the page gates
+    on both together now that the default scope is Italia.
+    """
+    return (MARTS_DIR / f"{CLIMATE_REGION}.parquet").exists()
+
+
 def climate_cities() -> list[str]:
     rows = _query(
         f"SELECT DISTINCT capital_city AS name FROM {CLIMATE_ANNUAL} "
         "WHERE capital_city IS NOT NULL ORDER BY name"
     )
     return [r["name"] for r in rows]
+
+
+def climate_region_options() -> list[str]:
+    """Selectable regions for the climate scope cascade, Italia first.
+
+    Italia is the broadest scope and the deliberate start of the region ->
+    city cascade below (see climate_city_options), so it is placed first
+    explicitly rather than left to alphabetical sort order, the way
+    mart_province_options puts "All" first for the same reason.
+    """
+    rows = _query(
+        f"SELECT DISTINCT region_name AS name FROM {CLIMATE_REGION} "
+        "WHERE region_code != 'IT' ORDER BY name"
+    )
+    return [ITALIA] + [r["name"] for r in rows]
+
+
+def climate_city_options(region: str = ITALIA) -> list[str]:
+    """Cities selectable within `region`; every city when region is Italia.
+
+    Mirrors mart_province_options's region-to-province cascade: "All" first,
+    then the narrowed detail rows. There is only one admin level to
+    disambiguate here (mart_climate_annual carries province-capital rows
+    exclusively, never provinces mixed with regions), so a single
+    region_name equality filter is enough — no scope-level pin needed.
+    """
+    clause, params = ("", []) if region == ITALIA else ("AND region_name = ?", [region])
+    rows = _query(
+        f"SELECT DISTINCT capital_city AS name FROM {CLIMATE_ANNUAL} "
+        f"WHERE capital_city IS NOT NULL {clause} ORDER BY name",
+        params,
+    )
+    return [ALL] + [r["name"] for r in rows]
 
 
 def climate_coverage() -> dict[str, str]:
@@ -893,13 +949,29 @@ def climate_annual_series(city: str) -> list[Row]:
     Partial years are excluded (see MIN_DAYS_FOR_A_FULL_YEAR): the running year
     would otherwise plot about 1 C too warm, as a record that never happened.
     """
+    return _annual_windowed(
+        f"""
+        SELECT year AS period, t_mean, t_min_mean AS t_min, t_max_mean AS t_max
+        FROM {CLIMATE_ANNUAL}
+        WHERE capital_city = ? AND days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
+        """,
+        [city],
+    )
+
+
+def _annual_windowed(base_sql: str, params: list) -> list[Row]:
+    """Shared rolling-mean/band shaping behind the annual warming line, at any
+    scope: `climate_annual_series` (city) and `climate_region_annual_series`
+    (region/Italia) both delegate here.
+
+    `base_sql` must already select exactly (period, t_mean, t_min, t_max),
+    filtered to one city/region and to complete years only — see
+    `climate_annual_series`'s docstring for what `t_band`/`t_rolling` mean
+    and why partial years are excluded upstream, not here.
+    """
     return _query(
         f"""
-        WITH base AS (
-            SELECT year AS period, t_mean, t_min_mean AS t_min, t_max_mean AS t_max
-            FROM {CLIMATE_ANNUAL}
-            WHERE capital_city = ? AND days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
-        ),
+        WITH base AS ({base_sql}),
         windowed AS (
             SELECT *,
                 COUNT(*) OVER w AS n,
@@ -921,8 +993,57 @@ def climate_annual_series(city: str) -> list[Row]:
         FROM windowed
         ORDER BY CAST(period AS INTEGER)
         """,
-        [city],
+        params,
     )
+
+
+def _region_completeness_cte() -> str:
+    """SQL for a (region_code, year, days_observed) table covering every
+    region code AND 'IT'.
+
+    mart_climate_region has no `days_observed` column of its own: it is
+    already an aggregate over capitals, unlike mart_climate_annual, which
+    tracks it per province. Completeness is derived here by joining back to
+    mart_climate_annual, MIN(days_observed) across the region's member
+    capitals — not AVG — so one still-partial capital is not diluted away by
+    others that finished backfilling earlier (the same quota-limited-backfill
+    concern `climate_coverage`'s docstring describes). The 'IT' branch mirrors
+    mart_climate_region.sql's own national row: MIN across ALL capitals, not
+    a mean of the regions' own completeness.
+    """
+    return f"""
+        SELECT region_code, year, MIN(days_observed) AS days_observed
+        FROM {CLIMATE_ANNUAL} GROUP BY region_code, year
+        UNION ALL
+        SELECT 'IT' AS region_code, year, MIN(days_observed) AS days_observed
+        FROM {CLIMATE_ANNUAL} GROUP BY year
+    """
+
+
+def climate_region_annual_series(region: str = ITALIA) -> list[Row]:
+    """`climate_annual_series`'s region/Italia counterpart.
+
+    'IT'/'Italia' is just another region_name in mart_climate_region (see
+    ITALIA's own comment), so one equality filter serves a real region and
+    the national scope alike — no branching needed here.
+    """
+    return _annual_windowed(
+        f"""
+        WITH days AS ({_region_completeness_cte()})
+        SELECT r.year AS period, r.t_mean, r.t_min_mean AS t_min, r.t_max_mean AS t_max
+        FROM {CLIMATE_REGION} r
+        JOIN days d ON d.region_code = r.region_code AND d.year = r.year
+        WHERE r.region_name = ? AND d.days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
+        """,
+        [region],
+    )
+
+
+def _with_stripe_fill(rows: list[Row]) -> list[Row]:
+    """Attach each row's own diverging `fill`, in place (see `climate_stripes`)."""
+    for r in rows:
+        r["fill"] = f"var(--div-{palette.diverging_bucket(float(r['anomaly']))})"
+    return rows
 
 
 def climate_stripes(city: str) -> list[Row]:
@@ -947,9 +1068,26 @@ def climate_stripes(city: str) -> list[Row]:
         """,
         [city],
     )
-    for r in rows:
-        r["fill"] = f"var(--div-{palette.diverging_bucket(float(r['anomaly']))})"
-    return rows
+    return _with_stripe_fill(rows)
+
+
+def climate_region_stripes(region: str = ITALIA) -> list[Row]:
+    """`climate_stripes`'s region/Italia counterpart; see
+    `climate_region_annual_series` for why Italia needs no special case.
+    """
+    rows = _query(
+        f"""
+        WITH days AS ({_region_completeness_cte()})
+        SELECT r.year AS period, r.anomaly_1981_2010 AS anomaly
+        FROM {CLIMATE_REGION} r
+        JOIN days d ON d.region_code = r.region_code AND d.year = r.year
+        WHERE r.region_name = ? AND r.anomaly_1981_2010 IS NOT NULL
+          AND d.days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
+        ORDER BY r.year
+        """,
+        [region],
+    )
+    return _with_stripe_fill(rows)
 
 
 def warming_rate_ranking(top_n: int = 20) -> list[Row]:
@@ -970,7 +1108,11 @@ def warming_rate_ranking(top_n: int = 20) -> list[Row]:
         WHERE t_mean IS NOT NULL AND days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
         GROUP BY capital_city
         HAVING COUNT(*) >= 10  -- a slope from a handful of years is noise
-        ORDER BY value DESC
+        -- `name` (capital_city) is unique per group: a total order. Without
+        -- it, DuckDB's parallel execution returns tied `value`s in whatever
+        -- order threads happened to finish, which varies run to run and,
+        -- combined with LIMIT, changes which cities even make the top N.
+        ORDER BY value DESC, name
         LIMIT {int(top_n)}
         """
     )
@@ -992,14 +1134,46 @@ def climate_stripes_grid(limit: int = 12) -> list[Row]:
 
 
 def climate_threshold_days(city: str) -> list[Row]:
+    """Days per year over/under each threshold: hot, tropical nights, frost.
+
+    Partial years are excluded (see MIN_DAYS_FOR_A_FULL_YEAR), like every other
+    annual climate series here. Threshold days are COUNTS, not means, so an
+    unfinished year does not merely wobble: a year ending in August has had its
+    whole summer and none of the following winter, which reads as a record high
+    on hot_days and a collapse in frost_days. On the current snapshot the
+    running year came out as the highest hot_days value in the entire series
+    (47.2 against 30.1 the year before) and a third down on frost days, from
+    222 of 365 days -- next to two cards in the same section that stop at the
+    last complete year by design, and against the rule
+    `docs/07-methodology.md` already states.
+    """
     return _query(
         f"""
         SELECT year AS period, hot_days, tropical_nights, frost_days
         FROM {CLIMATE_ANNUAL}
-        WHERE capital_city = ?
+        WHERE capital_city = ? AND days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
         ORDER BY year
         """,
         [city],
+    )
+
+
+def climate_region_threshold_days(region: str = ITALIA) -> list[Row]:
+    """`climate_threshold_days`'s region/Italia counterpart, partial years and
+    all (see `climate_region_annual_series` for why Italia needs no special
+    case, and `_region_completeness_cte` for where completeness comes from at
+    this scope).
+    """
+    return _query(
+        f"""
+        WITH days AS ({_region_completeness_cte()})
+        SELECT r.year AS period, r.hot_days, r.tropical_nights, r.frost_days
+        FROM {CLIMATE_REGION} r
+        JOIN days d ON d.region_code = r.region_code AND d.year = r.year
+        WHERE r.region_name = ? AND d.days_observed >= {MIN_DAYS_FOR_A_FULL_YEAR}
+        ORDER BY r.year
+        """,
+        [region],
     )
 
 
@@ -1021,43 +1195,51 @@ def climate_month_heatmap(city: str) -> list[Row]:
     )
 
 
-def climate_distribution(city: str) -> list[Row]:
+def climate_distribution_windows(city: str) -> tuple[int, int, int, int] | None:
+    """(early_lo, early_hi, late_lo, late_hi): `city`'s record split in half.
+
+    None when the city has fewer than two complete years. The caller must show
+    the empty state rather than substitute a guess — see the SQL file, which
+    carries the full rationale for the split.
+
+    CITY SCOPE ONLY, deliberately with no region/Italia counterpart:
+    mart_climate_region holds yearly aggregates, never the daily readings this
+    histogram needs, so there is no region-level distribution to compute.
+    Called with a region or Italia name, `capital_city = ?` simply matches no
+    row and this returns None like any city with an empty record — the same
+    empty state a caller must already handle, not a new one to invent (see
+    test_distribution_is_empty_at_region_and_italy_scope).
+    """
+    rows = _query(load_sql("climate_distribution_windows"), [city, MIN_DAYS_FOR_A_FULL_YEAR])
+    if not rows:
+        return None
+    r = rows[0]
+    return int(r["early_lo"]), int(r["early_hi"]), int(r["late_lo"]), int(r["late_hi"])
+
+
+def climate_distribution(city: str, windows: tuple[int, int, int, int] | None = None) -> list[Row]:
     """Daily max-temperature histogram, early window against late window.
 
-    Counts are normalized to percentages so unequal window lengths (a shorter
-    late window near the present) do not make one curve look taller than the
-    other for purely arithmetic reasons.
+    Counts are normalized to percentages so the two curves are comparable in
+    height. The windows are near-equal by construction, so this now guards
+    against a leap day rather than a 15-year difference in span, but it still
+    has to be there.
+
+    `windows` is accepted so a caller that already resolved them (the state, to
+    label the card) does not resolve them twice; omit it and they are looked up.
+    An empty list means the city has no drawable two-window split.
 
     Returns `period` (not `bucket`) for its x-axis key: every other
     chart-feeding function in this module names its x-axis `period`, and the
     shared line_chart component keys on that name.
     """
-    early_lo, early_hi = EARLY_WINDOW
-    late_lo, late_hi = LATE_WINDOW
+    if windows is None:
+        windows = climate_distribution_windows(city)
+    if windows is None:
+        return []
+    early_lo, early_hi, late_lo, late_hi = windows
     return _query(
-        """
-        WITH d AS (
-            SELECT CAST(year AS INTEGER) AS y,
-                   CAST(FLOOR(t_max / 2.0) * 2 AS INTEGER) AS bucket
-            FROM mart_climate_daily
-            WHERE capital_city = ? AND t_max IS NOT NULL
-        ),
-        tot AS (
-            SELECT
-                COUNT(*) FILTER (WHERE y BETWEEN ? AND ?) AS n_early,
-                COUNT(*) FILTER (WHERE y BETWEEN ? AND ?) AS n_late
-            FROM d
-        )
-        SELECT d.bucket AS period,
-               ROUND(100.0 * COUNT(*) FILTER (WHERE y BETWEEN ? AND ?)
-                     / NULLIF(ANY_VALUE(tot.n_early), 0), 3) AS early,
-               ROUND(100.0 * COUNT(*) FILTER (WHERE y BETWEEN ? AND ?)
-                     / NULLIF(ANY_VALUE(tot.n_late), 0), 3) AS late
-        FROM d, tot
-        GROUP BY d.bucket
-        HAVING ANY_VALUE(tot.n_early) > 0 AND ANY_VALUE(tot.n_late) > 0
-        ORDER BY period
-        """,
+        load_sql("climate_distribution"),
         [city, early_lo, early_hi, late_lo, late_hi, early_lo, early_hi, late_lo, late_hi],
     )
 
@@ -1084,16 +1266,7 @@ def crime_climate_scatter() -> dict[str, list[Row]]:
     summer temperature on x, the hot southern regions sit on the right, which
     is the confound this chart exists to make visible.
     """
-    rows = _query(
-        """
-        SELECT region_name, year,
-               summer_tmax, ln_offenders,
-               summer_anomaly_dm, ln_offenders_dm
-        FROM mart_crime_climate
-        WHERE summer_anomaly IS NOT NULL AND ln_offenders IS NOT NULL
-        ORDER BY region_name, year
-        """
-    )
+    rows = _query(load_sql("crime_climate_scatter"))
     return {
         "raw": [
             {
@@ -1130,17 +1303,7 @@ def crime_climate_stats() -> dict[str, str]:
     same observations and share one n.
     """
     out = {"raw": "—", "panel": "—", "n": "0"}
-    rows = _query(
-        """
-        SELECT COUNT(*) AS n,
-               ROUND(regr_slope(ln_offenders, summer_tmax), 4) AS raw_slope,
-               ROUND(corr(ln_offenders, summer_tmax), 3) AS raw_r,
-               ROUND(regr_slope(ln_offenders_dm, summer_anomaly_dm), 4) AS dm_slope,
-               ROUND(corr(ln_offenders_dm, summer_anomaly_dm), 3) AS dm_r
-        FROM mart_crime_climate
-        WHERE summer_anomaly IS NOT NULL AND ln_offenders IS NOT NULL
-        """
-    )
+    rows = _query(load_sql("crime_climate_stats"))
     if not rows or not rows[0]["n"]:
         return out
     r = rows[0]

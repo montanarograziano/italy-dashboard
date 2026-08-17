@@ -6,6 +6,26 @@
 --
 -- `provinces_covered` makes the sample size behind each regional mean visible;
 -- Valle d'Aosta and the two autonomous provinces have exactly one.
+--
+-- The national 'IT' / 'Italia' row applies the same reasoning one level up:
+-- it is the unweighted mean across ALL province capitals for the year, not a
+-- population-weighted national average (same missing-weights problem as
+-- above) and not a mean of the regions' own means (that would let a region
+-- with few capitals move the national figure as much as one with many,
+-- which is not "unweighted by capitals", it is unweighted by REGION). It is
+-- computed straight from the province rows for exactly that reason.
+--
+-- A baseline requires at least 25 years of data within its 30-year window,
+-- exactly as mart_climate_annual; otherwise it (and its anomaly) is NULL.
+-- 25 of 30, not 30 of 30: a genuine climate normal tolerates a few missing
+-- years, and demanding every single year would make the mart brittle against
+-- a single upstream gap. Below the threshold, a handful of years would
+-- produce a confident-looking anomaly that is really just noise dressed up
+-- as a 30-year normal. The guard is evaluated separately for every region
+-- AND for the national series: the national anomaly comes from the national
+-- t_mean time series, never from averaging the regions' own anomalies, since
+-- those two numbers are not the same and only one of them is the national
+-- anomaly.
 
 {{ config(
     materialized='external',
@@ -27,18 +47,113 @@ with per_province as (
         sum(case when is_frost_day then 1 else 0 end)      as frost_days
     from {{ ref('mart_climate_daily') }}
     group by region_code, province_code, year
+),
+
+region_year as (
+    select
+        region_code,
+        any_value(region_name)        as region_name,
+        year,
+        avg(t_mean)                   as t_mean,
+        avg(t_min_mean)                as t_min_mean,
+        avg(t_max_mean)                as t_max_mean,
+        avg(hot_days)                  as hot_days,
+        avg(tropical_nights)           as tropical_nights,
+        avg(frost_days)                as frost_days,
+        count(distinct province_code)  as provinces_covered
+    from per_province
+    group by region_code, year
+),
+
+region_clino as (
+    select
+        region_code,
+        case when count(*) filter (
+                 where cast(year as integer) between 1971 and 2000
+             ) >= 25
+             then avg(case when cast(year as integer)
+                      between 1971 and 2000 then t_mean end)
+        end as base_1971_2000,
+        case when count(*) filter (
+                 where cast(year as integer) between 1981 and 2010
+             ) >= 25
+             then avg(case when cast(year as integer)
+                      between 1981 and 2010 then t_mean end)
+        end as base_1981_2010
+    from region_year
+    group by region_code
+),
+
+-- National year: the unweighted mean across ALL province capitals, built
+-- straight from per_province (not from region_year) so it is a mean of
+-- capitals, not a mean of regional means.
+national_year as (
+    select
+        year,
+        avg(t_mean)                   as t_mean,
+        avg(t_min_mean)                as t_min_mean,
+        avg(t_max_mean)                as t_max_mean,
+        avg(hot_days)                  as hot_days,
+        avg(tropical_nights)           as tropical_nights,
+        avg(frost_days)                as frost_days,
+        count(distinct province_code)  as provinces_covered
+    from per_province
+    group by year
+),
+
+national_clino as (
+    select
+        case when count(*) filter (
+                 where cast(year as integer) between 1971 and 2000
+             ) >= 25
+             then avg(case when cast(year as integer)
+                      between 1971 and 2000 then t_mean end)
+        end as base_1971_2000,
+        case when count(*) filter (
+                 where cast(year as integer) between 1981 and 2010
+             ) >= 25
+             then avg(case when cast(year as integer)
+                      between 1981 and 2010 then t_mean end)
+        end as base_1981_2010
+    from national_year
+),
+
+region_rows as (
+    select
+        r.region_code,
+        r.region_name,
+        r.year,
+        round(r.t_mean, 2)          as t_mean,
+        round(r.t_min_mean, 2)      as t_min_mean,
+        round(r.t_max_mean, 2)      as t_max_mean,
+        round(r.hot_days, 1)        as hot_days,
+        round(r.tropical_nights, 1) as tropical_nights,
+        round(r.frost_days, 1)      as frost_days,
+        r.provinces_covered,
+        round(r.t_mean - c.base_1971_2000, 2) as anomaly_1971_2000,
+        round(r.t_mean - c.base_1981_2010, 2) as anomaly_1981_2010
+    from region_year r
+    left join region_clino c on r.region_code = c.region_code
+),
+
+national_rows as (
+    select
+        'IT'     as region_code,
+        'Italia' as region_name,
+        n.year,
+        round(n.t_mean, 2)          as t_mean,
+        round(n.t_min_mean, 2)      as t_min_mean,
+        round(n.t_max_mean, 2)      as t_max_mean,
+        round(n.hot_days, 1)        as hot_days,
+        round(n.tropical_nights, 1) as tropical_nights,
+        round(n.frost_days, 1)      as frost_days,
+        n.provinces_covered,
+        round(n.t_mean - c.base_1971_2000, 2) as anomaly_1971_2000,
+        round(n.t_mean - c.base_1981_2010, 2) as anomaly_1981_2010
+    from national_year n
+    cross join national_clino c
 )
 
-select
-    region_code,
-    any_value(region_name)        as region_name,
-    year,
-    round(avg(t_mean), 2)         as t_mean,
-    round(avg(t_min_mean), 2)     as t_min_mean,
-    round(avg(t_max_mean), 2)     as t_max_mean,
-    round(avg(hot_days), 1)        as hot_days,
-    round(avg(tropical_nights), 1) as tropical_nights,
-    round(avg(frost_days), 1)      as frost_days,
-    count(distinct province_code)  as provinces_covered
-from per_province
-group by region_code, year
+select * from region_rows
+union all
+select * from national_rows

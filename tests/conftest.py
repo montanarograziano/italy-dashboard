@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import polars as pl
 import pytest
 
 from ingestion import fetch
@@ -28,6 +29,37 @@ def sample_db(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(queries, "DATA_DIR", data_dir)
     monkeypatch.setattr(queries, "MARTS_DIR", data_dir / "marts")
     return data_dir
+
+
+@pytest.fixture
+def annual_only_climate_mart(sample_db: Path) -> Path:
+    """`mart_climate_annual` present, `mart_climate_region` absent.
+
+    The shape of an older snapshot built before `mart_climate_region` existed
+    (see queries.climate_region_ready): city-scope queries would all work
+    fine against this snapshot, but the default scope is now Italia/region,
+    which needs the mart this fixture deliberately withholds.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = [
+        {
+            "province_code": "IT999",
+            "province_name": "Testville",
+            "capital_city": "Testville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": str(year),
+            "t_mean": 15.0,
+            "t_min_mean": 10.0,
+            "t_max_mean": 20.0,
+            "days_observed": 365,
+            "anomaly_1981_2010": 0.0,
+        }
+        for year in range(2010, 2022)
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_climate_annual.parquet")
+    return marts
 
 
 @pytest.fixture

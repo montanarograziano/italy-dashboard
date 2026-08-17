@@ -134,3 +134,16 @@ def tooltip_border_css() -> rx.Var:
         light=f"1px solid {_LIGHT['GRIDLINE']}",
         dark=f"1px solid {_DARK['GRIDLINE']}",
     )
+
+
+def selection_border_css() -> rx.Var:
+    """The full `2px solid <colour>` ring used to call out a selected item.
+
+    Built on INK_PRIMARY, not the BORDER token: BORDER is a deliberately
+    subtle, near-invisible hairline for card edges (see `border_css()`),
+    which would defeat the point of a ring meant to actually stand out.
+    """
+    return rx.color_mode_cond(
+        light=f"2px solid {_LIGHT['INK_PRIMARY']}",
+        dark=f"2px solid {_DARK['INK_PRIMARY']}",
+    )

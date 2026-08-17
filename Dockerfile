@@ -34,6 +34,13 @@ RUN uv sync --frozen --no-install-project --no-dev
 COPY ingestion ./ingestion
 COPY italy_dashboard ./italy_dashboard
 COPY dbt ./dbt
+# `shared/` is a RUNTIME dependency, not a build-time one: queries.py's
+# load_sql() reads shared/queries/*.sql on every call (it is the same SQL the
+# static frontend imports), so an image without it raises FileNotFoundError on
+# the Economy, Crime and Climate x Crime pages instead of failing at build
+# time. tests/unit/test_deployment_paths.py derives the required set from the
+# code's own Path constants and fails if any of them stops being copied.
+COPY shared ./shared
 COPY rxconfig.py ./
 # Reflex's frontend-side lockfile (pinned bun.lock/package.json versions), so
 # the frontend build reuses the pins from `reflex init`/`reflex export` runs

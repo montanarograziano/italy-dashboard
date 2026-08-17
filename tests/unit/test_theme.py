@@ -119,3 +119,15 @@ def test_tooltip_border_css_is_a_complete_declaration_for_both_modes():
     assert '"1px solid #e1e0d9"' in rendered  # light
     assert '"1px solid #2e2e2c"' in rendered  # dark
     assert "resolvedColorMode" in rendered
+
+
+def test_selection_border_css_is_a_complete_declaration_for_both_modes():
+    """Used to ring a selected item (e.g. the climate page's cross-city
+    ranking/grid acknowledging the currently selected city). Built on
+    INK_PRIMARY, not BORDER: BORDER is a deliberately subtle hairline (see
+    border_css()), which would defeat a selection ring meant to stand out.
+    """
+    rendered = str(rx.box(border=theme.selection_border_css()).render())
+    assert '"2px solid #0b0b0b"' in rendered  # light
+    assert '"2px solid #f4f4f2"' in rendered  # dark
+    assert "resolvedColorMode" in rendered

@@ -144,6 +144,17 @@ EN: dict[str, str] = {
     "change_pct": "Change (%)",
     # climate page
     "city": "City",
+    # {name} is the selected city, or else the selected region, or else
+    # "Italia" — substituted in ClimateState.selected_scope_title. Templated
+    # because the entity name is a runtime value (see _format_translation).
+    "selected_scope_title": "Selected scope: {name}",
+    "across_italy_section": "Across Italy",
+    # {city} is the selected city, substituted in
+    # ClimateState.city_outside_ranking_note. Templated for the same reason
+    # as selected_scope_title.
+    "city_outside_ranking": (
+        "{city} is not among the top 20 fastest-warming cities, so it isn't highlighted below."
+    ),
     "warming_title": "Annual temperature",
     "warming_sub": (
         "Annual mean (thin line), the min-max band each year (shaded), and a "
@@ -167,9 +178,20 @@ EN: dict[str, str] = {
     "tropical_nights": "Tropical nights",
     "frost_days": "Frost days",
     "distribution_title": "Distribution of daily maxima",
-    "distribution_sub": "Share of days per 2 C bucket, 1951-1980 against 1996-2025",
-    "dist_early": "1951-1980",
-    "dist_late": "1996-2025",
+    # {early_lo}-{early_hi} / {late_lo}-{late_hi} are substituted in
+    # ClimateState.distribution_sub / dist_early_label / dist_late_label. The
+    # windows are derived per city, so these MUST stay templates: a literal
+    # year range here would drift away from the data it labels.
+    "distribution_sub": (
+        "Share of days per 2 C bucket, {early_lo}-{early_hi} against "
+        "{late_lo}-{late_hi} — the record split in half"
+    ),
+    "dist_early": "{early_lo}-{early_hi}",
+    "dist_late": "{late_lo}-{late_hi}",
+    "distribution_city_only": (
+        "Daily histograms need a single city: the regional mart holds yearly "
+        "aggregates, not daily readings. Pick a city above to see it."
+    ),
     "anomaly": "Anomaly (C)",
     "degrees_per_decade": "C / decade",
     "no_climate": (
@@ -181,6 +203,17 @@ EN: dict[str, str] = {
     "climate_coverage": (
         "Coverage: {capitals} of {capitals_total} capitals, {regions} of "
         "{regions_total} regions, {year_start}-{year_end}"
+    ),
+    # Shown at Italia scope only (ClimateState.is_national_scope). The coverage
+    # line above gives the counts; this says what the counts do not — WHICH half
+    # of the country is missing. Same job, and the same wording pattern, as
+    # cc_coverage_note below.
+    "climate_coverage_note": (
+        "Italia is an unweighted mean of the capitals covered so far, and the "
+        "temperature backfill runs in province-code order, so it fills from the "
+        "north: much of the South is still missing and the absolute level reads "
+        "colder than Italy's. The anomaly chart is far more robust to this, "
+        "because it measures each year against the same cities' own baseline."
     ),
     "nav_climate_crime": "Climate × Crime",  # noqa: RUF001
     "climate_crime_title": "Summer heat and violent crime",
@@ -359,6 +392,14 @@ IT: dict[str, str] = {
     "inflation_sub": "Variazione media annua dell'indice generale (%)",
     "change_pct": "Variazione (%)",
     "city": "Città",
+    # Vedi il commento nella tabella EN: {name} è un valore a runtime.
+    "selected_scope_title": "Ambito selezionato: {name}",
+    "across_italy_section": "In tutta Italia",
+    # Vedi il commento nella tabella EN: {city} è un valore a runtime.
+    "city_outside_ranking": (
+        "{city} non è tra le prime 20 città che si scaldano più in fretta, "
+        "quindi non è evidenziata qui sotto."
+    ),
     "warming_title": "Temperatura annuale",
     "warming_sub": (
         "Media annuale (linea sottile), la fascia minimo-massimo di ogni anno "
@@ -382,9 +423,18 @@ IT: dict[str, str] = {
     "tropical_nights": "Notti tropicali",
     "frost_days": "Giorni di gelo",
     "distribution_title": "Distribuzione delle massime giornaliere",
-    "distribution_sub": "Quota di giorni per intervallo di 2 C, 1951-1980 contro 1996-2025",
-    "dist_early": "1951-1980",
-    "dist_late": "1996-2025",
+    # Vedi il commento nella tabella EN: sono template, non stringhe fisse.
+    "distribution_sub": (
+        "Quota di giorni per intervallo di 2 C, {early_lo}-{early_hi} contro "
+        "{late_lo}-{late_hi} — la serie divisa in due metà"
+    ),
+    "dist_early": "{early_lo}-{early_hi}",
+    "dist_late": "{late_lo}-{late_hi}",
+    "distribution_city_only": (
+        "Gli istogrammi giornalieri richiedono una singola città: il mart "
+        "regionale contiene aggregati annuali, non dati giornalieri. "
+        "Seleziona una città qui sopra per vederlo."
+    ),
     "anomaly": "Anomalia (C)",
     "degrees_per_decade": "C / decennio",
     "no_climate": (
@@ -394,6 +444,13 @@ IT: dict[str, str] = {
     "climate_coverage": (
         "Copertura: {capitals} di {capitals_total} capoluoghi, {regions} di "
         "{regions_total} regioni, {year_start}-{year_end}"
+    ),
+    "climate_coverage_note": (
+        "Italia è una media non ponderata dei capoluoghi finora coperti, e il "
+        "backfill delle temperature procede in ordine di codice provinciale, "
+        "quindi da nord: gran parte del Sud manca ancora e il livello assoluto "
+        "risulta più freddo di quello italiano. Il grafico delle anomalie è molto "
+        "più robusto: misura ogni anno rispetto alla baseline delle stesse città."
     ),
     "nav_climate_crime": "Clima × Criminalità",  # noqa: RUF001
     "climate_crime_title": "Caldo estivo e criminalità violenta",

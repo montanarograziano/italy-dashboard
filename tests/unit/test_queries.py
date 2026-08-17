@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import time
+from datetime import date, timedelta
 
 import duckdb
 import polars as pl
@@ -162,6 +165,66 @@ def test_crime_offence_breakdown_sorted_and_filtered(crime_mart):
     assert [r["name"] for r in rows] == ["theft", "fraud"]
     rows_lazio = q.crime_offence_breakdown({**ALL_SEL, "region": "Lazio"})
     assert rows_lazio[0]["value"] < rows[0]["value"]
+
+
+@pytest.fixture
+def breakdown_value_ties_mart(sample_db):
+    """mart_crime with two 3-way ties in `value`, offences inserted in an
+    order that is NOT alphabetical.
+
+    `mart_breakdown`'s `ORDER BY value DESC` alone is not a total order: for
+    equal values, DuckDB hands rows back in whatever order its grouping
+    happens to produce, which empirically is not this fixture's insertion
+    order either. The `, name` tiebreaker is what forces alphabetical order
+    among ties; without it, this fixture's non-alphabetical insertion order
+    survives and the test below fails.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    offences = [
+        ("zebra", 30.0),
+        ("mango", 30.0),
+        ("kiwi", 30.0),
+        ("delta", 10.0),
+        ("charlie", 10.0),
+        ("bravo", 10.0),
+    ]
+    rows = [
+        {
+            "year": "2023",
+            "region_code": "ITC4",
+            "region_name": "Lombardia",
+            "region_level": "region",
+            "offence_code": name.upper(),
+            "offence_name": name,
+            "sex_code": "9",
+            "sex_name": "total",
+            "age_code": "TOTAL",
+            "age_name": "total",
+            "region_is_total": False,
+            "offence_is_total": False,
+            "sex_is_total": True,
+            "age_is_total": True,
+            "value": value,
+        }
+        for name, value in offences
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_crime.parquet")
+    return marts
+
+
+def test_mart_breakdown_orders_ties_by_the_full_declared_key(breakdown_value_ties_mart):
+    """No two rows may share the complete (value, name) key, and the rows
+    must already come back sorted by it: value descending, name ascending
+    among ties. Comparing to Python's `sorted()` (not merely re-running the
+    query) is what catches a missing tiebreaker instead of passing whether
+    or not the bug is present.
+    """
+    sel = {"region": "Lombardia", "offence": q.ALL, "sex": q.ALL, "age": q.ALL}
+    rows = q.mart_breakdown(q.CRIME_MART, "offence", sel, top_n=10)
+    keys = [(r["value"], r["name"]) for r in rows]
+    assert len(set(keys)) == len(keys), "fixture key isn't unique; test can't discriminate"
+    assert keys == sorted(keys, key=lambda k: (-k[0], k[1]))
 
 
 def test_crime_mart_missing_degrades_gracefully(sample_db):
@@ -397,14 +460,160 @@ def test_region_rate_ranking_defaults_to_latest_year(rates_mart):
     assert q.region_rate_ranking(None, q.ALL, q.ALL) == q.region_rate_ranking("2024", q.ALL, q.ALL)
 
 
+@pytest.fixture
+def region_rate_value_ties_mart(sample_db):
+    """mart_offender_rates with two 3-way rate ties, regions inserted in an
+    order that is NOT alphabetical (see breakdown_value_ties_mart above for
+    why non-alphabetical insertion is what makes the tiebreaker test bite)."""
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    # (region_code, region_name, offenders, population): 1000*offenders/pop
+    # ties within each group. Codes match the NUTS2-shaped regex the query
+    # requires (^IT[A-Z][0-9]$).
+    regions = [
+        ("ITZ1", "Zeta", 300.0, 100_000.0),
+        ("ITY1", "Yankee", 300.0, 100_000.0),
+        ("ITX1", "Xray", 300.0, 100_000.0),
+        ("ITW1", "Whiskey", 100.0, 100_000.0),
+        ("ITV1", "Victor", 100.0, 100_000.0),
+        ("ITU1", "Uniform", 100.0, 100_000.0),
+    ]
+    rows = [
+        {
+            "year": "2024",
+            "region_code": rc,
+            "region_name": rn,
+            "crime_code": "THEFT",
+            "crime_name": "theft",
+            "crime_is_total": False,
+            "citizenship_code": "TOTAL",
+            "citizenship_name": "total",
+            "citizenship_is_total": True,
+            "offenders": offenders,
+            "population": population,
+            "rate_per_1000": 1000.0 * offenders / population,
+        }
+        for rc, rn, offenders, population in regions
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_offender_rates.parquet")
+    return marts
+
+
+def test_region_rate_ranking_orders_ties_by_the_full_declared_key(region_rate_value_ties_mart):
+    """Same guard as mart_breakdown's: no two rows may share the complete
+    (value, name) key, and rows must already come back in that order."""
+    rows = q.region_rate_ranking("2024", q.ALL, q.ALL)
+    keys = [(r["value"], r["name"]) for r in rows]
+    assert len(set(keys)) == len(keys), "fixture key isn't unique; test can't discriminate"
+    assert keys == sorted(keys, key=lambda k: (-k[0], k[1]))
+
+
+# ------------------------------------------------------- income vs crime (SQL)
+
+
+@pytest.fixture
+def income_scatter_ties_mart(sample_db):
+    """mart_crime_income with a real income tie: `income_per_capita` is a
+    REGIONAL figure (see dbt/models/marts/mart_crime_income.sql), so it
+    repeats across every citizenship row for one region — precisely the
+    scenario that makes shared/queries/income_scatter.sql's `ORDER BY
+    income` alone non-total. Two regions, two citizenship codes each, all
+    four rows inserted `ITL` before `FRG` (reverse of the fixed query's
+    alphabetical `code` tiebreak).
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = [
+        {
+            "year": "2023",
+            "region_code": "ITF1",
+            "region_name": "Lazio",
+            "citizenship_code": "ITL",
+            "citizenship_name": "italian",
+            "offenders": 10.0,
+            "population": 100.0,
+            "rate_per_1000": 2.0,
+            "income_mln": 1.0,
+            "income_per_capita": 40000.0,
+        },
+        {
+            "year": "2023",
+            "region_code": "ITF1",
+            "region_name": "Lazio",
+            "citizenship_code": "FRG",
+            "citizenship_name": "foreign",
+            "offenders": 10.0,
+            "population": 100.0,
+            "rate_per_1000": 5.0,
+            "income_mln": 1.0,
+            "income_per_capita": 40000.0,
+        },
+        {
+            "year": "2023",
+            "region_code": "ITG1",
+            "region_name": "Sicilia",
+            "citizenship_code": "ITL",
+            "citizenship_name": "italian",
+            "offenders": 10.0,
+            "population": 100.0,
+            "rate_per_1000": 1.0,
+            "income_mln": 1.0,
+            "income_per_capita": 30000.0,
+        },
+        {
+            "year": "2023",
+            "region_code": "ITG1",
+            "region_name": "Sicilia",
+            "citizenship_code": "FRG",
+            "citizenship_name": "foreign",
+            "offenders": 10.0,
+            "population": 100.0,
+            "rate_per_1000": 3.0,
+            "income_mln": 1.0,
+            "income_per_capita": 30000.0,
+        },
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_crime_income.parquet")
+    return marts
+
+
+def test_income_scatter_sql_orders_ties_by_the_full_declared_key(income_scatter_ties_mart):
+    """Runs the shared SQL file directly (not the `income_scatter()` Python
+    wrapper, which regroups rows by citizenship code and would hide the very
+    ordering this test exists to check): no two rows may share the complete
+    (income, region, code) key, and rows must already come back in that
+    order.
+    """
+    rows = q._query(q.load_sql("income_scatter"), ["2023"])
+    keys = [(r["income"], r["region"], r["code"]) for r in rows]
+    assert len(set(keys)) == len(keys), "fixture key isn't unique; test can't discriminate"
+    assert keys == sorted(keys)
+
+
 # ------------------------------------------------------------------ climate
 
 
 def test_climate_not_ready_without_a_snapshot(missing_db):
     assert q.climate_ready() is False
+    assert q.climate_region_ready() is False
     assert q.climate_cities() == []
     assert q.climate_annual_series("Roma") == []
     assert q.warming_rate_ranking() == []
+
+
+def test_climate_region_ready_true_once_the_dbt_build_runs(climate_db):
+    assert q.climate_ready() is True
+    assert q.climate_region_ready() is True
+
+
+def test_climate_region_ready_false_on_an_annual_only_snapshot(annual_only_climate_mart):
+    """The exact shape a pre-region-mart snapshot has: mart_climate_annual
+    exists, mart_climate_region does not. `climate_ready()` alone (the old
+    gate) cannot see this; `climate_region_ready()` is the new check
+    ClimateState.mart_ready needs now that the default scope is Italia.
+    """
+    assert q.climate_ready() is True
+    assert q.climate_region_ready() is False
 
 
 def test_climate_cities_are_the_sample_capitals(climate_db):
@@ -536,6 +745,95 @@ def test_warming_rate_ranking_is_sorted_descending(climate_db):
     assert values == sorted(values, reverse=True)
 
 
+@pytest.fixture
+def warming_rate_ties_mart(sample_db):
+    """mart_climate_annual with two 3-way warming-rate ties, cities inserted
+    in an order that is NOT alphabetical.
+
+    Each group's cities share an IDENTICAL t_mean sequence over the same 12
+    years, so `regr_slope` ties EXACTLY, not merely after rounding — this is
+    the confirmed-biting site (see the measured 8-orderings-in-8-processes
+    defect at 0.36/0.31 in the real climate snapshot); this fixture pins the
+    same shape without needing a dbt build.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    years = list(range(2000, 2012))  # 12 years >= the HAVING COUNT(*) >= 10 floor
+
+    def city_rows(city: str, start_temp: float, step: float) -> list[dict]:
+        return [
+            {
+                "province_code": f"IT{abs(hash((city, i))) % 1000:03d}",
+                "province_name": city,
+                "capital_city": city,
+                "region_code": "ITZ9",
+                "region_name": "Testregion",
+                "year": str(year),
+                "t_mean": start_temp + step * i,
+                "t_min_mean": start_temp + step * i - 5.0,
+                "t_max_mean": start_temp + step * i + 5.0,
+                "days_observed": 365,
+                "anomaly_1981_2010": 0.0,
+            }
+            for i, year in enumerate(years)
+        ]
+
+    rows = []
+    # Fast-warming tie group, inserted zebra -> mango -> kiwi.
+    for city in ("Zebra City", "Mango City", "Kiwi City"):
+        rows += city_rows(city, 10.0, 0.5)
+    # Slow-warming tie group, inserted delta -> charlie -> bravo.
+    for city in ("Delta City", "Charlie City", "Bravo City"):
+        rows += city_rows(city, 10.0, 0.1)
+    pl.DataFrame(rows).write_parquet(marts / "mart_climate_annual.parquet")
+    return marts
+
+
+def test_warming_rate_ranking_orders_ties_by_the_full_declared_key(warming_rate_ties_mart):
+    """Same guard as mart_breakdown's and region_rate_ranking's: no two rows
+    may share the complete (value, name) key, and rows must already come
+    back in that order.
+    """
+    rows = q.warming_rate_ranking(top_n=10)
+    keys = [(r["value"], r["name"]) for r in rows]
+    assert len(set(keys)) == len(keys), "fixture key isn't unique; test can't discriminate"
+    assert keys == sorted(keys, key=lambda k: (-k[0], k[1]))
+
+
+def test_warming_rate_ranking_is_deterministic_across_processes(climate_db):
+    """Regression for the exact defect reported against this function: 8
+    separate processes returned 8 distinct orderings over the real climate
+    snapshot, with 5-wide tie groups at 0.36 and 0.31.
+
+    A single process — even a fresh one — can get lucky and land on the same
+    answer twice; `_query`'s result cache (see its docstring) would also
+    paper over the bug if this called the function twice in-process instead
+    of spawning genuinely separate interpreters. Each subprocess points a
+    brand-new process at the same on-disk snapshot `climate_db` already
+    built, so this only pays for the interpreter + query cost, not another
+    dbt build.
+    """
+    script = (
+        "from pathlib import Path\n"
+        "from italy_dashboard import queries as q\n"
+        f"q.DATA_DIR = Path({str(climate_db)!r})\n"
+        f"q.MARTS_DIR = Path({str(climate_db)!r}) / 'marts'\n"
+        "rows = q.warming_rate_ranking(top_n=20)\n"
+        "print(','.join(r['name'] for r in rows))\n"
+    )
+    orderings = set()
+    for _ in range(6):
+        proc = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        )
+        orderings.add(proc.stdout.strip())
+    assert len(orderings) == 1, f"non-deterministic ordering across processes: {orderings}"
+
+
 def test_threshold_days_are_non_negative_integers(climate_db):
     rows = q.climate_threshold_days("Palermo")
     assert rows
@@ -549,30 +847,39 @@ def test_month_heatmap_has_twelve_month_columns(climate_db):
     assert {"period", *[f"m{i}" for i in range(1, 13)]} == set(rows[0])
 
 
+DISTRIBUTION_FIXTURE_YEARS = [
+    # Warming by construction: the split lands between 1970 and 2000, so the
+    # early years occupy buckets 20/22/24 and the late years 26/28/30, with no
+    # bucket shared. That disjointness is what the assertions below key on.
+    (1960, 20.0),
+    (1965, 22.0),
+    (1970, 24.0),
+    (2000, 26.0),
+    (2010, 28.0),
+    (2020, 30.0),
+]
+
+
 @pytest.fixture
 def climate_daily_mart(sample_db):
     """Minimal mart_climate_daily.parquet spanning both distribution windows.
 
     climate_db's synthetic weather series only covers 1981-2024 (see
-    ingestion.sample_data.WEATHER_YEARS), which has ZERO overlap with
-    EARLY_WINDOW (1951-1980). That makes climate_distribution("Torino")
-    legitimately return [] against climate_db: the same short-series
-    limitation already documented for the anomaly columns, not a bug to
-    paper over. Real ERA5 data starts in 1950 and covers both windows.
+    ingestion.sample_data.WEATHER_YEARS). That used to have ZERO overlap with a
+    hardcoded early window of 1951-1980; now that the windows are derived per
+    city from the record itself, a short series splits inside its own span
+    instead of returning []. This fixture stays anyway, because it pins the
+    bucketing/normalization logic to known values (bypassing dbt, like
+    crime_mart/rates_mart above) rather than to whatever the sample generator
+    happens to emit.
 
-    This fixture supplies rows in both windows directly (bypassing dbt, like
-    crime_mart/rates_mart above) so the bucketing/normalization logic itself
-    is still exercised by a real test.
+    Every year is written FULL (365 days at one temperature). Windows are
+    derived only from years with at least MIN_DAYS_FOR_A_FULL_YEAR days, so a
+    one-row-per-year fixture would produce no complete years and no windows at
+    all — the same rule that keeps a partial running year out of the real chart.
     """
     marts = sample_db / "marts"
     marts.mkdir(exist_ok=True)
-    rows = []
-    # early window (1951-1980): cooler days -> lower buckets
-    for year, t_max in [(1960, 20.0), (1965, 22.0), (1970, 24.0)]:
-        rows.append((year, t_max))
-    # late window (1996-2025): warmer days -> higher buckets
-    for year, t_max in [(2000, 26.0), (2010, 28.0), (2020, 30.0)]:
-        rows.append((year, t_max))
     pl.DataFrame(
         [
             {
@@ -581,14 +888,15 @@ def climate_daily_mart(sample_db):
                 "capital_city": "Torino",
                 "region_code": "ITC1",
                 "region_name": "Piemonte",
-                "obs_date": f"{year}-07-15",
+                "obs_date": date(year, 1, 1) + timedelta(days=offset),
                 "year": str(year),
-                "month": 7,
+                "month": (date(year, 1, 1) + timedelta(days=offset)).month,
                 "t_min": t_max - 10.0,
                 "t_mean": t_max - 5.0,
                 "t_max": t_max,
             }
-            for year, t_max in rows
+            for year, t_max in DISTRIBUTION_FIXTURE_YEARS
+            for offset in range(365)
         ]
     ).write_parquet(marts / "mart_climate_daily.parquet")
     return marts
@@ -602,6 +910,55 @@ def test_distribution_buckets_are_ordered_and_comparable(climate_daily_mart):
     # early-window days landed in the cooler buckets, late-window in the
     # warmer ones: each row is 100% one side, 0% the other.
     assert all((r["early"] > 0) != (r["late"] > 0) for r in rows)
+
+
+def test_distribution_windows_split_the_record_with_no_gap(climate_daily_mart):
+    """The two windows must be adjacent and cover every complete year.
+
+    This is the whole point of deriving them: a gap between the windows reads
+    to a viewer as missing data, and an overlap would double-count years.
+    """
+    windows = q.climate_distribution_windows("Torino")
+    assert windows is not None
+    early_lo, early_hi, late_lo, late_hi = windows
+    years = [year for year, _ in DISTRIBUTION_FIXTURE_YEARS]
+    assert (early_lo, late_hi) == (min(years), max(years))
+    assert late_lo == early_hi + 1  # adjacent: no gap, no overlap
+    assert early_lo <= early_hi  # neither window can come out empty
+    assert late_lo <= late_hi
+    assert all(early_lo <= year <= late_hi for year in years)
+
+
+def test_distribution_windows_exclude_a_partial_trailing_year(climate_daily_mart):
+    """A year holding only its summer would drag its window warm.
+
+    Written as a REAL partial year appended to the fixture, because the failure
+    it guards against is arithmetic, not a branch: 200 hot days averaged
+    against 365 balanced ones shifts the late curve with nothing looking wrong.
+    """
+    existing = pl.read_parquet(climate_daily_mart / "mart_climate_daily.parquet")
+    partial = (
+        existing.filter(pl.col("year") == "2020")
+        .head(200)
+        .with_columns(
+            pl.lit("2026").alias("year"),
+            pl.col("obs_date").dt.offset_by("6y"),
+        )
+    )
+    pl.concat([existing, partial]).write_parquet(climate_daily_mart / "mart_climate_daily.parquet")
+    windows = q.climate_distribution_windows("Torino")
+    assert windows is not None
+    assert windows[3] == 2020  # late_hi, not the 2026 stub
+
+
+def test_distribution_windows_are_none_below_two_complete_years(climate_daily_mart):
+    """One year cannot be split in two, and must not be faked into a comparison."""
+    existing = pl.read_parquet(climate_daily_mart / "mart_climate_daily.parquet")
+    existing.filter(pl.col("year") == "1960").write_parquet(
+        climate_daily_mart / "mart_climate_daily.parquet"
+    )
+    assert q.climate_distribution_windows("Torino") is None
+    assert q.climate_distribution("Torino") == []
 
 
 def test_crime_climate_scatter_returns_both_views(climate_db):
@@ -698,41 +1055,58 @@ def partial_year_annual_mart(sample_db):
     is exactly zero. The partial year is 6 C warmer with 210 days of data,
     which is what a January-to-August year looks like on the real feed (the
     fetch always runs to today minus 7 days).
+
+    The threshold-day counts carry the same shape and are what make the partial
+    year visibly wrong rather than merely warm: a year that stops in August has
+    had all of its summer and none of the following winter, so hot days spike
+    and frost days collapse. `mart_climate_region` is written alongside from the
+    same numbers (one province, so region == national == the province), because
+    the region/Italia scope reaches those counts through a different query.
     """
     marts = sample_db / "marts"
     marts.mkdir(exist_ok=True)
-    rows = [
-        {
+
+    def annual(year: int, t_mean: float, days: int, hot: int, frost: int) -> dict:
+        return {
             "province_code": "IT999",
             "province_name": "Testville",
             "capital_city": "Testville",
             "region_code": "ITZ9",
             "region_name": "Testregion",
             "year": str(year),
-            "t_mean": 15.0,
-            "t_min_mean": 10.0,
-            "t_max_mean": 20.0,
-            "days_observed": 365,
-            "anomaly_1981_2010": 0.0,
+            "t_mean": t_mean,
+            "t_min_mean": t_mean - 5.0,
+            "t_max_mean": t_mean + 5.0,
+            "hot_days": hot,
+            "tropical_nights": hot,
+            "frost_days": frost,
+            "days_observed": days,
+            "anomaly_1981_2010": t_mean - 15.0,
         }
-        for year in range(2010, 2022)
-    ]
-    rows.append(
-        {
-            "province_code": "IT999",
-            "province_name": "Testville",
-            "capital_city": "Testville",
-            "region_code": "ITZ9",
-            "region_name": "Testregion",
-            "year": "2022",
-            "t_mean": 21.0,
-            "t_min_mean": 16.0,
-            "t_max_mean": 26.0,
-            "days_observed": 210,
-            "anomaly_1981_2010": 6.0,
-        }
-    )
+
+    rows = [annual(year, 15.0, 365, 20, 30) for year in range(2010, 2022)]
+    rows.append(annual(2022, 21.0, 210, 45, 8))
     pl.DataFrame(rows).write_parquet(marts / "mart_climate_annual.parquet")
+
+    pl.DataFrame(
+        [
+            {
+                "region_code": code,
+                "region_name": name,
+                "year": row["year"],
+                "t_mean": row["t_mean"],
+                "t_min_mean": row["t_min_mean"],
+                "t_max_mean": row["t_max_mean"],
+                "hot_days": float(row["hot_days"]),
+                "tropical_nights": float(row["tropical_nights"]),
+                "frost_days": float(row["frost_days"]),
+                "provinces_covered": 1,
+                "anomaly_1981_2010": row["anomaly_1981_2010"],
+            }
+            for row in rows
+            for code, name in (("ITZ9", "Testregion"), ("IT", q.ITALIA))
+        ]
+    ).write_parquet(marts / "mart_climate_region.parquet")
     return marts
 
 
@@ -752,6 +1126,45 @@ def test_partial_years_are_excluded_from_every_climate_series(partial_year_annua
 
     ranking = q.warming_rate_ranking()
     assert ranking == [{"name": "Testville", "value": 0.0}]  # flat, not warming
+
+
+@pytest.mark.parametrize(
+    ("label", "rows_fn"),
+    [
+        ("city", lambda: q.climate_threshold_days("Testville")),
+        ("region", lambda: q.climate_region_threshold_days("Testregion")),
+        ("italia", lambda: q.climate_region_threshold_days(q.ITALIA)),
+    ],
+)
+def test_threshold_days_stop_at_the_last_complete_year(
+    partial_year_annual_mart, label: str, rows_fn
+):
+    """The threshold chart must end where its two sibling charts end.
+
+    It was the only annual climate series without the guard, so on the default
+    landing view the running year plotted as the highest hot-days value in the
+    whole series and a third down on frost days, from 222 of 365 days, next to
+    two cards that stop at the last complete year by design. A count is not
+    merely noisy when the year is unfinished: it is missing an entire season.
+
+    All three scopes are checked because they are three different queries (the
+    city one filters `mart_climate_annual` directly, the other two join
+    completeness back from it through `_region_completeness_cte`), and the
+    region/Italia scope is the DEFAULT one.
+    """
+    periods = [r["period"] for r in rows_fn()]
+    assert periods, f"{label} scope returned nothing at all"
+    assert "2022" not in periods, f"{label} scope plots the unfinished year: {periods}"
+    assert max(periods) == "2021"
+    # The excluded year really is in the mart, and really is the extreme point:
+    # without that, this test would pass against data that simply stops in 2021.
+    unguarded = q._query(
+        "SELECT year, hot_days, frost_days FROM mart_climate_annual "
+        "WHERE capital_city = 'Testville' ORDER BY year DESC LIMIT 1"
+    )
+    assert unguarded[0]["year"] == "2022"
+    assert unguarded[0]["hot_days"] > max(r["hot_days"] for r in rows_fn())
+    assert unguarded[0]["frost_days"] < min(r["frost_days"] for r in rows_fn())
 
 
 def test_climate_stripes_carry_a_diverging_fill(climate_db):
@@ -775,6 +1188,162 @@ def test_climate_stripes_grid_returns_one_entry_per_city(climate_db):
     assert len(grid) <= 6
     assert {"city", "rows"} == set(grid[0])
     assert all(r["fill"].startswith("var(--div-") for r in grid[0]["rows"])
+
+
+# ---------------------------------------- climate: region / Italia scope
+#
+# mart_climate_region carries 'IT' ('Italia') as just another region_code
+# (see dbt/models/marts/mart_climate_region.sql's own header), so these
+# functions take a plain region_name and never special-case Italia in SQL.
+# The synthetic climate_db snapshot's 20 capitals (ingestion.sample_data.
+# SAMPLE_CAPITALS) span 12 real regions; Piemonte (Torino + Cuneo) is used
+# below as a region with more than one member capital.
+
+
+def test_climate_region_options_starts_with_italia(climate_db):
+    regions = q.climate_region_options()
+    assert regions[0] == q.ITALIA
+    assert "Piemonte" in regions
+    assert "IT" not in regions  # the code, not the name, must never leak here
+    assert regions[1:] == sorted(regions[1:])
+
+
+def test_climate_city_options_cascade_from_region(climate_db):
+    all_cities = q.climate_city_options(q.ITALIA)
+    assert all_cities[0] == q.ALL
+    assert len(all_cities) == 1 + len(q.climate_cities())
+
+    piemonte_cities = q.climate_city_options("Piemonte")
+    assert piemonte_cities == [q.ALL, "Cuneo", "Torino"]
+
+
+def test_climate_region_annual_series_has_min_mean_max_per_year(climate_db):
+    rows = q.climate_region_annual_series("Piemonte")
+    assert rows
+    assert {"period", "t_mean", "t_min", "t_max", "t_band", "t_rolling"} == set(rows[0])
+    assert [r["period"] for r in rows] == sorted(r["period"] for r in rows)
+    assert all(r["t_min"] <= r["t_mean"] <= r["t_max"] for r in rows)
+
+
+def test_climate_region_annual_series_italia_is_the_national_row(climate_db):
+    rows = q.climate_region_annual_series(q.ITALIA)
+    assert rows, "the national 'IT' row must be reachable through region_name = 'Italia'"
+
+
+def test_climate_region_unknown_name_returns_empty_not_an_error(climate_db):
+    assert q.climate_region_annual_series("Nonexistentia") == []
+    assert q.climate_region_stripes("Nonexistentia") == []
+    assert q.climate_region_threshold_days("Nonexistentia") == []
+
+
+def test_climate_region_stripes_carry_a_diverging_fill(climate_db):
+    rows = q.climate_region_stripes("Piemonte")
+    if not rows:
+        pytest.skip("no anomalies in this fixture: the CLINO guard nulls them")
+    assert {"period", "anomaly", "fill"} == set(rows[0])
+    for r in rows:
+        assert r["fill"].startswith("var(--div-")
+
+
+def test_climate_region_threshold_days_are_non_negative(climate_db):
+    rows = q.climate_region_threshold_days("Piemonte")
+    assert rows
+    assert {"period", "hot_days", "tropical_nights", "frost_days"} == set(rows[0])
+    assert all(r["hot_days"] >= 0 and r["frost_days"] >= 0 for r in rows)
+
+
+def test_climate_region_functions_degrade_gracefully_without_a_snapshot(missing_db):
+    assert q.climate_region_options() == [q.ITALIA]
+    assert q.climate_city_options() == [q.ALL]
+    assert q.climate_region_annual_series(q.ITALIA) == []
+    assert q.climate_region_stripes(q.ITALIA) == []
+    assert q.climate_region_threshold_days(q.ITALIA) == []
+
+
+@pytest.fixture
+def partial_year_region_mart(sample_db):
+    """A region (and the 'IT' row) with 12 complete years plus one partial one.
+
+    mart_climate_region carries no `days_observed` of its own — it is already
+    an aggregate over capitals, unlike mart_climate_annual, which tracks it
+    per province (see mart_climate_region.sql). The region-scope completeness
+    guard is derived by joining back to mart_climate_annual, so this fixture
+    populates BOTH marts, mirroring partial_year_annual_mart above exactly.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+
+    def annual_row(year: str, t_mean: float, days: int, anomaly: float) -> dict:
+        return {
+            "province_code": "IT999",
+            "province_name": "Testville",
+            "capital_city": "Testville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": year,
+            "t_mean": t_mean,
+            "t_min_mean": t_mean - 5.0,
+            "t_max_mean": t_mean + 5.0,
+            "days_observed": days,
+            "anomaly_1981_2010": anomaly,
+        }
+
+    annual_rows = [annual_row(str(year), 15.0, 365, 0.0) for year in range(2010, 2022)]
+    annual_rows.append(annual_row("2022", 21.0, 210, 6.0))
+    pl.DataFrame(annual_rows).write_parquet(marts / "mart_climate_annual.parquet")
+
+    def region_row(region_code: str, region_name: str, year: str, t_mean: float, anomaly) -> dict:
+        return {
+            "region_code": region_code,
+            "region_name": region_name,
+            "year": year,
+            "t_mean": t_mean,
+            "t_min_mean": t_mean - 5.0,
+            "t_max_mean": t_mean + 5.0,
+            "hot_days": 0.0,
+            "tropical_nights": 0.0,
+            "frost_days": 0.0,
+            "provinces_covered": 1,
+            "anomaly_1971_2000": None,
+            "anomaly_1981_2010": anomaly,
+        }
+
+    region_rows = [
+        region_row(code, name, str(year), 15.0, 0.0)
+        for code, name in (("ITZ9", "Testregion"), ("IT", "Italia"))
+        for year in range(2010, 2022)
+    ]
+    region_rows += [
+        region_row("ITZ9", "Testregion", "2022", 21.0, 6.0),
+        region_row("IT", "Italia", "2022", 21.0, 6.0),
+    ]
+    pl.DataFrame(region_rows).write_parquet(marts / "mart_climate_region.parquet")
+    return marts
+
+
+def test_partial_years_are_excluded_from_region_scope_too(partial_year_region_mart):
+    """The city-scope guarantee (test_partial_years_are_excluded_from_every_
+    climate_series above) must hold at region and Italia scope as well, even
+    though mart_climate_region has no days_observed column of its own.
+    """
+    for region in ("Testregion", q.ITALIA):
+        years = [r["period"] for r in q.climate_region_annual_series(region)]
+        assert "2022" not in years, region
+        assert len(years) == 12, region
+
+        stripe_years = [r["period"] for r in q.climate_region_stripes(region)]
+        assert "2022" not in stripe_years, region
+
+
+def test_distribution_is_empty_at_region_and_italy_scope(climate_daily_mart):
+    """mart_climate_region has no daily rows (see queries.climate_distribution's
+    docstring): a region or Italia name never matches a capital_city, so the
+    card's existing empty state fires instead of a crash or invented data.
+    """
+    assert q.climate_distribution_windows("Piemonte") is None
+    assert q.climate_distribution("Piemonte") == []
+    assert q.climate_distribution_windows(q.ITALIA) is None
+    assert q.climate_distribution(q.ITALIA) == []
 
 
 # ------------------------------------------------------- climate coverage

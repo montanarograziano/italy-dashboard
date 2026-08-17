@@ -100,6 +100,25 @@ silently shipping an empty dashboard. **A rebuild is how you publish updated
 data**: there is no scheduled refresh or fetch-on-deploy step; redeploying
 without rebuilding just redeploys the same snapshot.
 
+## What else the image has to carry
+
+Data is not the only thing read at runtime rather than imported. The query
+layer resolves `shared/queries/<name>.sql` from disk on every call (the same
+files the static frontend imports, see
+[Architecture](02-architecture.md)) and `dbt/seeds/province_capitals.csv` for
+the coverage denominators. A file like that is invisible to the entire test
+suite when it is missing from the image: the code imports fine and the
+container still raises `FileNotFoundError` on the first query. It happened
+once — `shared/` was extracted out of `queries.py` and the Dockerfile was not
+updated, which would have left three pages stuck on the loading placeholder in
+production.
+
+`tests/unit/test_deployment_paths.py` now derives the required set from the
+code's own `Path` constants and fails if any of them stops being copied (or
+gets excluded by `.dockerignore`), so the next extraction is caught by the
+suite rather than by a deploy. **If you add a runtime-read file outside
+`italy_dashboard/`, add a `COPY` for it** — the test will tell you.
+
 ## The dashboard currently ships partial weather coverage
 
 The temperature backfill is still running as of this writing: about 40 of

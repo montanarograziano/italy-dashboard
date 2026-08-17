@@ -147,6 +147,20 @@ docker-build:
 docker-serve: docker-build
     docker run --rm -p 10000:10000 italy-dashboard
 
+# Regenerate the shared artifacts the static frontend consumes (palette, conformance)
+generate-shared:
+    uv run python scripts/generate_palette.py
+    uv run python scripts/generate_conformance_expected.py
+
+# Type-check the static frontend (Vite/esbuild strips types without checking them)
+typecheck-web:
+    cd web && npm run typecheck
+
+# Run the Python-versus-TypeScript conformance suite (needs `cd web && npm install`).
+# Includes `typecheck-web` as one of its tests, so a type error fails here too.
+test-conformance:
+    uv run pytest tests/browser/test_conformance.py -m browser -v
+
 # Remove caches and build artifacts (keeps data/ and .venv)
 clean:
     rm -rf .web .states .pytest_cache .ruff_cache

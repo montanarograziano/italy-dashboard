@@ -53,6 +53,19 @@ def _coverage_text(
     )
 
 
+def _format_translation(lang: str, key: str, /, **values: str) -> str:
+    """One translated template filled in for a language.
+
+    Same constraint as `_coverage_text` above: Reflex Vars cannot be
+    `.format()`-ed, so every templated label has to resolve in a backend
+    `@rx.var` over plain values, never in a page's render tree. Extra `values`
+    are tolerated (`str.format` ignores what a template does not reference), so
+    callers can pass one bundle of substitutions to several related keys.
+    """
+    table = IT if lang == "it" else EN
+    return table[key].format(**values)
+
+
 class AppState(rx.State):
     """Shared: language, data availability, region list.
 
@@ -514,10 +527,22 @@ class EconomyState(AppState):
 
 
 class ClimateState(AppState):
-    """Climate explorer over the mart_climate_* marts."""
+    """Climate explorer over the mart_climate_* marts, at three scopes.
 
+    `region` and `city` cascade exactly like CrimeState's region/province
+    (see queries.mart_province_options): picking a city narrows to CITY
+    scope; leaving `city` at `q.ALL` shows whichever `region` is selected —
+    `q.ITALIA` by default, the broadest level of the hierarchy. Unlike the
+    crime marts' "All" dimension handling, Italia needs no special-case SQL:
+    mart_climate_region already carries it as a plain region row (see
+    queries.ITALIA), so `region` alone decides between city-scope queries
+    (mart_climate_annual) and region-scope queries (mart_climate_region).
+    """
+
+    region_options: list[str] = []
+    region: str = q.ITALIA
     city_options: list[str] = []
-    city: str = ""
+    city: str = q.ALL
     annual: list[Row] = []
     stripes: list[Row] = []
     ranking: list[Row] = []
@@ -537,6 +562,35 @@ class ClimateState(AppState):
     year_start: str = "—"
     year_end: str = "—"
 
+    # Distribution-card windows, derived per city (see
+    # queries.climate_distribution_windows). Held as strings because they only
+    # ever reach the UI as label text, and "—" reads as "this city has no
+    # drawable split" in a way that a 0 would not.
+    dist_early_lo: str = "—"
+    dist_early_hi: str = "—"
+    dist_late_lo: str = "—"
+    dist_late_hi: str = "—"
+
+    def _dist_window_values(self) -> dict[str, str]:
+        return {
+            "early_lo": self.dist_early_lo,
+            "early_hi": self.dist_early_hi,
+            "late_lo": self.dist_late_lo,
+            "late_hi": self.dist_late_hi,
+        }
+
+    @rx.var
+    def distribution_sub(self) -> str:
+        return _format_translation(self.lang, "distribution_sub", **self._dist_window_values())
+
+    @rx.var
+    def dist_early_label(self) -> str:
+        return _format_translation(self.lang, "dist_early", **self._dist_window_values())
+
+    @rx.var
+    def dist_late_label(self) -> str:
+        return _format_translation(self.lang, "dist_late", **self._dist_window_values())
+
     @rx.var
     def coverage_text(self) -> str:
         return _coverage_text(
@@ -549,10 +603,82 @@ class ClimateState(AppState):
             self.year_end,
         )
 
+    @rx.var
+    def is_city_scope(self) -> bool:
+        """Whether a single city, rather than a region or Italia, is
+        selected. Used by the distribution card (city-only: see
+        queries.climate_distribution_windows's docstring) to show an
+        explanatory line instead of its em-dash placeholder when the scope
+        is too broad for a daily histogram to exist at all.
+        """
+        return self.city != q.ALL
+
+    @rx.var
+    def is_national_scope(self) -> bool:
+        """Whether the cards below are showing the Italia aggregate.
+
+        The one scope whose composition needs a caveat: it is an unweighted
+        mean of whichever capitals the backfill has reached, and the backfill
+        goes in province-code order, i.e. from the north. See
+        `climate_coverage_note` in translations.py.
+        """
+        return self.region == q.ITALIA and not self.is_city_scope
+
+    @rx.var
+    def highlighted_city(self) -> str:
+        """The city to call out in the cross-city ranking/grid, or "" (never
+        a real city name) when nothing should be highlighted.
+
+        Only CITY scope has a single entity to point at; region and Italia
+        scope each select many cities at once, so nothing is emphasised
+        there — see `components.h_bar_chart`/`small_multiples`'s own
+        docstrings for how an empty string disables their highlight.
+        """
+        return self.city if self.is_city_scope else ""
+
+    @rx.var
+    def city_outside_ranking_note(self) -> str:
+        """ "{city} is not among the top 20..." when a city is selected but
+        absent from `ranking`, else "" (nothing to say).
+
+        `climate_stripes_grid`'s top 12 is a strict subset of `ranking`'s top
+        20 (both order by the same warming rate), so a city outside the
+        ranking entirely gets NO visual acknowledgement anywhere on the page:
+        neither the ranking's outline nor the grid's ring. Without this note
+        that reads as a broken feature; with it, it reads as "not in the top
+        20" — a real, distinguishable state, not a bug.
+        """
+        if not self.is_city_scope:
+            return ""
+        if any(r["name"] == self.city for r in self.ranking):
+            return ""
+        return _format_translation(self.lang, "city_outside_ranking", city=self.city)
+
+    @rx.var
+    def selected_scope_title(self) -> str:
+        """The translated "Selected scope: {name}" heading, for whichever
+        entity the "selected scope" cards below are showing: the city if one
+        is picked, else the region (Italia by default). Templated because
+        the entity name is a runtime value — see `_format_translation`'s
+        docstring for why this cannot be a plain f-string over a Reflex Var.
+        """
+        name = self.city if self.city != q.ALL else self.region
+        return _format_translation(self.lang, "selected_scope_title", name=name)
+
     @rx.event
     def load(self):
         self.load_shared()
-        self.mart_ready = q.climate_ready()
+        # BOTH marts, not just climate_ready(): the default scope is now
+        # Italia (region scope), so an older snapshot that has
+        # mart_climate_annual but predates mart_climate_region would
+        # otherwise report ready, collapse region_options to just ["Italia"],
+        # and silently render every "Selected scope" card empty with no
+        # callout — the only way out being to pick a city by hand. Gating on
+        # both is an all-or-nothing trade-off (it also hides the four
+        # city-capable cards on that same old snapshot, even though they
+        # would work), accepted deliberately: a page that claims ready and
+        # renders nothing is worse than one that honestly says it isn't.
+        self.mart_ready = q.climate_ready() and q.climate_region_ready()
         coverage = q.climate_coverage()
         self.capitals_included = coverage["capitals"]
         self.capitals_total = coverage["capitals_total"]
@@ -561,11 +687,12 @@ class ClimateState(AppState):
         self.year_start = coverage["year_start"]
         self.year_end = coverage["year_end"]
         if self.mart_ready:
-            self.city_options = q.climate_cities()
-            # Roma is the default when present: a familiar reference point
-            # beats an alphabetically-first city nobody has intuitions about.
+            self.region_options = q.climate_region_options()
+            if self.region not in self.region_options:
+                self.region = q.ITALIA
+            self.city_options = q.climate_city_options(self.region)
             if self.city not in self.city_options:
-                self.city = "Roma" if "Roma" in self.city_options else self.city_options[0]
+                self.city = q.ALL
             self.ranking = q.warming_rate_ranking(top_n=20)
             # `climate_stripes_grid` returns `list[Row]` (the flat, broadly-
             # used alias); `GridItem` narrows the shape for Reflex's benefit
@@ -577,15 +704,44 @@ class ClimateState(AppState):
         self.has_loaded = True
 
     @rx.event
+    def set_region(self, value: str):
+        self.region = value
+        self.city = q.ALL  # city cascades from region: broaden back out
+        self.city_options = q.climate_city_options(value)
+        self._refresh()
+
+    @rx.event
     def set_city(self, value: str):
         self.city = value
         self._refresh()
 
     def _refresh(self):
-        self.annual = q.climate_annual_series(self.city)
-        self.stripes = q.climate_stripes(self.city)
-        self.thresholds = q.climate_threshold_days(self.city)
-        self.distribution = q.climate_distribution(self.city)
+        if self.city != q.ALL:
+            self.annual = q.climate_annual_series(self.city)
+            self.stripes = q.climate_stripes(self.city)
+            self.thresholds = q.climate_threshold_days(self.city)
+            # Resolved once and passed down: the card labels and the
+            # histogram must describe the SAME two windows, and a second
+            # lookup is a second chance for them to disagree.
+            windows = q.climate_distribution_windows(self.city)
+            self.distribution = q.climate_distribution(self.city, windows)
+            self.dist_early_lo, self.dist_early_hi, self.dist_late_lo, self.dist_late_hi = (
+                [str(year) for year in windows] if windows else ["—"] * 4
+            )
+        else:
+            self.annual = q.climate_region_annual_series(self.region)
+            self.stripes = q.climate_region_stripes(self.region)
+            self.thresholds = q.climate_region_threshold_days(self.region)
+            # Region/Italia scope has no drawable distribution:
+            # mart_climate_region holds yearly aggregates only, never the
+            # daily readings the histogram needs (see
+            # queries.climate_distribution's docstring). This sets the
+            # card's EXISTING empty state (the same one a city with under
+            # two complete years already gets) rather than querying with a
+            # region name, which would just silently reach the same empty
+            # result through capital_city matching nothing.
+            self.distribution = []
+            self.dist_early_lo = self.dist_early_hi = self.dist_late_lo = self.dist_late_hi = "—"
 
 
 class ClimateCrimeState(AppState):
