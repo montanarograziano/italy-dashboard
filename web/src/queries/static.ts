@@ -1,7 +1,14 @@
+import climateDistributionSql from "../../../shared/queries/climate_distribution.sql?raw";
+import climateDistributionWindowsSql from "../../../shared/queries/climate_distribution_windows.sql?raw";
+import incomeCorrelationsSql from "../../../shared/queries/income_correlations.sql?raw";
 import inflationSeriesSql from "../../../shared/queries/inflation_series.sql?raw";
 import incomeYearsSql from "../../../shared/queries/income_years.sql?raw";
 import incomeScatterSql from "../../../shared/queries/income_scatter.sql?raw";
 import { runSql } from "../db";
+
+// queries.py's MIN_DAYS_FOR_A_FULL_YEAR: a year needs this many observed days
+// before climate_distribution_windows.sql counts it as complete.
+const MIN_DAYS_FOR_A_FULL_YEAR = 360;
 
 // Matches italy_dashboard.queries.inflation_series
 export async function inflationSeries() {
@@ -23,6 +30,29 @@ export async function incomeScatter(year: string) {
     const code = String(r.code);
     if (code in out) {
       out[code]!.push({ income: r.income, rate: r.rate, region: r.region });
+    }
+  }
+  return out;
+}
+
+// `n:+.2f` the way Python's str.format does: a `-` for any negative value
+// (including one that rounds to zero, e.g. -0.001 at 2 decimals -> "-0.00")
+// and a `+` otherwise.
+function signedFixed(n: number, decimals: number): string {
+  const negative = n < 0 || Object.is(n, -0);
+  const fixed = Math.abs(n).toFixed(decimals);
+  return negative ? `-${fixed}` : `+${fixed}`;
+}
+
+// Matches italy_dashboard.queries.income_correlations. Economy.ts does not
+// exist yet (Task 3 creates it); this lives beside incomeScatter until then.
+export async function incomeCorrelations(year: string): Promise<Record<string, string>> {
+  const out: Record<string, string> = { ITL: "—", FRG: "—" };
+  const rows = await runSql(incomeCorrelationsSql, [year]);
+  for (const r of rows) {
+    const code = String(r.code);
+    if (code in out && r.r !== null && r.r !== undefined && Number(r.n) >= 5) {
+      out[code] = `r = ${signedFixed(Number(r.r), 2)} (n=${Number(r.n)})`;
     }
   }
   return out;
@@ -69,4 +99,43 @@ export async function climateAnnualSeries(city: string) {
      ORDER BY CAST(period AS INTEGER)`,
     [city],
   );
+}
+
+// Matches italy_dashboard.queries.climate_distribution_windows: (early_lo,
+// early_hi, late_lo, late_hi), or `null` when `city` has fewer than two
+// complete years (CITY SCOPE ONLY -- a region/Italia name simply matches no
+// row and returns null, same as an empty record; see the Python docstring).
+// `null`, not `[]`: a distinct shape the conformance matrix pins directly.
+export async function climateDistributionWindows(
+  city: string,
+): Promise<[number, number, number, number] | null> {
+  const rows = await runSql(climateDistributionWindowsSql, [city, MIN_DAYS_FOR_A_FULL_YEAR]);
+  if (rows.length === 0) return null;
+  const r = rows[0]!;
+  return [Number(r.early_lo), Number(r.early_hi), Number(r.late_lo), Number(r.late_hi)];
+}
+
+// Matches italy_dashboard.queries.climate_distribution. Always resolves its
+// own windows (the Python `windows` parameter that lets a caller reuse an
+// already-fetched result is not part of this port's interface); an empty
+// windows result means the city has no drawable two-window split.
+//
+// The nine positional parameters repeat the four window bounds twice, per
+// climate_distribution.sql's header comment: once to size each window's
+// denominator, once to size each bucket's numerator.
+export async function climateDistribution(city: string) {
+  const windows = await climateDistributionWindows(city);
+  if (windows === null) return [];
+  const [earlyLo, earlyHi, lateLo, lateHi] = windows;
+  return runSql(climateDistributionSql, [
+    city,
+    earlyLo,
+    earlyHi,
+    lateLo,
+    lateHi,
+    earlyLo,
+    earlyHi,
+    lateLo,
+    lateHi,
+  ]);
 }

@@ -26,8 +26,8 @@ EXPECTED_QUERIES = {
 
 WEB_SRC = q.PROJECT_ROOT / "web" / "src"
 
-# Shared queries with no TypeScript consumer YET. Plan 1 ports four functions by
-# design, so this is expected -- but it has to be written down, because the
+# Shared queries with no TypeScript consumer YET. Empty once every shared
+# query has a TS consumer (as of plan 2) -- but the set stays here, because the
 # alternative (a "both sides reference every file" check that only ever looked
 # at Python) is documentation asserting a guarantee that does not exist.
 #
@@ -35,13 +35,7 @@ WEB_SRC = q.PROJECT_ROOT / "web" / "src"
 # typescript_side` fails if a name listed here HAS gained a TS consumer, so
 # porting a query forces the entry out; and a new file that neither side
 # consumes cannot be parked here without a deliberate edit.
-NOT_YET_CONSUMED_BY_TS = {
-    "climate_distribution",
-    "climate_distribution_windows",
-    "crime_climate_scatter",
-    "crime_climate_stats",
-    "income_correlations",
-}
+NOT_YET_CONSUMED_BY_TS: set[str] = set()
 
 
 def _sql_files() -> dict[str, str]:
