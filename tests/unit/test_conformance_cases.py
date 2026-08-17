@@ -35,9 +35,23 @@ def test_every_case_names_a_real_query_function():
 def test_the_matrix_covers_an_empty_result():
     """A query returning [] is a real state, and the easiest one to get wrong.
 
-    climate_stripes returns nothing when the CLINO coverage guard nulls every
-    anomaly, which is correct behaviour, not a bug. Both implementations must
-    agree on it.
+    Both empty cases the matrix currently carries are the same shape: an
+    unknown name matching no row (`climate_annual_unknown_city`,
+    `climate_region_annual_unknown_region`). Neither is a mistyped argument --
+    each was verified against the real snapshot to be a genuinely nonexistent
+    city/region, not one written as a region code where a display name was
+    expected (region-scope functions take `region_name`, not `region_code` --
+    see the comment above `ITALIA = "Italia"` in `italy_dashboard/queries.py`
+    -- and a code silently returns [] too, which would make an unverified
+    case here look like coverage while asserting nothing).
+
+    The spec's own named example -- `climate_stripes` returning [] when the
+    CLINO coverage guard nulls every anomaly -- is NOT covered by anything in
+    this matrix, and is not reachable on the current snapshot at all: no city
+    has annual rows with every `anomaly_1981_2010` null. That path stays
+    uncovered until a future snapshot (a wider Open-Meteo backfill, or a
+    region with no CLINO baseline) actually produces it; a fixture just for
+    this test file would need synthetic data no other test here uses.
     """
     expected = json.loads((SHARED / "expected.json").read_text())["results"]
     assert any(v == [] for v in expected.values()), (
