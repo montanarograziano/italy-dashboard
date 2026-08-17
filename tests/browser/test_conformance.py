@@ -9,14 +9,28 @@ silently ignored. A harness that quietly covers less than it claims is worse
 than no harness.
 
 Unlike the other files in this directory, this module does NOT guard its
-Playwright import with `pytest.importorskip`. This is the harness whose entire
-purpose is to prove a real divergence gets caught -- an `importorskip` would
-turn "Playwright is not installed" into a silent, green SKIP for exactly this
-test, which is the one test in the repo that must never report success
+Playwright dependency with `pytest.importorskip`. This is the harness whose
+entire purpose is to prove a real divergence gets caught -- an `importorskip`
+would turn "Playwright is not installed" into a silent, green SKIP for exactly
+this test, which is the one test in the repo that must never report success
 without having actually run. The `browser` marker (see `pytestmark` below)
 still keeps it out of the default run via `addopts` in pyproject.toml; explicit
 selection (`-m browser`, `just test-conformance`) is what asks for the real
 thing, and a missing dependency should fail loudly there, not skip quietly.
+It does that: with pytest-playwright absent, the `browser` fixture below is
+unresolvable and every test here ERRORS.
+
+The browser comes from pytest-playwright's own session-scoped `browser`
+fixture, like every sibling file in this directory, rather than from a private
+`sync_playwright()` context. That is not a style preference: the Reflex browser
+tests run first under `pytest -m browser` and leave pytest-playwright's own
+sync context open, and a second independent `sync_playwright()` start in the
+same thread trips playwright's "Sync API inside the asyncio loop" guard (see
+`conftest.py::_require_chromium`, which hit the same thing). Every test in this
+module used to ERROR in that run -- so the divergence gate was silent unless
+invoked as exactly `just test-conformance`, which is the "the gate only works
+if you type it one specific way" fragility this project has been bitten by
+before.
 """
 
 from __future__ import annotations
@@ -27,7 +41,6 @@ import time
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import sync_playwright
 
 pytestmark = pytest.mark.browser
 
@@ -72,15 +85,17 @@ def vite_server():
 
 
 @pytest.fixture(scope="module")
-def results(vite_server: str) -> dict:
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page()
+def results(vite_server: str, browser) -> dict:
+    """Every case's output, run once in the browser (see the module docstring
+    for why the browser is pytest-playwright's and not a private one).
+    """
+    page = browser.new_page()
+    try:
         page.goto(f"{vite_server}/conformance/harness.html")
         page.wait_for_function("() => typeof window.runConformance === 'function'")
-        out = page.evaluate("() => window.runConformance()")
-        browser.close()
-    return out
+        return page.evaluate("() => window.runConformance()")
+    finally:
+        page.close()
 
 
 def test_no_case_errored(results: dict):
