@@ -7,6 +7,7 @@ size and safe across Reflex's async event handlers.
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -42,33 +43,140 @@ def db_ready() -> bool:
     return bool(_parquet_files())
 
 
-def _query(sql: str, params: list | None = None) -> list[Row]:
-    """Run SQL over the local snapshot.
+# ---------------------------------------------- connection & result caching
+#
+# `_query` used to open a fresh in-memory DuckDB connection AND re-create
+# every view (data/*.parquet, data/marts/*.parquet — about 18 of them) on
+# EVERY call. One climate page load makes ~32 `_query` calls, so that was 576
+# `CREATE VIEW` statements per visit, repeated for every session. Views are
+# still created from local, relative parquet paths (never absolute ones — see
+# docs/02-architecture.md), so the snapshot still works unmodified on the
+# host, in Docker and in CI; only the "build it every time" part changes.
+#
+# One shared connection is now reused across calls; `connection.cursor()`
+# (DuckDB's documented pattern for concurrent access) hands each call its own
+# lightweight handle onto that SAME database, which is what makes reuse safe
+# under Reflex's async event handlers, which can overlap — never a bare
+# connection/cursor shared across concurrent calls.
+#
+# INVALIDATION RULE (what keeps this safe in development too): both the
+# connection's views and the query-result cache are keyed off
+# `_snapshot_fingerprint()` — the sorted (path, size, mtime) of every parquet
+# file on disk. In production the parquet snapshot is baked into the image
+# and immutable for the container's life, so the fingerprint never changes
+# and nothing ever busts. In development, `just sample` / `just transform`
+# rewrite those files in place: size and/or mtime change, the fingerprint
+# changes, and `_get_cursor` below throws away the old connection AND the
+# whole result cache before the next query runs — so a developer refreshing
+# data never keeps seeing the previous run's numbers with no obvious cause.
+_conn_lock = threading.Lock()
+_shared_con: duckdb.DuckDBPyConnection | None = None
+_shared_fingerprint: tuple[tuple[str, int, int], ...] | None = None
+_result_cache: dict[tuple[str, tuple], list[Row]] = {}
 
-    Views are created in-memory from data/*.parquet on every call, resolved
-    against THIS process's data directory — never stored with absolute paths,
-    so the same snapshot works on the host, in Docker, and in tests. A missing
-    dataset simply means its view doesn't exist; the caller gets [].
+
+def _snapshot_fingerprint() -> tuple[tuple[str, int, int], ...]:
+    """Cheap identity for "what's on disk right now": (path, size, mtime_ns)
+    per parquet file, sorted. Equal across two calls iff every file is
+    unchanged; adding, removing, or rewriting any file changes it.
+    """
+    fingerprint = []
+    for path in _parquet_files():
+        try:
+            stat = path.stat()
+        except OSError:
+            continue  # vanished between the glob and the stat: treat as absent
+        fingerprint.append((str(path), stat.st_size, stat.st_mtime_ns))
+    return tuple(fingerprint)
+
+
+def _ensure_fresh_connection() -> None:
+    """Rebuild the shared connection/views and drop the result cache if the
+    on-disk snapshot's fingerprint has changed since the last check.
+
+    MUST run, and complete, before any `_result_cache` lookup: checking the
+    cache first and only invalidating on a miss would let a stale entry from
+    a since-changed snapshot survive under an unchanged (sql, params) key —
+    exactly the "developer refreshes data, still sees old numbers" bug this
+    whole cache exists to avoid.
+    """
+    global _shared_con, _shared_fingerprint
+    fingerprint = _snapshot_fingerprint()
+    with _conn_lock:
+        if _shared_con is None or fingerprint != _shared_fingerprint:
+            if _shared_con is not None:
+                _shared_con.close()
+            _shared_con = duckdb.connect()  # in-memory
+            for parquet in _parquet_files():
+                _shared_con.execute(
+                    f"CREATE VIEW {parquet.stem} AS SELECT * FROM read_parquet('{parquet}')"
+                )
+            _shared_fingerprint = fingerprint
+            _result_cache.clear()
+
+
+def _get_cursor() -> duckdb.DuckDBPyConnection:
+    """A fresh cursor on the shared connection, rebuilding it if the snapshot changed.
+
+    Opening the connection and creating its views is the expensive,
+    one-time-per-snapshot part; handing out `cursor()` per call is what makes
+    reusing it safe when Reflex runs overlapping async event handlers.
+    """
+    _ensure_fresh_connection()
+    assert _shared_con is not None  # just (re)built above
+    return _shared_con.cursor()
+
+
+def _reset_query_cache() -> None:
+    """Test-only escape hatch: drop the shared connection and result cache.
+
+    Production code never calls this — `_get_cursor`'s fingerprint check
+    already invalidates automatically when the parquet snapshot changes. It
+    exists so tests can start from a known-empty cache instead of relying on
+    incidental fingerprint differences between fixtures' temp directories.
+    """
+    global _shared_con, _shared_fingerprint
+    if _shared_con is not None:
+        _shared_con.close()
+    _shared_con = None
+    _shared_fingerprint = None
+    _result_cache.clear()
+
+
+def _query(sql: str, params: list | None = None) -> list[Row]:
+    """Run SQL over the local snapshot, through the shared cached connection.
+
+    Views resolve against THIS process's data directory using relative paths
+    — never absolute ones — so the same snapshot works on the host, in
+    Docker, and in tests (see the caching comment above `_get_cursor`). A
+    missing dataset simply means its view doesn't exist; the caller gets [].
     """
     if not db_ready():
         return []
-    con = duckdb.connect()  # in-memory
+    params = params or []
+    _ensure_fresh_connection()  # must precede the cache lookup; see its docstring
+    cache_key = (sql, tuple(params))
+    if cache_key in _result_cache:
+        return _result_cache[cache_key]
+
+    cur = _get_cursor()
     try:
-        for parquet in _parquet_files():
-            con.execute(f"CREATE VIEW {parquet.stem} AS SELECT * FROM read_parquet('{parquet}')")
-        cur = con.execute(sql, params or [])
+        cur.execute(sql, params)
         columns = [d[0] for d in cur.description]
-        return [dict(zip(columns, row, strict=True)) for row in cur.fetchall()]
+        rows = [dict(zip(columns, row, strict=True)) for row in cur.fetchall()]
+        _result_cache[cache_key] = rows
+        return rows
     except duckdb.CatalogException:
         # A referenced view doesn't exist: that dataset simply isn't in the
-        # local snapshot (yet). Expected during partial refreshes.
+        # local snapshot (yet). Expected during partial refreshes. Not
+        # cached, so the mart being built is picked up on the very next call.
         logger.info("Dataset not in local snapshot yet; returning no rows.")
         return []
     except duckdb.Error as exc:
         logger.error("Query failed: %s\nSQL: %s", exc, sql)
         return []
     finally:
-        con.close()
+        cur.close()
 
 
 def region_names(view: str = "labor_unemployment") -> list[str]:

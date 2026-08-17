@@ -7,6 +7,7 @@ from italy_dashboard.components import (
     area_compare_chart,
     band_trend_chart,
     card,
+    data_gate,
     data_table,
     h_bar_chart,
     line_chart,
@@ -41,7 +42,8 @@ def climate_page() -> rx.Component:
             width="100%",
             align="center",
         ),
-        rx.cond(
+        data_gate(
+            ClimateState.has_loaded,
             ClimateState.mart_ready,
             rx.vstack(
                 rx.text(
@@ -124,4 +126,5 @@ def climate_page() -> rx.Component:
             ),
             rx.callout(t("no_climate"), icon="triangle_alert", color_scheme="orange", width="100%"),
         ),
+        has_loaded=ClimateState.has_loaded,
     )

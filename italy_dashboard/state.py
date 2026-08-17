@@ -54,7 +54,26 @@ def _coverage_text(
 
 
 class AppState(rx.State):
-    """Shared: language, data availability, region list."""
+    """Shared: language, data availability, region list.
+
+    `has_loaded` is deliberately NOT declared here even though it looks
+    "shared" like `data_ready`/`regions`. Reflex mounts exactly ONE AppState
+    node per browser session, with every page state (ClimateState, CrimeState,
+    ...) as a sibling child of it; a field declared here is the SAME storage
+    slot no matter which page's `load()` last wrote it. `data_ready` is safe
+    to share that way because it reflects a session-invariant fact (does
+    data/ exist at all) that stays correct once any page has checked it. A
+    "have I loaded" flag is the opposite: it needs to be False again on every
+    NOT-yet-visited page, even after some OTHER page in the same session has
+    already finished loading — otherwise navigating from a loaded page to a
+    fresh one would show that fresh page's still-default `mart_ready=False`
+    as "loaded and empty" (the error callout) for the brief window before its
+    OWN `load()` completes, reintroducing the exact flash this fix removes,
+    just moved from first paint to every subsequent first-visit. So
+    `has_loaded` is declared separately on each concrete page state below,
+    each set True at the END of that state's own `load()`, and threaded into
+    `components.shell()` explicitly rather than read off AppState.
+    """
 
     lang: str = rx.LocalStorage("en")
     data_ready: bool = False
@@ -75,6 +94,9 @@ class HomeState(AppState):
     kpi_population: str = "—"
     kpi_unemployment: str = "—"
     kpi_inflation: str = "—"
+    # See AppState's docstring: page-scoped, not inherited, so a not-yet-
+    # visited page never inherits "loaded" from a page visited earlier.
+    has_loaded: bool = False
 
     @rx.event
     def load(self):
@@ -84,6 +106,7 @@ class HomeState(AppState):
         self.kpi_population = k["population"]
         self.kpi_unemployment = k["unemployment"]
         self.kpi_inflation = k["inflation"]
+        self.has_loaded = True
 
 
 class CrimeState(AppState):
@@ -116,6 +139,7 @@ class CrimeState(AppState):
     by_region: list[Row] = []
     latest_year: str = "—"
     mart_ready: bool = False
+    has_loaded: bool = False  # see AppState's docstring: page-scoped, not inherited
 
     SPLIT_KEYS: ClassVar[list[str]] = ["None", "Sex", "Age", "Region", "Offence"]
 
@@ -131,19 +155,19 @@ class CrimeState(AppState):
     def load(self):
         self.load_shared()
         self.mart_ready = q.crime_mart_ready()
-        if not self.mart_ready:
-            return
-        options = q.crime_options()
-        self.region_options = options["region"]
-        self.province_options = q.mart_province_options(q.CRIME_MART, self.region)
-        self.offence_options = options["offence"]
-        self.sex_options = options["sex"]
-        self.age_options = options["age"]
-        self.year_options = q.mart_years(q.CRIME_MART)
-        self.latest_year = q.crime_latest_year()
-        if not self.breakdown_year and self.year_options:
-            self.breakdown_year = self.year_options[0]
-        self._refresh()
+        if self.mart_ready:
+            options = q.crime_options()
+            self.region_options = options["region"]
+            self.province_options = q.mart_province_options(q.CRIME_MART, self.region)
+            self.offence_options = options["offence"]
+            self.sex_options = options["sex"]
+            self.age_options = options["age"]
+            self.year_options = q.mart_years(q.CRIME_MART)
+            self.latest_year = q.crime_latest_year()
+            if not self.breakdown_year and self.year_options:
+                self.breakdown_year = self.year_options[0]
+            self._refresh()
+        self.has_loaded = True
 
     @rx.event
     def set_region_filter(self, value: str):
@@ -247,6 +271,7 @@ class OffendersState(AppState):
     by_crime: list[Row] = []
     latest_year: str = "—"
     mart_ready: bool = False
+    has_loaded: bool = False  # see AppState's docstring: page-scoped, not inherited
 
     kpi_total: str = "—"
     kpi_yoy: str = "—"
@@ -300,26 +325,26 @@ class OffendersState(AppState):
     def load(self):
         self.load_shared()
         self.mart_ready = q.mart_ready(q.OFFENDERS_MART)
-        if not self.mart_ready:
-            return
-        options = q.mart_options(q.OFFENDERS_MART)
-        self.region_options = options["region"]
-        self.province_options = q.mart_province_options(q.OFFENDERS_MART, self.region)
-        self.year_options = q.mart_years(q.OFFENDERS_MART)
-        if not self.breakdown_year and self.year_options:
-            self.breakdown_year = self.year_options[0]
-        self.indicator_options = options["indicator"]
-        self.crime_options = options["crime"]
-        self.sex_options = options["sex"]
-        self.age_options = options["age"]
-        self.citizenship_options = options["citizenship"]
-        # Indicators (reported vs arrested, ...) are alternative counts of the
-        # same people: summing them double-counts. Default to the first
-        # concrete indicator instead of "All" when there are several.
-        if len(self.indicator_options) > 2 and self.indicator == q.ALL:
-            self.indicator = self.indicator_options[1]
-        self.latest_year = q.mart_latest_year(q.OFFENDERS_MART)
-        self._refresh()
+        if self.mart_ready:
+            options = q.mart_options(q.OFFENDERS_MART)
+            self.region_options = options["region"]
+            self.province_options = q.mart_province_options(q.OFFENDERS_MART, self.region)
+            self.year_options = q.mart_years(q.OFFENDERS_MART)
+            if not self.breakdown_year and self.year_options:
+                self.breakdown_year = self.year_options[0]
+            self.indicator_options = options["indicator"]
+            self.crime_options = options["crime"]
+            self.sex_options = options["sex"]
+            self.age_options = options["age"]
+            self.citizenship_options = options["citizenship"]
+            # Indicators (reported vs arrested, ...) are alternative counts of
+            # the same people: summing them double-counts. Default to the
+            # first concrete indicator instead of "All" when there are several.
+            if len(self.indicator_options) > 2 and self.indicator == q.ALL:
+                self.indicator = self.indicator_options[1]
+            self.latest_year = q.mart_latest_year(q.OFFENDERS_MART)
+            self._refresh()
+        self.has_loaded = True
 
     @rx.event
     def set_region_filter(self, value: str):
@@ -439,11 +464,13 @@ class PopulationState(AppState):
     region: str = q.NATIONAL
     residents: list[Row] = []
     foreign_share: list[Row] = []
+    has_loaded: bool = False  # see AppState's docstring: page-scoped, not inherited
 
     @rx.event
     def load(self):
         self.load_shared()
         self._refresh()
+        self.has_loaded = True
 
     @rx.event
     def set_region_filter(self, value: str):
@@ -458,11 +485,13 @@ class PopulationState(AppState):
 class LaborState(AppState):
     region: str = q.NATIONAL
     series: list[Row] = []
+    has_loaded: bool = False  # see AppState's docstring: page-scoped, not inherited
 
     @rx.event
     def load(self):
         self.load_shared()
         self._refresh()
+        self.has_loaded = True
 
     @rx.event
     def set_region_filter(self, value: str):
@@ -475,11 +504,13 @@ class LaborState(AppState):
 
 class EconomyState(AppState):
     inflation: list[Row] = []
+    has_loaded: bool = False  # see AppState's docstring: page-scoped, not inherited
 
     @rx.event
     def load(self):
         self.load_shared()
         self.inflation = q.inflation_series()
+        self.has_loaded = True
 
 
 class ClimateState(AppState):
@@ -494,6 +525,7 @@ class ClimateState(AppState):
     thresholds: list[Row] = []
     distribution: list[Row] = []
     mart_ready: bool = False
+    has_loaded: bool = False  # see AppState's docstring: page-scoped, not inherited
 
     # Coverage: how much of Italy mart_climate_annual actually has data for
     # (see queries.climate_coverage). Populated even when the mart is empty,
@@ -528,21 +560,21 @@ class ClimateState(AppState):
         self.regions_total = coverage["regions_total"]
         self.year_start = coverage["year_start"]
         self.year_end = coverage["year_end"]
-        if not self.mart_ready:
-            return
-        self.city_options = q.climate_cities()
-        # Roma is the default when present: a familiar reference point beats an
-        # alphabetically-first city nobody has intuitions about.
-        if self.city not in self.city_options:
-            self.city = "Roma" if "Roma" in self.city_options else self.city_options[0]
-        self.ranking = q.warming_rate_ranking(top_n=20)
-        # `climate_stripes_grid` returns `list[Row]` (the flat, broadly-used
-        # alias); `GridItem` narrows the shape for Reflex's benefit only, at
-        # this one boundary. The runtime values already conform (`{"city":
-        # str, "rows": list[Row]}`); this is a static-typing reconciliation,
-        # not a runtime coercion.
-        self.stripes_grid = cast(list[GridItem], q.climate_stripes_grid(limit=12))
-        self._refresh()
+        if self.mart_ready:
+            self.city_options = q.climate_cities()
+            # Roma is the default when present: a familiar reference point
+            # beats an alphabetically-first city nobody has intuitions about.
+            if self.city not in self.city_options:
+                self.city = "Roma" if "Roma" in self.city_options else self.city_options[0]
+            self.ranking = q.warming_rate_ranking(top_n=20)
+            # `climate_stripes_grid` returns `list[Row]` (the flat, broadly-
+            # used alias); `GridItem` narrows the shape for Reflex's benefit
+            # only, at this one boundary. The runtime values already conform
+            # (`{"city": str, "rows": list[Row]}`); this is a static-typing
+            # reconciliation, not a runtime coercion.
+            self.stripes_grid = cast(list[GridItem], q.climate_stripes_grid(limit=12))
+            self._refresh()
+        self.has_loaded = True
 
     @rx.event
     def set_city(self, value: str):
@@ -565,6 +597,7 @@ class ClimateCrimeState(AppState):
     stat_panel: str = "—"
     stat_n: str = "0"
     mart_ready: bool = False
+    has_loaded: bool = False  # see AppState's docstring: page-scoped, not inherited
 
     # Coverage: see ClimateState. This page's whole argument is that the raw
     # scatter recovers a north-south confound; with partial, mostly-northern
@@ -600,12 +633,12 @@ class ClimateCrimeState(AppState):
         self.regions_total = coverage["regions_total"]
         self.year_start = coverage["year_start"]
         self.year_end = coverage["year_end"]
-        if not self.mart_ready:
-            return
-        scatter = q.crime_climate_scatter()
-        self.raw_points = scatter["raw"]
-        self.panel_points = scatter["panel"]
-        stats = q.crime_climate_stats()
-        self.stat_raw = stats["raw"]
-        self.stat_panel = stats["panel"]
-        self.stat_n = stats["n"]
+        if self.mart_ready:
+            scatter = q.crime_climate_scatter()
+            self.raw_points = scatter["raw"]
+            self.panel_points = scatter["panel"]
+            stats = q.crime_climate_stats()
+            self.stat_raw = stats["raw"]
+            self.stat_panel = stats["panel"]
+            self.stat_n = stats["n"]
+        self.has_loaded = True

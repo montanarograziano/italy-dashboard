@@ -78,12 +78,62 @@ def no_data_callout() -> rx.Component:
     )
 
 
-def shell(*children: rx.Component) -> rx.Component:
+def _loading_placeholder() -> rx.Component:
+    """Neutral placeholder shown before a page's data has loaded.
+
+    Never the error callout: a bare `ready`/`mart_ready` bool defaults False
+    and can't tell "haven't loaded yet" from "genuinely no data" (see
+    `data_gate`), so painting the error for the instant before the websocket
+    connects and `load()` runs would be a false alarm on every single visit.
+    """
+    return rx.center(rx.spinner(size="3"), padding_y="3em", width="100%")
+
+
+def data_gate(
+    has_loaded: rx.Var | bool,
+    ready: rx.Var | bool,
+    content: rx.Component,
+    empty: rx.Component,
+    loading: rx.Component | None = None,
+) -> rx.Component:
+    """Three-state render gate: loading (neutral) / ready (content) / empty (callout).
+
+    `has_loaded` must be set True at the END of the owning state's `load()`,
+    regardless of outcome (see the per-state `has_loaded` fields in state.py,
+    and AppState's docstring for why it's page-scoped rather than shared):
+    until then this always renders `loading`, never `empty`, which is what
+    stops the error callout from flashing on every page visit. Once loaded,
+    `ready` picks between the real content and the real "no data" callout
+    exactly as before this fix.
+    """
+    return rx.cond(
+        has_loaded,
+        rx.cond(ready, content, empty),
+        loading if loading is not None else _loading_placeholder(),
+    )
+
+
+def shell(*children: rx.Component, has_loaded: rx.Var | bool) -> rx.Component:
+    """Page frame: navbar + the shared "no data snapshot" banner + content.
+
+    `has_loaded` is required (no default) so every call site names the
+    CALLING PAGE's own state flag explicitly — it can't default to a shared
+    AppState value (see AppState's docstring for why that would be wrong).
+    """
     return rx.box(
         rx.el.style(palette.diverging_css_vars()),
         navbar(),
         rx.vstack(
-            rx.cond(AppState.data_ready, rx.fragment(), no_data_callout()),
+            # `loading=rx.fragment()`: this slot is a thin top-of-page banner,
+            # not a content area, so "nothing" (not a spinner) is the right
+            # neutral placeholder while a page's own `load()` is still running.
+            data_gate(
+                has_loaded,
+                AppState.data_ready,
+                rx.fragment(),
+                no_data_callout(),
+                loading=rx.fragment(),
+            ),
             *children,
             spacing="5",
             width="100%",

@@ -636,3 +636,144 @@ def test_line_chart_brush_is_off_by_default():
 def test_line_chart_brush_true_adds_a_brush():
     rendered = str(c.line_chart(ROWS, [("value", "V", theme.series(1))], brush=True).render())
     assert "RechartsBrush" in rendered
+
+
+# ------------------------------------------------------------------ data_gate
+#
+# The fix for "the app shows an error callout while it is merely loading": a
+# bare `mart_ready`-style bool defaults False, indistinguishable from
+# "genuinely no data", so a page rendering directly on it shows the error
+# callout on first paint, before `load()` has run. `data_gate` adds the third
+# state (`has_loaded`) that tells the two apart.
+#
+# `rx.cond`'s render() ALWAYS embeds both branches (recharts/React decides
+# which one to mount client-side; see reflex_components_core.core.cond.Cond),
+# so a plain `"ERROR_TEXT" not in str(component.render())` assertion over the
+# WHOLE tree can never distinguish the three states — both the loading
+# placeholder's markup and the error callout's markup are always present
+# somewhere in the string. These tests instead navigate to the STRUCTURAL
+# slot each state occupies (loading = outer cond's false_value; ready = inner
+# cond's true_value; empty = inner cond's false_value), which is fixed by
+# which argument `data_gate` was called with, and check each slot on its own.
+
+CHARTS_MARKER = "STATE_CHARTS_MARKER"
+EMPTY_MARKER = "STATE_EMPTY_MARKER"
+
+
+def _data_gate_branches(rendered_gate: dict) -> tuple[str, str, str]:
+    """(loading, ready, empty) branch sub-trees, each stringified on its own."""
+    outer = rendered_gate["children"][0]
+    assert "cond_state" in outer, "expected the outer has_loaded cond"
+    loading = str(outer["false_value"])
+
+    inner = outer["true_value"]["children"][0]
+    assert "cond_state" in inner, "expected the inner ready/mart_ready cond"
+    ready = str(inner["true_value"])
+    empty = str(inner["false_value"])
+    return loading, ready, empty
+
+
+def test_data_gate_loading_branch_never_contains_the_error_or_the_content():
+    """State 1/3: not loaded yet. Must be neutral — never the error callout,
+    and obviously not the real content either (it isn't ready to show yet).
+    """
+    gate = c.data_gate(
+        ClimateState.has_loaded,
+        ClimateState.mart_ready,
+        rx.text(CHARTS_MARKER),
+        rx.text(EMPTY_MARKER),
+    )
+    loading, _ready, _empty = _data_gate_branches(gate.render())
+
+    assert EMPTY_MARKER not in loading, "loading branch must never show the error"
+    assert CHARTS_MARKER not in loading, "loading branch must not show unready content either"
+
+
+def test_data_gate_ready_branch_shows_content_not_the_error():
+    """State 2/3: loaded and ready. The real content, and only the content."""
+    gate = c.data_gate(
+        ClimateState.has_loaded,
+        ClimateState.mart_ready,
+        rx.text(CHARTS_MARKER),
+        rx.text(EMPTY_MARKER),
+    )
+    _loading, ready, _empty = _data_gate_branches(gate.render())
+
+    assert CHARTS_MARKER in ready
+    assert EMPTY_MARKER not in ready
+
+
+def test_data_gate_empty_branch_shows_the_existing_error_callout_unchanged():
+    """State 3/3: loaded but genuinely no data. The pre-existing callout,
+    unchanged — this fix is about not lying during load, not about changing
+    what the genuinely-empty case looks like.
+    """
+    gate = c.data_gate(
+        ClimateState.has_loaded,
+        ClimateState.mart_ready,
+        rx.text(CHARTS_MARKER),
+        rx.text(EMPTY_MARKER),
+    )
+    _loading, _ready, empty = _data_gate_branches(gate.render())
+
+    assert EMPTY_MARKER in empty
+    assert CHARTS_MARKER not in empty
+
+
+def test_data_gate_defaults_to_a_spinner_while_loading_not_silence_or_error():
+    """The default `loading=` placeholder is a spinner, not the caller's
+    `empty` callout and not literally nothing — `shell()` is the one call
+    site that deliberately overrides this to `rx.fragment()` (see its own
+    comment); every page-content gate should get real, visible feedback.
+    """
+    gate = c.data_gate(
+        ClimateState.has_loaded,
+        ClimateState.mart_ready,
+        rx.text(CHARTS_MARKER),
+        rx.text(EMPTY_MARKER),
+    )
+    loading, _ready, _empty = _data_gate_branches(gate.render())
+    assert "RadixThemesSpinner" in loading
+
+
+def _cond_nodes(tree) -> list[dict]:
+    """Every `Cond`-shaped node (has `cond_state`/`true_value`/`false_value`)
+    found anywhere in a rendered tree, walked the same way `_nodes` (above)
+    walks named components — `rx.cond` branches nest under keys other than
+    `children`, so a `children`-only walk would miss them.
+    """
+    found = []
+    stack = [tree]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if "cond_state" in node:
+                found.append(node)
+            stack.extend(node.values())
+        elif isinstance(node, (list, tuple)):
+            stack.extend(node)
+    return found
+
+
+def test_climate_page_wires_data_gate_with_its_own_state():
+    """Pins the real page, not just the helper in isolation: `climate_page()`
+    must gate its content on a `has_loaded` cond that itself WRAPS the
+    `mart_ready` cond (exactly what `data_gate` builds), not merely have both
+    strings appear somewhere in the page. A regression that reverts to a bare
+    `rx.cond(ClimateState.mart_ready, ...)` still has `has_loaded` elsewhere
+    in the tree (`shell()`'s own parameter), so a flat "both substrings
+    appear" check would miss it — the nesting is what has_loaded is FOR.
+    """
+    from italy_dashboard.pages.climate import climate_page
+
+    tree = climate_page().render()
+    has_loaded_conds = [c for c in _cond_nodes(tree) if "has_loaded" in c["cond_state"]]
+    assert has_loaded_conds, "expected at least one has_loaded-gated cond"
+
+    wraps_mart_ready = [
+        c for c in has_loaded_conds if any("mart_ready" in n["cond_state"] for n in _cond_nodes(c))
+    ]
+    assert wraps_mart_ready, (
+        "the page's own content must be gated by has_loaded WRAPPING mart_ready "
+        "(data_gate's shape), not just have both flags appear independently"
+    )

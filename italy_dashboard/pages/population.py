@@ -41,4 +41,5 @@ def population_page() -> rx.Component:
                 [("period", t("year")), ("value", t("share_label"))],
             ),
         ),
+        has_loaded=PopulationState.has_loaded,
     )

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import time
+
+import duckdb
 import polars as pl
 import pytest
 
@@ -800,3 +804,142 @@ def test_climate_coverage_counts_whats_actually_in_the_mart(climate_db):
     assert coverage["regions"] == "12"
     assert coverage["year_start"] == "1981"
     assert coverage["year_end"] == "2024"
+
+
+# ---------------------------------------------- connection & result caching
+#
+# `_query` used to open a fresh in-memory DuckDB connection and re-create
+# every view on EVERY call (32 calls x 18 views = 576 CREATE VIEWs on one
+# climate page load). These tests pin the fix: one shared connection reused
+# across calls, its views built only once per on-disk snapshot, and query
+# results cached and only invalidated when the snapshot's fingerprint
+# (path, size, mtime per parquet file) actually changes.
+
+
+class _SpyConnection:
+    """Wraps a real DuckDB connection, logging every `execute()` call's SQL.
+
+    A plain attribute assignment (`con.execute = ...`) fails: DuckDB's
+    connection is a C-extension type whose methods are read-only. Wrapping it
+    behind `__getattr__` is the only way to intercept `execute` without
+    touching queries.py's own code.
+    """
+
+    def __init__(self, real: duckdb.DuckDBPyConnection, log: list[str]) -> None:
+        object.__setattr__(self, "_real", real)
+        object.__setattr__(self, "_log", log)
+
+    def execute(self, sql, *args, **kwargs):
+        self._log.append(sql)
+        return self._real.execute(sql, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+def test_connection_is_reused_not_reopened_on_every_call(sample_db, monkeypatch):
+    q._reset_query_cache()
+    connect_calls: list[object] = []
+    real_connect = duckdb.connect
+
+    def counting_connect(*args, **kwargs):
+        connect_calls.append(1)
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(duckdb, "connect", counting_connect)
+
+    q.region_names()
+    q.unemployment_series(q.NATIONAL)
+    q.kpis()
+
+    assert len(connect_calls) == 1
+
+
+def test_views_are_created_once_per_snapshot_not_once_per_call(sample_db, monkeypatch):
+    q._reset_query_cache()
+    log: list[str] = []
+    real_connect = duckdb.connect
+
+    def spying_connect(*args, **kwargs):
+        return _SpyConnection(real_connect(*args, **kwargs), log)
+
+    monkeypatch.setattr(duckdb, "connect", spying_connect)
+
+    q.region_names()
+    created_after_first_call = sum(1 for sql in log if sql.startswith("CREATE VIEW"))
+    assert created_after_first_call > 0  # the 18-ish views were built once
+
+    q.region_names()
+    q.unemployment_series(q.NATIONAL)
+    created_after_more_calls = sum(1 for sql in log if sql.startswith("CREATE VIEW"))
+    assert created_after_more_calls == created_after_first_call, (
+        "later calls must not re-create views against an unchanged snapshot"
+    )
+
+
+def test_query_results_are_cached_across_calls(sample_db):
+    q._reset_query_cache()
+    sql = "SELECT DISTINCT territory_name FROM labor_unemployment ORDER BY territory_name"
+
+    first = q._query(sql)
+    second = q._query(sql)
+
+    assert first is second, "identical (sql, params) must be served from the cache"
+
+
+def test_query_cache_is_busted_when_the_snapshot_fingerprint_changes(sample_db):
+    """The correctness guard the task calls out explicitly: a developer who
+    reruns `just sample`/`just transform` rewrites parquet files IN PLACE, so
+    the cache must key on more than the SQL text. Bumping just the mtime of
+    one file (no schema/content change needed to prove the point) must force
+    a fresh read rather than silently keep serving the previous run's list.
+    """
+    q._reset_query_cache()
+    sql = "SELECT DISTINCT territory_name FROM labor_unemployment ORDER BY territory_name"
+    first = q._query(sql)
+
+    target = next(sample_db.glob("*.parquet"))
+    future = time.time() + 5
+    os.utime(target, (future, future))
+
+    second = q._query(sql)
+    assert second is not first, "a changed fingerprint must invalidate the cached result"
+    assert second == first, "the underlying data didn't change, only its mtime"
+
+
+def test_a_mart_appearing_after_a_prior_miss_is_picked_up_not_stuck_empty(sample_db):
+    """`crime_trend` degrades to [] when mart_crime.parquet doesn't exist yet
+    (see `_query`'s CatalogException branch). That miss must NOT be cached
+    forever: once the mart is built (a real `just transform` outcome), the
+    very next call must see it.
+    """
+    q._reset_query_cache()
+    sel = dict.fromkeys(["region", "offence", "sex", "age"], q.ALL)
+    assert q.crime_trend(sel) == []
+
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    pl.DataFrame(
+        [
+            {
+                "year": "2023",
+                "region_code": "IT",
+                "region_name": "Italy",
+                "region_level": "country",
+                "offence_code": "THEFT",
+                "offence_name": "theft",
+                "sex_code": "9",
+                "sex_name": "total",
+                "age_code": "TOTAL",
+                "age_name": "total",
+                "region_is_total": True,
+                "offence_is_total": False,
+                "sex_is_total": True,
+                "age_is_total": True,
+                "value": 42.0,
+            }
+        ]
+    ).write_parquet(marts / "mart_crime.parquet")
+
+    rows = q.crime_trend(sel)
+    assert rows and rows[0]["value"] == 42

@@ -5,6 +5,7 @@ import reflex as rx
 from italy_dashboard import theme
 from italy_dashboard.components import (
     card,
+    data_gate,
     data_table,
     h_bar_chart,
     line_chart,
@@ -150,7 +151,8 @@ def _offenders_kpis() -> rx.Component:
 
 def _offenders_tab() -> rx.Component:
     s = OffendersState
-    return rx.cond(
+    return data_gate(
+        s.has_loaded,
         s.mart_ready,
         rx.vstack(
             card(t("explore"), t("explore_offenders_sub"), _offenders_filter_bar()),
@@ -326,7 +328,8 @@ def _convictions_filter_bar() -> rx.Component:
 
 def _convictions_tab() -> rx.Component:
     s = CrimeState
-    return rx.cond(
+    return data_gate(
+        s.has_loaded,
         s.mart_ready,
         rx.vstack(
             card(t("explore"), t("explore_convictions_sub"), _convictions_filter_bar()),
@@ -387,4 +390,8 @@ def crime_page() -> rx.Component:
             default_value="offenders",
             width="100%",
         ),
+        # Both tabs load independently (see italy_dashboard.py's on_load
+        # list); the shell's own "no data snapshot" banner only means
+        # anything once BOTH have had their chance to run.
+        has_loaded=OffendersState.has_loaded & CrimeState.has_loaded,
     )

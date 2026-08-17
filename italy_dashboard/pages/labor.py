@@ -34,4 +34,5 @@ def labor_page() -> rx.Component:
                 ],
             ),
         ),
+        has_loaded=LaborState.has_loaded,
     )
