@@ -112,12 +112,15 @@ def climate_page() -> rx.Component:
                 ),
                 card(
                     t("distribution_title"),
-                    t("distribution_sub"),
+                    # Not `t(...)`: these three labels are templates filled with
+                    # the selected city's derived windows, so they resolve in
+                    # ClimateState rather than in the render tree.
+                    ClimateState.distribution_sub,
                     area_compare_chart(
                         ClimateState.distribution,
                         [
-                            ("early", t("dist_early"), theme.series(1)),
-                            ("late", t("dist_late"), theme.series(2)),
+                            ("early", ClimateState.dist_early_label, theme.series(1)),
+                            ("late", ClimateState.dist_late_label, theme.series(2)),
                         ],
                     ),
                 ),

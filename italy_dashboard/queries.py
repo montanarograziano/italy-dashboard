@@ -769,8 +769,11 @@ def income_correlations(year: str) -> dict[str, str]:
 CLIMATE_ANNUAL = "mart_climate_annual"
 
 # Distribution chart: the first and last 30-year windows the series supports.
-EARLY_WINDOW = (1951, 1980)
-LATE_WINDOW = (1996, 2025)
+# Distribution chart: its two year windows are DERIVED PER CITY, by
+# shared/queries/climate_distribution_windows.sql. They used to be the literals
+# (1951, 1980) and (1996, 2025), which had two problems: the 1981-1995 hole read
+# as missing data to anyone looking at the card, and a hardcoded end year falls
+# behind the snapshot every January with nothing to catch it.
 
 # The fetch always runs to today minus 7 days, so the current year is a partial
 # year for eleven months out of twelve. Plotted as if complete it reads roughly
@@ -1008,19 +1011,41 @@ def climate_month_heatmap(city: str) -> list[Row]:
     )
 
 
-def climate_distribution(city: str) -> list[Row]:
+def climate_distribution_windows(city: str) -> tuple[int, int, int, int] | None:
+    """(early_lo, early_hi, late_lo, late_hi): `city`'s record split in half.
+
+    None when the city has fewer than two complete years. The caller must show
+    the empty state rather than substitute a guess — see the SQL file, which
+    carries the full rationale for the split.
+    """
+    rows = _query(load_sql("climate_distribution_windows"), [city, MIN_DAYS_FOR_A_FULL_YEAR])
+    if not rows:
+        return None
+    r = rows[0]
+    return int(r["early_lo"]), int(r["early_hi"]), int(r["late_lo"]), int(r["late_hi"])
+
+
+def climate_distribution(city: str, windows: tuple[int, int, int, int] | None = None) -> list[Row]:
     """Daily max-temperature histogram, early window against late window.
 
-    Counts are normalized to percentages so unequal window lengths (a shorter
-    late window near the present) do not make one curve look taller than the
-    other for purely arithmetic reasons.
+    Counts are normalized to percentages so the two curves are comparable in
+    height. The windows are near-equal by construction, so this now guards
+    against a leap day rather than a 15-year difference in span, but it still
+    has to be there.
+
+    `windows` is accepted so a caller that already resolved them (the state, to
+    label the card) does not resolve them twice; omit it and they are looked up.
+    An empty list means the city has no drawable two-window split.
 
     Returns `period` (not `bucket`) for its x-axis key: every other
     chart-feeding function in this module names its x-axis `period`, and the
     shared line_chart component keys on that name.
     """
-    early_lo, early_hi = EARLY_WINDOW
-    late_lo, late_hi = LATE_WINDOW
+    if windows is None:
+        windows = climate_distribution_windows(city)
+    if windows is None:
+        return []
+    early_lo, early_hi, late_lo, late_hi = windows
     return _query(
         load_sql("climate_distribution"),
         [city, early_lo, early_hi, late_lo, late_hi, early_lo, early_hi, late_lo, late_hi],

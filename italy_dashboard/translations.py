@@ -167,9 +167,16 @@ EN: dict[str, str] = {
     "tropical_nights": "Tropical nights",
     "frost_days": "Frost days",
     "distribution_title": "Distribution of daily maxima",
-    "distribution_sub": "Share of days per 2 C bucket, 1951-1980 against 1996-2025",
-    "dist_early": "1951-1980",
-    "dist_late": "1996-2025",
+    # {early_lo}-{early_hi} / {late_lo}-{late_hi} are substituted in
+    # ClimateState.distribution_sub / dist_early_label / dist_late_label. The
+    # windows are derived per city, so these MUST stay templates: a literal
+    # year range here would drift away from the data it labels.
+    "distribution_sub": (
+        "Share of days per 2 C bucket, {early_lo}-{early_hi} against "
+        "{late_lo}-{late_hi} — the record split in half"
+    ),
+    "dist_early": "{early_lo}-{early_hi}",
+    "dist_late": "{late_lo}-{late_hi}",
     "anomaly": "Anomaly (C)",
     "degrees_per_decade": "C / decade",
     "no_climate": (
@@ -382,9 +389,13 @@ IT: dict[str, str] = {
     "tropical_nights": "Notti tropicali",
     "frost_days": "Giorni di gelo",
     "distribution_title": "Distribuzione delle massime giornaliere",
-    "distribution_sub": "Quota di giorni per intervallo di 2 C, 1951-1980 contro 1996-2025",
-    "dist_early": "1951-1980",
-    "dist_late": "1996-2025",
+    # Vedi il commento nella tabella EN: sono template, non stringhe fisse.
+    "distribution_sub": (
+        "Quota di giorni per intervallo di 2 C, {early_lo}-{early_hi} contro "
+        "{late_lo}-{late_hi} — la serie divisa in due metà"
+    ),
+    "dist_early": "{early_lo}-{early_hi}",
+    "dist_late": "{late_lo}-{late_hi}",
     "anomaly": "Anomalia (C)",
     "degrees_per_decade": "C / decennio",
     "no_climate": (

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import date, timedelta
 
 import duckdb
 import polars as pl
@@ -549,30 +550,39 @@ def test_month_heatmap_has_twelve_month_columns(climate_db):
     assert {"period", *[f"m{i}" for i in range(1, 13)]} == set(rows[0])
 
 
+DISTRIBUTION_FIXTURE_YEARS = [
+    # Warming by construction: the split lands between 1970 and 2000, so the
+    # early years occupy buckets 20/22/24 and the late years 26/28/30, with no
+    # bucket shared. That disjointness is what the assertions below key on.
+    (1960, 20.0),
+    (1965, 22.0),
+    (1970, 24.0),
+    (2000, 26.0),
+    (2010, 28.0),
+    (2020, 30.0),
+]
+
+
 @pytest.fixture
 def climate_daily_mart(sample_db):
     """Minimal mart_climate_daily.parquet spanning both distribution windows.
 
     climate_db's synthetic weather series only covers 1981-2024 (see
-    ingestion.sample_data.WEATHER_YEARS), which has ZERO overlap with
-    EARLY_WINDOW (1951-1980). That makes climate_distribution("Torino")
-    legitimately return [] against climate_db: the same short-series
-    limitation already documented for the anomaly columns, not a bug to
-    paper over. Real ERA5 data starts in 1950 and covers both windows.
+    ingestion.sample_data.WEATHER_YEARS). That used to have ZERO overlap with a
+    hardcoded early window of 1951-1980; now that the windows are derived per
+    city from the record itself, a short series splits inside its own span
+    instead of returning []. This fixture stays anyway, because it pins the
+    bucketing/normalization logic to known values (bypassing dbt, like
+    crime_mart/rates_mart above) rather than to whatever the sample generator
+    happens to emit.
 
-    This fixture supplies rows in both windows directly (bypassing dbt, like
-    crime_mart/rates_mart above) so the bucketing/normalization logic itself
-    is still exercised by a real test.
+    Every year is written FULL (365 days at one temperature). Windows are
+    derived only from years with at least MIN_DAYS_FOR_A_FULL_YEAR days, so a
+    one-row-per-year fixture would produce no complete years and no windows at
+    all — the same rule that keeps a partial running year out of the real chart.
     """
     marts = sample_db / "marts"
     marts.mkdir(exist_ok=True)
-    rows = []
-    # early window (1951-1980): cooler days -> lower buckets
-    for year, t_max in [(1960, 20.0), (1965, 22.0), (1970, 24.0)]:
-        rows.append((year, t_max))
-    # late window (1996-2025): warmer days -> higher buckets
-    for year, t_max in [(2000, 26.0), (2010, 28.0), (2020, 30.0)]:
-        rows.append((year, t_max))
     pl.DataFrame(
         [
             {
@@ -581,14 +591,15 @@ def climate_daily_mart(sample_db):
                 "capital_city": "Torino",
                 "region_code": "ITC1",
                 "region_name": "Piemonte",
-                "obs_date": f"{year}-07-15",
+                "obs_date": date(year, 1, 1) + timedelta(days=offset),
                 "year": str(year),
-                "month": 7,
+                "month": (date(year, 1, 1) + timedelta(days=offset)).month,
                 "t_min": t_max - 10.0,
                 "t_mean": t_max - 5.0,
                 "t_max": t_max,
             }
-            for year, t_max in rows
+            for year, t_max in DISTRIBUTION_FIXTURE_YEARS
+            for offset in range(365)
         ]
     ).write_parquet(marts / "mart_climate_daily.parquet")
     return marts
@@ -602,6 +613,55 @@ def test_distribution_buckets_are_ordered_and_comparable(climate_daily_mart):
     # early-window days landed in the cooler buckets, late-window in the
     # warmer ones: each row is 100% one side, 0% the other.
     assert all((r["early"] > 0) != (r["late"] > 0) for r in rows)
+
+
+def test_distribution_windows_split_the_record_with_no_gap(climate_daily_mart):
+    """The two windows must be adjacent and cover every complete year.
+
+    This is the whole point of deriving them: a gap between the windows reads
+    to a viewer as missing data, and an overlap would double-count years.
+    """
+    windows = q.climate_distribution_windows("Torino")
+    assert windows is not None
+    early_lo, early_hi, late_lo, late_hi = windows
+    years = [year for year, _ in DISTRIBUTION_FIXTURE_YEARS]
+    assert (early_lo, late_hi) == (min(years), max(years))
+    assert late_lo == early_hi + 1  # adjacent: no gap, no overlap
+    assert early_lo <= early_hi  # neither window can come out empty
+    assert late_lo <= late_hi
+    assert all(early_lo <= year <= late_hi for year in years)
+
+
+def test_distribution_windows_exclude_a_partial_trailing_year(climate_daily_mart):
+    """A year holding only its summer would drag its window warm.
+
+    Written as a REAL partial year appended to the fixture, because the failure
+    it guards against is arithmetic, not a branch: 200 hot days averaged
+    against 365 balanced ones shifts the late curve with nothing looking wrong.
+    """
+    existing = pl.read_parquet(climate_daily_mart / "mart_climate_daily.parquet")
+    partial = (
+        existing.filter(pl.col("year") == "2020")
+        .head(200)
+        .with_columns(
+            pl.lit("2026").alias("year"),
+            pl.col("obs_date").dt.offset_by("6y"),
+        )
+    )
+    pl.concat([existing, partial]).write_parquet(climate_daily_mart / "mart_climate_daily.parquet")
+    windows = q.climate_distribution_windows("Torino")
+    assert windows is not None
+    assert windows[3] == 2020  # late_hi, not the 2026 stub
+
+
+def test_distribution_windows_are_none_below_two_complete_years(climate_daily_mart):
+    """One year cannot be split in two, and must not be faked into a comparison."""
+    existing = pl.read_parquet(climate_daily_mart / "mart_climate_daily.parquet")
+    existing.filter(pl.col("year") == "1960").write_parquet(
+        climate_daily_mart / "mart_climate_daily.parquet"
+    )
+    assert q.climate_distribution_windows("Torino") is None
+    assert q.climate_distribution("Torino") == []
 
 
 def test_crime_climate_scatter_returns_both_views(climate_db):

@@ -53,6 +53,19 @@ def _coverage_text(
     )
 
 
+def _format_translation(lang: str, key: str, /, **values: str) -> str:
+    """One translated template filled in for a language.
+
+    Same constraint as `_coverage_text` above: Reflex Vars cannot be
+    `.format()`-ed, so every templated label has to resolve in a backend
+    `@rx.var` over plain values, never in a page's render tree. Extra `values`
+    are tolerated (`str.format` ignores what a template does not reference), so
+    callers can pass one bundle of substitutions to several related keys.
+    """
+    table = IT if lang == "it" else EN
+    return table[key].format(**values)
+
+
 class AppState(rx.State):
     """Shared: language, data availability, region list.
 
@@ -537,6 +550,35 @@ class ClimateState(AppState):
     year_start: str = "—"
     year_end: str = "—"
 
+    # Distribution-card windows, derived per city (see
+    # queries.climate_distribution_windows). Held as strings because they only
+    # ever reach the UI as label text, and "—" reads as "this city has no
+    # drawable split" in a way that a 0 would not.
+    dist_early_lo: str = "—"
+    dist_early_hi: str = "—"
+    dist_late_lo: str = "—"
+    dist_late_hi: str = "—"
+
+    def _dist_window_values(self) -> dict[str, str]:
+        return {
+            "early_lo": self.dist_early_lo,
+            "early_hi": self.dist_early_hi,
+            "late_lo": self.dist_late_lo,
+            "late_hi": self.dist_late_hi,
+        }
+
+    @rx.var
+    def distribution_sub(self) -> str:
+        return _format_translation(self.lang, "distribution_sub", **self._dist_window_values())
+
+    @rx.var
+    def dist_early_label(self) -> str:
+        return _format_translation(self.lang, "dist_early", **self._dist_window_values())
+
+    @rx.var
+    def dist_late_label(self) -> str:
+        return _format_translation(self.lang, "dist_late", **self._dist_window_values())
+
     @rx.var
     def coverage_text(self) -> str:
         return _coverage_text(
@@ -585,7 +627,14 @@ class ClimateState(AppState):
         self.annual = q.climate_annual_series(self.city)
         self.stripes = q.climate_stripes(self.city)
         self.thresholds = q.climate_threshold_days(self.city)
-        self.distribution = q.climate_distribution(self.city)
+        # Resolved once and passed down: the card labels and the histogram must
+        # describe the SAME two windows, and a second lookup is a second chance
+        # for them to disagree.
+        windows = q.climate_distribution_windows(self.city)
+        self.distribution = q.climate_distribution(self.city, windows)
+        self.dist_early_lo, self.dist_early_hi, self.dist_late_lo, self.dist_late_hi = (
+            [str(year) for year in windows] if windows else ["—"] * 4
+        )
 
 
 class ClimateCrimeState(AppState):

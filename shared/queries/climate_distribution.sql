@@ -1,8 +1,14 @@
 -- Daily max-temperature histogram, early window against late window.
 --
--- Counts are normalized to percentages so unequal window lengths (a shorter
--- late window near the present) do not make one curve look taller than the
--- other for purely arithmetic reasons.
+-- Counts are normalized to percentages so the two curves are comparable in
+-- height rather than reflecting how many days each window happens to hold.
+-- climate_distribution_windows.sql now hands over near-equal windows, so this
+-- guards against an odd year and a leap day instead of a 15-year difference in
+-- span, but dropping it would still make one curve taller for purely
+-- arithmetic reasons.
+--
+-- The two windows are adjacent and cover the whole record; see
+-- climate_distribution_windows.sql, which is the only place the split lives.
 --
 -- Parameters (positional): the early/late year-window bounds repeat because
 -- the same two windows are used in two different FILTER clauses (once to
