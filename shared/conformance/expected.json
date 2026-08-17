@@ -8222,6 +8222,40 @@
         "value": 24413
       }
     ],
+    "mart_breakdown_offenders_crime": [
+      {
+        "name": "thefts",
+        "value": 101023
+      },
+      {
+        "name": "swindles and cyber frauds",
+        "value": 73373
+      },
+      {
+        "name": "trafficking and drugs possession",
+        "value": 62284
+      },
+      {
+        "name": "culpable injuries",
+        "value": 55097
+      },
+      {
+        "name": "menaces",
+        "value": 48563
+      },
+      {
+        "name": "shoplifting",
+        "value": 29490
+      },
+      {
+        "name": "damages",
+        "value": 26216
+      },
+      {
+        "name": "robberies",
+        "value": 23058
+      }
+    ],
     "mart_options_crime": {
       "age": [
         "All",
@@ -8889,6 +8923,154 @@
       {
         "period": "2017",
         "value": 302108
+      }
+    ],
+    "mart_trend_offenders_all": [
+      {
+        "period": "2007",
+        "value": 560143
+      },
+      {
+        "period": "2008",
+        "value": 561421
+      },
+      {
+        "period": "2009",
+        "value": 533357
+      },
+      {
+        "period": "2010",
+        "value": 559878
+      },
+      {
+        "period": "2011",
+        "value": 603273
+      },
+      {
+        "period": "2012",
+        "value": 642458
+      },
+      {
+        "period": "2013",
+        "value": 678631
+      },
+      {
+        "period": "2014",
+        "value": 679967
+      },
+      {
+        "period": "2015",
+        "value": 660756
+      },
+      {
+        "period": "2016",
+        "value": 611042
+      },
+      {
+        "period": "2017",
+        "value": 601471
+      },
+      {
+        "period": "2018",
+        "value": 595488
+      },
+      {
+        "period": "2019",
+        "value": 575297
+      },
+      {
+        "period": "2020",
+        "value": 512776
+      },
+      {
+        "period": "2021",
+        "value": 518712
+      },
+      {
+        "period": "2022",
+        "value": 564334
+      },
+      {
+        "period": "2023",
+        "value": 569046
+      },
+      {
+        "period": "2024",
+        "value": 584514
+      }
+    ],
+    "offender_foreign_share_all": [
+      {
+        "period": "2007",
+        "value": 34.5
+      },
+      {
+        "period": "2008",
+        "value": 32.6
+      },
+      {
+        "period": "2009",
+        "value": 30.7
+      },
+      {
+        "period": "2010",
+        "value": 31.9
+      },
+      {
+        "period": "2011",
+        "value": 33.8
+      },
+      {
+        "period": "2012",
+        "value": 34.3
+      },
+      {
+        "period": "2013",
+        "value": 35.1
+      },
+      {
+        "period": "2014",
+        "value": 35.3
+      },
+      {
+        "period": "2015",
+        "value": 35.2
+      },
+      {
+        "period": "2016",
+        "value": 31.9
+      },
+      {
+        "period": "2017",
+        "value": 32.9
+      },
+      {
+        "period": "2018",
+        "value": 35.0
+      },
+      {
+        "period": "2019",
+        "value": 33.9
+      },
+      {
+        "period": "2020",
+        "value": 32.6
+      },
+      {
+        "period": "2021",
+        "value": 33.1
+      },
+      {
+        "period": "2022",
+        "value": 34.6
+      },
+      {
+        "period": "2023",
+        "value": 35.7
+      },
+      {
+        "period": "2024",
+        "value": 37.3
       }
     ],
     "population_national": [
