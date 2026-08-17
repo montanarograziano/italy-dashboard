@@ -1,6 +1,7 @@
 import cases from "../../../shared/conformance/cases.json";
 import expected from "../../../shared/conformance/expected.json";
 import { openConnection } from "../db";
+import * as ready from "../queries/ready";
 import * as staticQueries from "../queries/static";
 
 const DECIMALS: number = (expected as { float_decimals: number }).float_decimals;
@@ -12,6 +13,12 @@ const IMPLEMENTED: Record<string, (...args: never[]) => Promise<unknown>> = {
   income_years: staticQueries.incomeYears,
   income_scatter: staticQueries.incomeScatter,
   climate_annual_series: staticQueries.climateAnnualSeries,
+  db_ready: ready.dbReady,
+  climate_ready: ready.climateReady,
+  climate_region_ready: ready.climateRegionReady,
+  crime_mart_ready: ready.crimeMartReady,
+  crime_climate_ready: ready.crimeClimateReady,
+  mart_ready: ready.martReady,
 };
 
 function normalise(value: unknown): unknown {
