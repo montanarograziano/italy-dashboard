@@ -199,6 +199,25 @@ def climate_page() -> rx.Component:
                     font_size="0.9em",
                     font_weight="600",
                 ),
+                # Italia scope only, and it is the DEFAULT scope, so this is
+                # what a visitor sees first. The coverage line above states the
+                # counts; it does not state that the missing half is
+                # geographic, which is what turns a northern-weighted average
+                # labelled "Italia" into a misreading. Same mitigation, same
+                # shape, as the climate-crime page's cc_coverage_note. Not
+                # shown at region or city scope: a single region's capitals are
+                # the region, so there is no composition caveat to make.
+                rx.cond(
+                    ClimateState.is_national_scope,
+                    rx.callout(
+                        t("climate_coverage_note"),
+                        icon="triangle_alert",
+                        color_scheme="amber",
+                        width="100%",
+                        size="1",
+                    ),
+                    rx.fragment(),
+                ),
                 _selected_scope_section(),
                 _across_italy_section(),
                 spacing="5",

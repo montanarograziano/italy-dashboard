@@ -204,6 +204,17 @@ EN: dict[str, str] = {
         "Coverage: {capitals} of {capitals_total} capitals, {regions} of "
         "{regions_total} regions, {year_start}-{year_end}"
     ),
+    # Shown at Italia scope only (ClimateState.is_national_scope). The coverage
+    # line above gives the counts; this says what the counts do not — WHICH half
+    # of the country is missing. Same job, and the same wording pattern, as
+    # cc_coverage_note below.
+    "climate_coverage_note": (
+        "Italia is an unweighted mean of the capitals covered so far, and the "
+        "temperature backfill runs in province-code order, so it fills from the "
+        "north: much of the South is still missing and the absolute level reads "
+        "colder than Italy's. The anomaly chart is far more robust to this, "
+        "because it measures each year against the same cities' own baseline."
+    ),
     "nav_climate_crime": "Climate × Crime",  # noqa: RUF001
     "climate_crime_title": "Summer heat and violent crime",
     "cc_raw_title": "Naive view: raw cross-section",
@@ -433,6 +444,13 @@ IT: dict[str, str] = {
     "climate_coverage": (
         "Copertura: {capitals} di {capitals_total} capoluoghi, {regions} di "
         "{regions_total} regioni, {year_start}-{year_end}"
+    ),
+    "climate_coverage_note": (
+        "Italia è una media non ponderata dei capoluoghi finora coperti, e il "
+        "backfill delle temperature procede in ordine di codice provinciale, "
+        "quindi da nord: gran parte del Sud manca ancora e il livello assoluto "
+        "risulta più freddo di quello italiano. Il grafico delle anomalie è molto "
+        "più robusto: misura ogni anno rispetto alla baseline delle stesse città."
     ),
     "nav_climate_crime": "Clima × Criminalità",  # noqa: RUF001
     "climate_crime_title": "Caldo estivo e criminalità violenta",

@@ -614,6 +614,17 @@ class ClimateState(AppState):
         return self.city != q.ALL
 
     @rx.var
+    def is_national_scope(self) -> bool:
+        """Whether the cards below are showing the Italia aggregate.
+
+        The one scope whose composition needs a caveat: it is an unweighted
+        mean of whichever capitals the backfill has reached, and the backfill
+        goes in province-code order, i.e. from the north. See
+        `climate_coverage_note` in translations.py.
+        """
+        return self.region == q.ITALIA and not self.is_city_scope
+
+    @rx.var
     def highlighted_city(self) -> str:
         """The city to call out in the cross-city ranking/grid, or "" (never
         a real city name) when nothing should be highlighted.

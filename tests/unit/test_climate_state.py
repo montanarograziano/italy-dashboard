@@ -132,6 +132,52 @@ def test_is_city_scope_tracks_whether_a_city_is_selected(climate_db):
     assert state.is_city_scope is False
 
 
+def test_is_national_scope_is_true_only_for_the_italia_aggregate(climate_db):
+    """The Italia average is an unweighted mean of whichever capitals the
+    backfill has reached, which it reaches in province-code order (from the
+    north), so it carries a composition caveat no other scope does — and it is
+    the DEFAULT scope, so that caveat is on the landing view. See
+    `climate_coverage_note` in translations.py and its `rx.cond` in the page.
+    """
+    state = _fresh()
+    state.load()
+    assert state.is_national_scope is True  # default
+
+    state.set_region("Piemonte")
+    assert state.is_national_scope is False
+
+    state.set_region(q.ITALIA)
+    state.set_city("Torino")  # a single city, even under Italia, is not the mean
+    assert state.is_national_scope is False
+
+    state.set_region(q.ITALIA)  # resets city to q.ALL
+    assert state.is_national_scope is True
+
+
+def test_the_climate_page_carries_the_national_coverage_note():
+    """The state var is only half of it: the note has to reach the page, in
+    both languages, gated on that var. Asserted on the rendered tree rather
+    than by reading the source, so a `t()` that silently resolved to nothing
+    or a caveat wired to the wrong condition would show up here.
+    """
+    from italy_dashboard.pages.climate import climate_page
+    from italy_dashboard.translations import EN, IT
+
+    # Distinctive fragments rather than the whole sentence: `render()` returns
+    # a repr in which apostrophes come back escaped. Each fragment is asserted
+    # to still BE part of its translation, so rewording the note cannot quietly
+    # turn this into a check of nothing.
+    en_marker = "unweighted mean of the capitals covered so far"
+    it_marker = "media non ponderata dei capoluoghi finora coperti"
+    assert en_marker in EN["climate_coverage_note"]
+    assert it_marker in IT["climate_coverage_note"]
+
+    rendered = str(climate_page().render())
+    assert en_marker in rendered
+    assert it_marker in rendered
+    assert "is_national_scope" in rendered
+
+
 # --------------------------------------------------------- highlighted_city
 #
 # The cross-city ranking/grid must acknowledge the selection ONLY when a
