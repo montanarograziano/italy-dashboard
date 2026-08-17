@@ -25,6 +25,7 @@ Measured against the current codebase rather than assumed:
 | Query functions with **static** SQL | 15 |
 | Query functions that **build SQL dynamically** | 17 |
 | Charts | 36 across 7 pages |
+| Views blocked in Reflex by a missing Recharts mark | 1 (month-by-year heatmap) |
 | Committed parquet | 12 MB, 14 files |
 | Design tokens | 216 lines across `palette.py` and `theme.py` |
 
@@ -52,7 +53,7 @@ shared/
 web/                   React + Vite + TypeScript + DuckDB-WASM
   src/db.ts            wasm bootstrap, parquet registration over HTTP
   src/queries/         TS ports of the 17 dynamic builders
-  src/charts/          Recharts components
+  src/charts/          Observable Plot marks (NOT Recharts: see Charts)
   src/pages/           the 7 pages
   src/theme.ts         reads palette.json
 italy_dashboard/       unchanged, except queries.py loads its static SQL
@@ -133,18 +134,34 @@ oversight.
 
 ## Charts
 
-Recharts on both sides. Reflex already wraps Recharts, so the two frontends use
-the same library and the same visual grammar, drawing from the same generated
-palette.
+**Visual parity is explicitly not a goal.** The two frontends share their data
+and their colours, not their chart implementations. That was a constraint in an
+earlier draft and it has been lifted, which frees the static app to use a
+library suited to statistical display rather than one chosen to match Reflex.
 
-The existing Playwright suite gets a sibling pointed at the static build,
-asserting the same properties it asserts against the Reflex app: axis tick
-contrast clearing 3:1 in both colour modes, warming stripes resolving to
-distinct colours, the distribution band rendering translucent.
+**Observable Plot**, for three reasons:
 
-The two chart layers will still drift visually over time. Shared palette and
-shared assertions narrow it. Nothing short of a single implementation removes
-it, and that trade was accepted when both frontends were.
+- Grammar of graphics, so a chart is a handful of lines rather than a tree of
+  configured components.
+- **Native faceting.** The small-multiples grid of warming stripes, which the
+  Reflex app assembles by hand from a grid of individual charts, becomes one
+  mark with a `fx` channel.
+- **It has a `cell` mark.** The month-by-year anomaly heatmap was cut from the
+  Reflex app because Recharts has no heatmap mark at all, and it remains on the
+  roadmap for that reason. `mart_climate_monthly` already holds the data and
+  `climate_month_heatmap()` already computes it, unused. The static app can
+  ship the view the Reflex app cannot draw.
+
+DuckDB-WASM returns Arrow tables, which Plot consumes directly, so there is no
+serialisation layer between query and chart.
+
+The palette stays shared, because that is the cheap half of consistency: the
+two sites should look like the same project even when the charts differ.
+
+The static build gets its own Playwright assertions rather than a mirror of the
+Reflex ones. The properties worth asserting are the same in spirit, axis
+contrast in both colour modes and diverging colours resolving distinctly, but
+they are checked against Plot's output, which has a different DOM.
 
 ## Deployment
 
@@ -167,8 +184,10 @@ The Render deployment is untouched. Both build from the same `main`.
 slow connection that is a real wait. It is the price of putting the query
 engine in the browser, and it buys the absence of a backend.
 
-**Two chart implementations.** They will diverge visually in ways the shared
-palette does not catch. Accepted as the cost of maintaining both.
+**Two chart implementations, diverging by design.** The charts will look
+different between the two sites, and that is now intended rather than tolerated.
+The shared palette keeps them recognisably one project. Anyone comparing a
+specific chart across the two should expect different marks, not a bug.
 
 **Scope.** This is the largest piece of work in the project so far: 49 query
 functions, 36 charts, a new build system and a new deployment target. Larger
