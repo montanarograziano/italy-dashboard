@@ -1,6 +1,13 @@
 import cases from "../../../shared/conformance/cases.json";
 import expected from "../../../shared/conformance/expected.json";
 import { openConnection } from "../db";
+import * as climate from "../queries/climate";
+import * as climateScope from "../queries/climateScope";
+import * as crime from "../queries/crime";
+import * as crimeClimate from "../queries/crimeClimate";
+import * as economy from "../queries/economy";
+import * as martEngine from "../queries/martEngine";
+import * as ready from "../queries/ready";
 import * as staticQueries from "../queries/static";
 
 const DECIMALS: number = (expected as { float_decimals: number }).float_decimals;
@@ -12,6 +19,44 @@ const IMPLEMENTED: Record<string, (...args: never[]) => Promise<unknown>> = {
   income_years: staticQueries.incomeYears,
   income_scatter: staticQueries.incomeScatter,
   climate_annual_series: staticQueries.climateAnnualSeries,
+  db_ready: ready.dbReady,
+  climate_ready: ready.climateReady,
+  climate_region_ready: ready.climateRegionReady,
+  crime_mart_ready: ready.crimeMartReady,
+  crime_climate_ready: ready.crimeClimateReady,
+  mart_ready: ready.martReady,
+  climate_distribution: staticQueries.climateDistribution,
+  climate_distribution_windows: staticQueries.climateDistributionWindows,
+  income_correlations: staticQueries.incomeCorrelations,
+  crime_climate_scatter: crimeClimate.crimeClimateScatter,
+  crime_climate_stats: crimeClimate.crimeClimateStats,
+  population_timeseries: economy.populationTimeseries,
+  unemployment_series: economy.unemploymentSeries,
+  foreign_share_timeseries: economy.foreignShareTimeseries,
+  region_names: economy.regionNames,
+  climate_cities: climate.climateCities,
+  climate_coverage: climate.climateCoverage,
+  climate_stripes: climate.climateStripes,
+  climate_threshold_days: climate.climateThresholdDays,
+  climate_month_heatmap: climate.climateMonthHeatmap,
+  warming_rate_ranking: climate.warmingRateRanking,
+  climate_region_options: climateScope.climateRegionOptions,
+  climate_city_options: climateScope.climateCityOptions,
+  climate_region_annual_series: climateScope.climateRegionAnnualSeries,
+  climate_region_stripes: climateScope.climateRegionStripes,
+  climate_region_threshold_days: climateScope.climateRegionThresholdDays,
+  mart_options: martEngine.martOptions,
+  mart_years: martEngine.martYears,
+  mart_latest_year: martEngine.martLatestYear,
+  mart_province_options: martEngine.martProvinceOptions,
+  mart_trend: crime.martTrend,
+  mart_trend_pivot: crime.martTrendPivot,
+  mart_breakdown: crime.martBreakdown,
+  kpis: crime.kpis,
+  offenders_kpis: crime.offendersKpis,
+  offender_foreign_share: crime.offenderForeignShare,
+  offender_rates: crime.offenderRates,
+  region_rate_ranking: crime.regionRateRanking,
 };
 
 function normalise(value: unknown): unknown {

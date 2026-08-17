@@ -126,9 +126,16 @@ export async function runSql(
 ): Promise<Record<string, unknown>[]> {
   const con = await getConnection();
   const stmt = await con.prepare(sql);
-  const table = params.length ? await stmt.query(...params) : await stmt.query();
-  return table.toArray().map((row) => {
-    const plain = row.toJSON() as Record<string, unknown>;
-    return Object.fromEntries(Object.entries(plain).map(([k, v]) => [k, toPlainValue(v)]));
-  });
+  // `AsyncPreparedStatement.close()` releases its id in the WASM instance;
+  // never skip it, including on a query error, or a long-lived page that
+  // re-queries on every filter change leaks one statement per call.
+  try {
+    const table = params.length ? await stmt.query(...params) : await stmt.query();
+    return table.toArray().map((row) => {
+      const plain = row.toJSON() as Record<string, unknown>;
+      return Object.fromEntries(Object.entries(plain).map(([k, v]) => [k, toPlainValue(v)]));
+    });
+  } finally {
+    await stmt.close();
+  }
 }
