@@ -2,6 +2,7 @@ import cases from "../../../shared/conformance/cases.json";
 import expected from "../../../shared/conformance/expected.json";
 import { openConnection } from "../db";
 import * as climate from "../queries/climate";
+import * as climateScope from "../queries/climateScope";
 import * as crimeClimate from "../queries/crimeClimate";
 import * as economy from "../queries/economy";
 import * as ready from "../queries/ready";
@@ -37,6 +38,11 @@ const IMPLEMENTED: Record<string, (...args: never[]) => Promise<unknown>> = {
   climate_threshold_days: climate.climateThresholdDays,
   climate_month_heatmap: climate.climateMonthHeatmap,
   warming_rate_ranking: climate.warmingRateRanking,
+  climate_region_options: climateScope.climateRegionOptions,
+  climate_city_options: climateScope.climateCityOptions,
+  climate_region_annual_series: climateScope.climateRegionAnnualSeries,
+  climate_region_stripes: climateScope.climateRegionStripes,
+  climate_region_threshold_days: climateScope.climateRegionThresholdDays,
 };
 
 function normalise(value: unknown): unknown {

@@ -7,8 +7,9 @@ import { climateReady } from "./ready";
 // masquerading as a data point -- see the Python docstrings this file ports
 // (climate_stripes, climate_threshold_days, warming_rate_ranking) for what
 // that looks like on a chart (a phantom record on the last, highest-leverage
-// point of every series).
-const MIN_DAYS_FOR_A_FULL_YEAR = 360;
+// point of every series). Exported so climateScope.ts's region/Italia
+// counterparts share the same literal rather than carrying a second copy.
+export const MIN_DAYS_FOR_A_FULL_YEAR = 360;
 
 // Matches italy_dashboard.queries.climate_cities.
 export async function climateCities(): Promise<string[]> {
@@ -47,8 +48,10 @@ function divergingBucket(anomaly: number): number {
 
 // Matches italy_dashboard.queries._with_stripe_fill: attaches each row's own
 // diverging `fill`, a CSS custom property (the colour has to follow
-// light/dark mode, so it cannot be a build-time hex constant).
-function withStripeFill(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+// light/dark mode, so it cannot be a build-time hex constant). Exported so
+// climateScope.ts's climateRegionStripes can reuse it rather than duplicate
+// the diverging-colour logic a second time.
+export function withStripeFill(rows: Record<string, unknown>[]): Record<string, unknown>[] {
   for (const r of rows) {
     r.fill = `var(--div-${divergingBucket(Number(r.anomaly))})`;
   }
