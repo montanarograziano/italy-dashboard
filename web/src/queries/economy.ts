@@ -3,7 +3,10 @@ import { runSql } from "../db";
 // Matches italy_dashboard.queries.NATIONAL: the display name INCLUDING the
 // parenthetical, as passed by the conformance cases -- not "Italia" (that is
 // climate's ITALIA, a different constant for a different mart family).
-const NATIONAL = "Italia (totale)";
+// Exported so kpis() in crime.ts (queries.py's kpis() calls
+// population_timeseries(NATIONAL) and unemployment_series(NATIONAL) too) can
+// reuse it instead of a second copy of the literal.
+export const NATIONAL = "Italia (totale)";
 
 // Matches italy_dashboard.queries._region_filter. NATIONAL resolves to the
 // IT row when the view carries one, else to NUTS2 regions only (the regex);

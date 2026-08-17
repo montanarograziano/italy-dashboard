@@ -1,17 +1,7 @@
 import crimeClimateScatterSql from "../../../shared/queries/crime_climate_scatter.sql?raw";
 import crimeClimateStatsSql from "../../../shared/queries/crime_climate_stats.sql?raw";
 import { runSql } from "../db";
-
-// `n:+.Nf` the way Python's str.format does: a `-` for any negative value
-// (including one that rounds to zero, e.g. -0.001 at 2 decimals -> "-0.00")
-// and a `+` otherwise. Mirrors italy_dashboard.queries's repeated
-// `f"{x:+.Nf}"` sites (no shared helper on the Python side either, so this
-// stays a small private function rather than a new cross-file abstraction).
-function signedFixed(n: number, decimals: number): string {
-  const negative = n < 0 || Object.is(n, -0);
-  const fixed = Math.abs(n).toFixed(decimals);
-  return negative ? `-${fixed}` : `+${fixed}`;
-}
+import { signedFixed } from "../format";
 
 // Matches italy_dashboard.queries.crime_climate_scatter, which reshapes each
 // row into both the raw (absolute-temperature) cross-section and the

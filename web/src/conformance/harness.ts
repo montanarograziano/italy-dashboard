@@ -3,6 +3,7 @@ import expected from "../../../shared/conformance/expected.json";
 import { openConnection } from "../db";
 import * as climate from "../queries/climate";
 import * as climateScope from "../queries/climateScope";
+import * as crime from "../queries/crime";
 import * as crimeClimate from "../queries/crimeClimate";
 import * as economy from "../queries/economy";
 import * as martEngine from "../queries/martEngine";
@@ -48,6 +49,14 @@ const IMPLEMENTED: Record<string, (...args: never[]) => Promise<unknown>> = {
   mart_years: martEngine.martYears,
   mart_latest_year: martEngine.martLatestYear,
   mart_province_options: martEngine.martProvinceOptions,
+  mart_trend: crime.martTrend,
+  mart_trend_pivot: crime.martTrendPivot,
+  mart_breakdown: crime.martBreakdown,
+  kpis: crime.kpis,
+  offenders_kpis: crime.offendersKpis,
+  offender_foreign_share: crime.offenderForeignShare,
+  offender_rates: crime.offenderRates,
+  region_rate_ranking: crime.regionRateRanking,
 };
 
 function normalise(value: unknown): unknown {

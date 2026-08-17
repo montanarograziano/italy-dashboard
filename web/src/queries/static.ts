@@ -5,6 +5,7 @@ import inflationSeriesSql from "../../../shared/queries/inflation_series.sql?raw
 import incomeYearsSql from "../../../shared/queries/income_years.sql?raw";
 import incomeScatterSql from "../../../shared/queries/income_scatter.sql?raw";
 import { runSql } from "../db";
+import { signedFixed } from "../format";
 import { annualWindowed } from "./climateScope";
 
 // queries.py's MIN_DAYS_FOR_A_FULL_YEAR: a year needs this many observed days
@@ -34,15 +35,6 @@ export async function incomeScatter(year: string) {
     }
   }
   return out;
-}
-
-// `n:+.2f` the way Python's str.format does: a `-` for any negative value
-// (including one that rounds to zero, e.g. -0.001 at 2 decimals -> "-0.00")
-// and a `+` otherwise.
-function signedFixed(n: number, decimals: number): string {
-  const negative = n < 0 || Object.is(n, -0);
-  const fixed = Math.abs(n).toFixed(decimals);
-  return negative ? `-${fixed}` : `+${fixed}`;
 }
 
 // Matches italy_dashboard.queries.income_correlations. Economy.ts does not
