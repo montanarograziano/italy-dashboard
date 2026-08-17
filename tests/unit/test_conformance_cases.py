@@ -45,14 +45,119 @@ def test_the_matrix_covers_an_empty_result():
     )
 
 
+# mart_options builds its own SQL directly and never calls _mart_where, so it
+# does not belong in this set despite living next to the other mart wrappers
+# (see italy_dashboard/queries.py's mart_options). These three are the only
+# public functions that reach the probe.
+_PROBE_FUNCTIONS = {"mart_trend", "mart_breakdown", "offender_foreign_share"}
+
+
+Mart = tuple[str, list[str]]
+
+
+def _free_dims(mart: Mart, selections: dict, skip: str | None) -> list[str]:
+    """Dimensions _mart_where would leave for the probe to decide between."""
+    _, dims = mart
+    return [d for d in dims if d != skip and selections.get(d, "All") == "All"]
+
+
+def _fixed_where_and_params(mart: Mart, selections: dict, skip: str | None) -> tuple[str, list]:
+    """Mirrors _mart_where's own fixed-clause construction for pinned
+    dimensions and the skip dimension (italy_dashboard/queries.py's
+    `_mart_where`), so the probe's combos query can be reconstructed and its
+    year-coverage measured directly. `_mart_where`'s return value alone can't
+    answer this: it only reports the winning combination, never whether any
+    other candidate would have scored differently.
+    """
+    _, dims = mart
+    scope = selections.get("_region_scope") or "region"
+    fixed: list[str] = []
+    params: list = []
+    for dim in dims:
+        selected = selections.get(dim, "All")
+        if dim == skip:
+            fixed.append(f"NOT {dim}_is_total")
+            if dim == "region":
+                fixed.append("region_level = 'region'")
+        elif selected != "All":
+            fixed.append(f"NOT {dim}_is_total")
+            fixed.append(f"{dim}_name = ?")
+            params.append(selected)
+            if dim == "region":
+                fixed.append("region_level = ?")
+                params.append(scope)
+    return " AND ".join(fixed) or "TRUE", params
+
+
+def _mart_where_inputs(case: dict) -> tuple[Mart, dict, str | None] | None:
+    """(mart, selections, skip) for a case reaching _mart_where's probe, or
+    None for a case whose function isn't one of `_PROBE_FUNCTIONS`.
+    """
+    fn = case["function"]
+    args = [gen._coerce_arg(a) for a in case["args"]]
+    if fn == "mart_trend":
+        mart, selections, *rest = args
+        return mart, selections, (rest[0] if rest else None)
+    if fn == "mart_breakdown":
+        mart, breakdown_dim, selections = args[0], args[1], args[2]
+        return mart, selections, breakdown_dim
+    if fn == "offender_foreign_share":
+        from italy_dashboard import queries as q
+
+        (selections,) = args
+        filtered = {k: v for k, v in selections.items() if k != "citizenship"}
+        return q.OFFENDERS_MART, {**filtered, "citizenship": "All"}, "citizenship"
+    return None
+
+
 def test_the_matrix_covers_the_dynamic_mart_engine():
     """_mart_where probes the data to choose an is_total flag combination.
 
-    It is the single most likely thing to diverge in a reimplementation, so the
-    matrix must exercise it through its public callers.
+    It is the single most likely thing to diverge in a reimplementation, and a
+    function *name* appearing in the matrix proves nothing about it: on
+    mart_crime every is_total combination happens to have identical year
+    coverage, so a TypeScript port that skips the probe entirely and always
+    emits the all-totals combination reproduces every mart_crime case in this
+    matrix byte for byte (this bit for real; see the case added on
+    mart_offenders and the git history of this test). What actually matters is
+    that at least one covered case sits on a mart/selection where the
+    combinations genuinely differ in year coverage, so a probe-free port is
+    provably distinguishable from the committed reference.
     """
-    functions = {c["function"] for c in _cases()}
-    assert {"mart_trend", "mart_breakdown", "mart_options"} <= functions
+    from italy_dashboard import queries as q
+
+    cases = _cases()
+    functions = {c["function"] for c in cases}
+    assert functions >= _PROBE_FUNCTIONS, (
+        f"no case calls any of {_PROBE_FUNCTIONS}, the only public callers of "
+        "_mart_where; mart_options builds its own SQL and never reaches it"
+    )
+
+    non_degenerate = []
+    for case in cases:
+        inputs = _mart_where_inputs(case)
+        if inputs is None:
+            continue
+        mart, selections, skip = inputs
+        free = _free_dims(mart, selections, skip)
+        if not free:
+            continue
+        where, params = _fixed_where_and_params(mart, selections, skip)
+        flag_cols = ", ".join(f"{d}_is_total" for d in free)
+        rows = q._query(
+            f"SELECT {flag_cols}, COUNT(DISTINCT year) AS yc "
+            f"FROM {mart[0]} WHERE {where} GROUP BY ALL",
+            params,
+        )
+        if len({r["yc"] for r in rows}) > 1:
+            non_degenerate.append(case["id"])
+
+    assert non_degenerate, (
+        "every mart_trend/mart_breakdown/offender_foreign_share case sits on a "
+        "mart where every is_total combination has identical year coverage, so "
+        "none of them can pin the probe's decision; add a case on a mart where "
+        "the combinations actually differ (see mart_offenders)"
+    )
 
 
 def test_committed_expected_matches_the_generator():
