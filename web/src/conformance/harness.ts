@@ -2,6 +2,7 @@ import cases from "../../../shared/conformance/cases.json";
 import expected from "../../../shared/conformance/expected.json";
 import { openConnection } from "../db";
 import * as crimeClimate from "../queries/crimeClimate";
+import * as economy from "../queries/economy";
 import * as ready from "../queries/ready";
 import * as staticQueries from "../queries/static";
 
@@ -25,6 +26,10 @@ const IMPLEMENTED: Record<string, (...args: never[]) => Promise<unknown>> = {
   income_correlations: staticQueries.incomeCorrelations,
   crime_climate_scatter: crimeClimate.crimeClimateScatter,
   crime_climate_stats: crimeClimate.crimeClimateStats,
+  population_timeseries: economy.populationTimeseries,
+  unemployment_series: economy.unemploymentSeries,
+  foreign_share_timeseries: economy.foreignShareTimeseries,
+  region_names: economy.regionNames,
 };
 
 function normalise(value: unknown): unknown {
