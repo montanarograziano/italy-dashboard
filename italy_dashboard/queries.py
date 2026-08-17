@@ -99,6 +99,14 @@ def _snapshot_fingerprint() -> tuple[tuple[str, int, int], ...]:
     """Cheap identity for "what's on disk right now": (path, size, mtime_ns)
     per parquet file, sorted. Equal across two calls iff every file is
     unchanged; adding, removing, or rewriting any file changes it.
+
+    IN-PROCESS CACHE INVALIDATION ONLY. mtime, absolute paths and the glob over
+    every file on disk are all correct for that job (it must notice a rewrite
+    within one process, cheaply, including of files this layer only registers as
+    views) and all wrong for identifying a snapshot ACROSS machines: they differ
+    between two checkouts of the same commit. The conformance reference needs
+    the second thing and has its own function for it,
+    `scripts/generate_conformance_expected.tracked_snapshot_fingerprint`.
     """
     fingerprint = []
     for path in _parquet_files():

@@ -7,7 +7,9 @@ diverge, so these tests check the matrix itself, not just that it parses.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -15,7 +17,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 import generate_conformance_expected as gen
 
-SHARED = Path(__file__).resolve().parents[2] / "shared" / "conformance"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SHARED = REPO_ROOT / "shared" / "conformance"
 
 
 def _cases() -> list[dict]:
@@ -200,7 +203,52 @@ def test_committed_expected_matches_the_generator():
 
 def test_expected_records_the_snapshot_fingerprint():
     """Expected output is only meaningful against the data it was generated from."""
-    from italy_dashboard import queries as q
-
     recorded = json.loads((SHARED / "expected.json").read_text())["fingerprint"]
-    assert recorded == gen.fingerprint_digest(q._snapshot_fingerprint())
+    assert recorded == gen.fingerprint_digest(gen.tracked_snapshot_fingerprint())
+
+
+def test_the_recorded_fingerprint_reproduces_in_a_second_checkout(monkeypatch: pytest.MonkeyPatch):
+    """The digest must identify the COMMITTED data, not this machine or moment.
+
+    It used to be built from absolute paths, `st_mtime_ns` and a glob that also
+    caught the untracked dbt inputs, so a fresh clone or a git worktree computed
+    a different digest (measured: 18 files / 1142563040ca2e00 here against 14 /
+    21218be79b0aad0a in a clone) and started red on an opaque mismatch. Since
+    plan 2 is meant to be developed in a worktree, and since a new contributor's
+    first `pytest` run hit the same thing, the property is worth pinning rather
+    than trusting the code to keep it.
+
+    A real second checkout is what makes this discriminate. Any in-process
+    reformulation over the same directory would pass whether or not the entries
+    carried absolute paths and mtimes; a `git worktree` of the same commit has
+    different absolute paths, freshly written files (so different mtimes) and no
+    untracked parquet at all -- the three differences that used to move the
+    digest. `gen.REPO_ROOT` is redirected at it rather than the code being run
+    from it, so the CURRENT implementation is what gets measured (the worktree
+    holds HEAD's copy of the script, which is one commit behind by definition).
+    """
+    here = gen.fingerprint_digest(gen.tracked_snapshot_fingerprint())
+    subprocess.run(["git", "worktree", "prune"], cwd=REPO_ROOT, check=True, capture_output=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        checkout = Path(tmp) / "same-commit"
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", "--quiet", str(checkout), "HEAD"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+        )
+        try:
+            with monkeypatch.context() as patched:
+                patched.setattr(gen, "REPO_ROOT", checkout)
+                elsewhere = gen.fingerprint_digest(gen.tracked_snapshot_fingerprint())
+        finally:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(checkout)],
+                cwd=REPO_ROOT,
+                check=False,
+                capture_output=True,
+            )
+    assert elsewhere == here, (
+        f"the fingerprint differs between two checkouts of the same commit: "
+        f"worktree {elsewhere!r} vs working tree {here!r}"
+    )

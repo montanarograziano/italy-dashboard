@@ -12,22 +12,83 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
 from italy_dashboard import queries as q
 
-SHARED = Path(__file__).resolve().parent.parent / "shared" / "conformance"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SHARED = REPO_ROOT / "shared" / "conformance"
 
 # Compare at the precision the UI actually shows. The two engines are the same
 # DuckDB build, but the round trip through JSON and JavaScript numbers makes
 # exact bitwise equality a brittle thing to demand.
 FLOAT_DECIMALS = 4
 
+Entry = tuple[str, int, str]
 
-def fingerprint_digest(fingerprint: tuple) -> str:
+
+def _tracked_parquet() -> list[Path]:
+    """The COMMITTED parquet snapshot, from git rather than from a glob.
+
+    Not `queries._parquet_files()`: that globs everything on disk, which on a
+    developer's checkout also picks up the untracked dbt/ingestion inputs
+    (`weather_daily.parquet`, `crime_offenders.parquet`, ...). A fresh clone
+    does not have those, so a digest over them is machine-specific and the
+    committed reference could never reproduce anywhere else -- which is exactly
+    what it is for.
+
+    Fails loudly rather than falling back to a glob: a silent fallback would
+    produce a *different* digest, i.e. the same opaque mismatch this replaced.
+    """
+    try:
+        listing = subprocess.run(
+            ["git", "ls-files", "-z", "--", "data"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as exc:  # pragma: no cover
+        raise RuntimeError(
+            "cannot list the committed parquet snapshot: this needs `git` and a "
+            "checkout of the repository, because the conformance reference is "
+            "defined against the COMMITTED data, not whatever is on disk"
+        ) from exc
+    paths = sorted(REPO_ROOT / name for name in listing.split("\0") if name.endswith(".parquet"))
+    missing = [p for p in paths if not p.is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"committed parquet missing from the working tree: {missing}. "
+            "The conformance reference cannot be generated without it."
+        )
+    return paths
+
+
+def tracked_snapshot_fingerprint() -> tuple[Entry, ...]:
+    """(repo-relative path, size, content hash) per committed parquet, sorted.
+
+    Deliberately NOT `queries._snapshot_fingerprint()`, which serves a
+    different purpose: that one busts the in-process query cache when a
+    developer regenerates data, so it wants cheap change detection and uses
+    absolute paths plus `st_mtime_ns`. Both of those, and the glob over
+    untracked files above, make a digest that differs between two checkouts of
+    the SAME commit -- so the recorded reference was unreproducible on a fresh
+    clone or a git worktree (measured: 18 files here, 14 in a clone). Content
+    hashing costs a few hundred ms once per regeneration and buys a digest that
+    depends only on committed bytes.
+    """
+    entries: list[Entry] = []
+    for path in _tracked_parquet():
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        entries.append((path.relative_to(REPO_ROOT).as_posix(), path.stat().st_size, digest))
+    return tuple(entries)
+
+
+def fingerprint_digest(fingerprint: tuple[Entry, ...]) -> str:
     """A short stable digest of the parquet snapshot the results came from."""
-    payload = json.dumps([[str(p), size, mtime] for p, size, mtime in fingerprint])
+    payload = json.dumps([list(entry) for entry in fingerprint])
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
@@ -64,7 +125,7 @@ def build() -> str:
             "change here means a query's output changed."
         ),
         "float_decimals": FLOAT_DECIMALS,
-        "fingerprint": fingerprint_digest(q._snapshot_fingerprint()),
+        "fingerprint": fingerprint_digest(tracked_snapshot_fingerprint()),
         "results": results,
     }
     return json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n"
