@@ -41,5 +41,18 @@
   {"id": "climate_region_stripes_italia", "function": "climate_region_stripes", "args": ["Italia"]},
   {"id": "climate_region_stripes_piemonte", "function": "climate_region_stripes", "args": ["Piemonte"]},
   {"id": "climate_region_threshold_days_italia", "function": "climate_region_threshold_days", "args": ["Italia"]},
-  {"id": "climate_region_threshold_days_piemonte", "function": "climate_region_threshold_days", "args": ["Piemonte"]}
+  {"id": "climate_region_threshold_days_piemonte", "function": "climate_region_threshold_days", "args": ["Piemonte"]},
+
+  {"id": "climate_month_heatmap_torino", "function": "climate_month_heatmap", "args": ["Torino"]},
+  {"id": "region_rate_ranking_all", "function": "region_rate_ranking", "args": [null, "All", "All"]},
+  {"id": "foreign_share_national", "function": "foreign_share_timeseries", "args": ["Italia (totale)"]},
+  {"id": "offender_rates_all", "function": "offender_rates", "args": ["All", "All"]},
+  {"id": "mart_trend_pivot_crime_region", "function": "mart_trend_pivot", "args": [["mart_crime", ["region", "offence", "sex", "age"]], {"region": "All", "offence": "All", "sex": "All", "age": "All"}, "region"]},
+  {"id": "region_names", "function": "region_names", "args": []},
+  {"id": "mart_years_crime", "function": "mart_years", "args": [["mart_crime", ["region", "offence", "sex", "age"]]]},
+  {"id": "mart_latest_year_crime", "function": "mart_latest_year", "args": [["mart_crime", ["region", "offence", "sex", "age"]]]},
+  {"id": "mart_province_options_offenders_all", "function": "mart_province_options", "args": [["mart_offenders", ["region", "indicator", "crime", "sex", "age", "citizenship"]], "All"]},
+  {"id": "mart_province_options_offenders_lombardia", "function": "mart_province_options", "args": [["mart_offenders", ["region", "indicator", "crime", "sex", "age", "citizenship"]], "Lombardia"]},
+  {"id": "kpis", "function": "kpis", "args": []},
+  {"id": "offenders_kpis_all", "function": "offenders_kpis", "args": [{"region": "All", "indicator": "All", "crime": "All", "sex": "All", "age": "All", "citizenship": "All"}]}
 ]
