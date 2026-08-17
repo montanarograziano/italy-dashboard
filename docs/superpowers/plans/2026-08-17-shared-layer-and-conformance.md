@@ -581,11 +581,11 @@ Create `shared/conformance/cases.json`. Include at minimum: every function that 
   {"id": "income_scatter_2023", "function": "income_scatter", "args": ["2023"]},
   {"id": "income_correlations_2023", "function": "income_correlations", "args": ["2023"]},
   {"id": "climate_cities", "function": "climate_cities", "args": []},
-  {"id": "climate_annual_roma", "function": "climate_annual_series", "args": ["Roma"]},
+  {"id": "climate_annual_torino", "function": "climate_annual_series", "args": ["Torino"]},
   {"id": "climate_annual_unknown_city", "function": "climate_annual_series", "args": ["Atlantis"]},
-  {"id": "climate_stripes_roma", "function": "climate_stripes", "args": ["Roma"]},
-  {"id": "climate_thresholds_roma", "function": "climate_threshold_days", "args": ["Roma"]},
-  {"id": "climate_distribution_roma", "function": "climate_distribution", "args": ["Roma"]},
+  {"id": "climate_stripes_torino", "function": "climate_stripes", "args": ["Torino"]},
+  {"id": "climate_thresholds_torino", "function": "climate_threshold_days", "args": ["Torino"]},
+  {"id": "climate_distribution_torino", "function": "climate_distribution", "args": ["Torino"]},
   {"id": "warming_rate_top5", "function": "warming_rate_ranking", "args": [5]},
   {"id": "climate_coverage", "function": "climate_coverage", "args": []},
   {"id": "crime_climate_scatter", "function": "crime_climate_scatter", "args": []},
@@ -599,6 +599,15 @@ Create `shared/conformance/cases.json`. Include at minimum: every function that 
 ```
 
 `climate_annual_unknown_city` is the empty-result case: no such capital exists, so both implementations must return `[]` rather than erroring.
+
+**Matrix city choice.** The cases use **Torino**, not Roma. The backfill runs in
+province-code order, so the snapshot fills from the north: at 50 of 106 capitals
+Roma (`ITE43`) is not yet present and every Roma case would return empty,
+collapsing four cases into duplicates of the deliberate empty-result case.
+Torino (`ITC11`) is fourth in code order, so it is present in any snapshot large
+enough to be worth testing, and it carries the full 76-year history the
+distribution and stripes cases need.
+
 
 - [ ] **Step 4: Write the generator**
 
