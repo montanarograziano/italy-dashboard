@@ -147,6 +147,11 @@ docker-build:
 docker-serve: docker-build
     docker run --rm -p 10000:10000 italy-dashboard
 
+# Regenerate the shared artifacts the static frontend consumes (palette, conformance)
+generate-shared:
+    uv run python scripts/generate_palette.py
+    uv run python scripts/generate_conformance_expected.py
+
 # Remove caches and build artifacts (keeps data/ and .venv)
 clean:
     rm -rf .web .states .pytest_cache .ruff_cache
