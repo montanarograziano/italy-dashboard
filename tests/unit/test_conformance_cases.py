@@ -63,32 +63,58 @@ def test_the_matrix_covers_an_empty_result():
 
 Mart = tuple[str, list[str]]
 
-# mart_options builds its own SQL directly and never calls _mart_where, so it
-# does not belong in this set despite living next to the other mart wrappers
-# (see italy_dashboard/queries.py's mart_options). These three are the only
-# public functions that reach the probe.
-_PROBE_FUNCTIONS = {"mart_trend", "mart_breakdown", "offender_foreign_share"}
+# _mart_where's three DIRECT public callers. Asserted present below as a
+# baseline: without at least one case for each, there is nothing for the scan
+# further down to work with at all.
+#
+# Several other public functions reach the probe INDIRECTLY, by delegating to
+# one of these three, and `_probe_case_inputs` below recognises the ones that
+# actually have a case in the matrix: `mart_trend_pivot` (straight to
+# `mart_trend`), `kpis` (via `crime_trend`), and `offenders_kpis` (via both
+# `mart_trend` and `offender_foreign_share`). `crime_trend`,
+# `crime_trend_pivot` and `crime_offence_breakdown` also reach the probe
+# indirectly, but no case in cases.json calls any of them -- they are thin
+# CRIME_MART-baked-in wrappers, each argument-identical to a case already in
+# the matrix (see the fix-round-1 report) -- so there is nothing for the scan
+# to visit there even though it would recognise them if there were.
+_DIRECT_PROBE_FUNCTIONS = {"mart_trend", "mart_breakdown", "offender_foreign_share"}
 
 
-def _mart_where_inputs(case: dict) -> tuple[Mart, dict, str | None] | None:
-    """(mart, selections, skip) for a case reaching _mart_where's probe, or
-    None for a case whose function isn't one of `_PROBE_FUNCTIONS`.
+def _probe_case_inputs(case: dict) -> list[tuple[Mart, dict, str | None]]:
+    """Every (mart, selections, skip) triple this case's function feeds to
+    _mart_where, directly or by delegation. [] for a case whose function
+    never reaches the probe at all (mart_options builds its own SQL, for
+    instance, despite living next to the other mart wrappers).
     """
+    from italy_dashboard import queries as q
+
     fn = case["function"]
     args = [gen._coerce_arg(a) for a in case["args"]]
-    if fn == "mart_trend":
+
+    if fn in ("mart_trend", "mart_trend_pivot"):
         mart, selections, *rest = args
-        return mart, selections, (rest[0] if rest else None)
+        return [(mart, selections, rest[0] if rest else None)]
     if fn == "mart_breakdown":
         mart, breakdown_dim, selections = args[0], args[1], args[2]
-        return mart, selections, breakdown_dim
+        return [(mart, selections, breakdown_dim)]
     if fn == "offender_foreign_share":
-        from italy_dashboard import queries as q
-
         (selections,) = args
         filtered = {k: v for k, v in selections.items() if k != "citizenship"}
-        return q.OFFENDERS_MART, {**filtered, "citizenship": "All"}, "citizenship"
-    return None
+        return [(q.OFFENDERS_MART, {**filtered, "citizenship": "All"}, "citizenship")]
+    if fn == "kpis":
+        # kpis() -> crime_trend(all-"All") -> mart_trend(CRIME_MART, ..., None).
+        return [(q.CRIME_MART, dict.fromkeys(q.CRIME_MART[1], "All"), None)]
+    if fn == "offenders_kpis":
+        # offenders_kpis(selections) calls mart_trend(OFFENDERS_MART,
+        # selections) and offender_foreign_share(selections); its third call,
+        # offender_rates, builds its own WHERE and never reaches _mart_where.
+        (selections,) = args
+        filtered = {k: v for k, v in selections.items() if k != "citizenship"}
+        return [
+            (q.OFFENDERS_MART, selections, None),
+            (q.OFFENDERS_MART, {**filtered, "citizenship": "All"}, "citizenship"),
+        ]
+    return []
 
 
 def _naive_all_totals_where(
@@ -145,21 +171,19 @@ def test_the_matrix_covers_the_dynamic_mart_engine(monkeypatch: pytest.MonkeyPat
 
     cases = _cases()
     functions = {c["function"] for c in cases}
-    assert functions >= _PROBE_FUNCTIONS, (
-        f"no case calls any of {_PROBE_FUNCTIONS}, the only public callers of "
-        "_mart_where; mart_options builds its own SQL and never reaches it"
+    assert functions >= _DIRECT_PROBE_FUNCTIONS, (
+        f"no case calls any of {_DIRECT_PROBE_FUNCTIONS}, the direct public "
+        "callers of _mart_where; mart_options builds its own SQL and never "
+        "reaches it"
     )
 
     distinguishable = []
     for case in cases:
-        inputs = _mart_where_inputs(case)
-        if inputs is None:
-            continue
-        mart, selections, skip = inputs
-        real = q._mart_where(mart, selections, skip=skip)
-        naive = _naive_all_totals_where(mart, selections, skip, monkeypatch)
-        if naive is not None and naive != real:
-            distinguishable.append(case["id"])
+        for mart, selections, skip in _probe_case_inputs(case):
+            real = q._mart_where(mart, selections, skip=skip)
+            naive = _naive_all_totals_where(mart, selections, skip, monkeypatch)
+            if naive is not None and naive != real:
+                distinguishable.append(case["id"])
 
     assert distinguishable, (
         "every probe-reaching case in the matrix sits on a mart/selection "
