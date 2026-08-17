@@ -6,6 +6,7 @@ size and safe across Reflex's async event handlers.
 
 from __future__ import annotations
 
+import functools
 import logging
 import threading
 from pathlib import Path
@@ -19,6 +20,25 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
+SHARED_SQL_DIR = PROJECT_ROOT / "shared" / "queries"
+
+
+@functools.cache
+def load_sql(name: str) -> str:
+    """The text of a shared SQL file, by filename stem.
+
+    Shared with the static frontend, which imports the same files through
+    Vite. Cached because the files cannot change while the process runs, and
+    because the Reflex app reads them on every page load.
+    """
+    path = SHARED_SQL_DIR / f"{name}.sql"
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"No shared query named {name!r}. Expected {path}. "
+            f"Available: {sorted(p.stem for p in SHARED_SQL_DIR.glob('*.sql'))}"
+        )
+    return path.read_text()
+
 
 Row = dict[str, Any]
 
@@ -547,15 +567,7 @@ def inflation_series() -> list[Row]:
     2011-01, 2016-01 and 2026-01 all have values), so no base chaining is
     needed. The last point may average a partial year.
     """
-    return _query(
-        """
-        SELECT substr(period, 1, 4) AS period, ROUND(AVG(value), 1) AS value
-        FROM economy_inflation
-        WHERE territory = 'IT'
-        GROUP BY 1
-        ORDER BY 1
-        """
-    )
+    return _query(load_sql("inflation_series"))
 
 
 # ------------------------------------------------------------------ KPIs
@@ -723,29 +735,14 @@ def offenders_kpis(selections: dict[str, str]) -> dict[str, str]:
 
 
 def income_years() -> list[str]:
-    rows = _query(
-        """
-        SELECT DISTINCT year FROM mart_crime_income
-        WHERE income_per_capita IS NOT NULL AND rate_per_1000 IS NOT NULL
-        ORDER BY year DESC
-        """
-    )
+    rows = _query(load_sql("income_years"))
     return [r["year"] for r in rows]
 
 
 def income_scatter(year: str) -> dict[str, list[Row]]:
     """Scatter points {income, rate, region} per citizenship for one year."""
     out: dict[str, list[Row]] = {"ITL": [], "FRG": []}
-    rows = _query(
-        """
-        SELECT citizenship_code AS code, region_name AS region,
-               income_per_capita AS income, rate_per_1000 AS rate
-        FROM mart_crime_income
-        WHERE year = ? AND income_per_capita IS NOT NULL AND rate_per_1000 IS NOT NULL
-        ORDER BY income
-        """,
-        [year],
-    )
+    rows = _query(load_sql("income_scatter"), [year])
     for r in rows:
         if r["code"] in out:
             out[r["code"]].append({"income": r["income"], "rate": r["rate"], "region": r["region"]})
@@ -754,17 +751,7 @@ def income_scatter(year: str) -> dict[str, list[Row]]:
 
 def income_correlations(year: str) -> dict[str, str]:
     """Pearson r between regional income and offender rate, per citizenship."""
-    rows = _query(
-        """
-        SELECT citizenship_code AS code,
-               ROUND(corr(income_per_capita, rate_per_1000), 2) AS r,
-               COUNT(*) AS n
-        FROM mart_crime_income
-        WHERE year = ? AND income_per_capita IS NOT NULL AND rate_per_1000 IS NOT NULL
-        GROUP BY citizenship_code
-        """,
-        [year],
-    )
+    rows = _query(load_sql("income_correlations"), [year])
     out = {"ITL": "—", "FRG": "—"}
     for r in rows:
         if r["code"] in out and r["r"] is not None and r["n"] >= 5:
@@ -1035,29 +1022,7 @@ def climate_distribution(city: str) -> list[Row]:
     early_lo, early_hi = EARLY_WINDOW
     late_lo, late_hi = LATE_WINDOW
     return _query(
-        """
-        WITH d AS (
-            SELECT CAST(year AS INTEGER) AS y,
-                   CAST(FLOOR(t_max / 2.0) * 2 AS INTEGER) AS bucket
-            FROM mart_climate_daily
-            WHERE capital_city = ? AND t_max IS NOT NULL
-        ),
-        tot AS (
-            SELECT
-                COUNT(*) FILTER (WHERE y BETWEEN ? AND ?) AS n_early,
-                COUNT(*) FILTER (WHERE y BETWEEN ? AND ?) AS n_late
-            FROM d
-        )
-        SELECT d.bucket AS period,
-               ROUND(100.0 * COUNT(*) FILTER (WHERE y BETWEEN ? AND ?)
-                     / NULLIF(ANY_VALUE(tot.n_early), 0), 3) AS early,
-               ROUND(100.0 * COUNT(*) FILTER (WHERE y BETWEEN ? AND ?)
-                     / NULLIF(ANY_VALUE(tot.n_late), 0), 3) AS late
-        FROM d, tot
-        GROUP BY d.bucket
-        HAVING ANY_VALUE(tot.n_early) > 0 AND ANY_VALUE(tot.n_late) > 0
-        ORDER BY period
-        """,
+        load_sql("climate_distribution"),
         [city, early_lo, early_hi, late_lo, late_hi, early_lo, early_hi, late_lo, late_hi],
     )
 
@@ -1084,16 +1049,7 @@ def crime_climate_scatter() -> dict[str, list[Row]]:
     summer temperature on x, the hot southern regions sit on the right, which
     is the confound this chart exists to make visible.
     """
-    rows = _query(
-        """
-        SELECT region_name, year,
-               summer_tmax, ln_offenders,
-               summer_anomaly_dm, ln_offenders_dm
-        FROM mart_crime_climate
-        WHERE summer_anomaly IS NOT NULL AND ln_offenders IS NOT NULL
-        ORDER BY region_name, year
-        """
-    )
+    rows = _query(load_sql("crime_climate_scatter"))
     return {
         "raw": [
             {
@@ -1130,17 +1086,7 @@ def crime_climate_stats() -> dict[str, str]:
     same observations and share one n.
     """
     out = {"raw": "—", "panel": "—", "n": "0"}
-    rows = _query(
-        """
-        SELECT COUNT(*) AS n,
-               ROUND(regr_slope(ln_offenders, summer_tmax), 4) AS raw_slope,
-               ROUND(corr(ln_offenders, summer_tmax), 3) AS raw_r,
-               ROUND(regr_slope(ln_offenders_dm, summer_anomaly_dm), 4) AS dm_slope,
-               ROUND(corr(ln_offenders_dm, summer_anomaly_dm), 3) AS dm_r
-        FROM mart_crime_climate
-        WHERE summer_anomaly IS NOT NULL AND ln_offenders IS NOT NULL
-        """
-    )
+    rows = _query(load_sql("crime_climate_stats"))
     if not rows or not rows[0]["n"]:
         return out
     r = rows[0]
