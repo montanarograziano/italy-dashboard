@@ -54,5 +54,7 @@
   {"id": "mart_province_options_offenders_all", "function": "mart_province_options", "args": [["mart_offenders", ["region", "indicator", "crime", "sex", "age", "citizenship"]], "All"]},
   {"id": "mart_province_options_offenders_lombardia", "function": "mart_province_options", "args": [["mart_offenders", ["region", "indicator", "crime", "sex", "age", "citizenship"]], "Lombardia"]},
   {"id": "kpis", "function": "kpis", "args": []},
-  {"id": "offenders_kpis_all", "function": "offenders_kpis", "args": [{"region": "All", "indicator": "All", "crime": "All", "sex": "All", "age": "All", "citizenship": "All"}]}
+  {"id": "offenders_kpis_all", "function": "offenders_kpis", "args": [{"region": "All", "indicator": "All", "crime": "All", "sex": "All", "age": "All", "citizenship": "All"}]},
+
+  {"id": "warming_rate_top12", "function": "warming_rate_ranking", "args": [12]}
 ]

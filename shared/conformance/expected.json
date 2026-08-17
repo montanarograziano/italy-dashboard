@@ -10885,6 +10885,56 @@
         "selected": 6.1
       }
     ],
+    "warming_rate_top12": [
+      {
+        "name": "Bolzano",
+        "value": 0.41
+      },
+      {
+        "name": "Trento",
+        "value": 0.4
+      },
+      {
+        "name": "Alessandria",
+        "value": 0.39
+      },
+      {
+        "name": "Milano",
+        "value": 0.38
+      },
+      {
+        "name": "Pavia",
+        "value": 0.38
+      },
+      {
+        "name": "Sondrio",
+        "value": 0.38
+      },
+      {
+        "name": "Biella",
+        "value": 0.37
+      },
+      {
+        "name": "Cuneo",
+        "value": 0.37
+      },
+      {
+        "name": "Lecco",
+        "value": 0.37
+      },
+      {
+        "name": "Verbania",
+        "value": 0.37
+      },
+      {
+        "name": "Bergamo",
+        "value": 0.36
+      },
+      {
+        "name": "Lodi",
+        "value": 0.36
+      }
+    ],
     "warming_rate_top5": [
       {
         "name": "Bolzano",
