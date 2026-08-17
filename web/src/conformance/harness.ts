@@ -1,6 +1,7 @@
 import cases from "../../../shared/conformance/cases.json";
 import expected from "../../../shared/conformance/expected.json";
 import { openConnection } from "../db";
+import * as climate from "../queries/climate";
 import * as crimeClimate from "../queries/crimeClimate";
 import * as economy from "../queries/economy";
 import * as ready from "../queries/ready";
@@ -30,6 +31,12 @@ const IMPLEMENTED: Record<string, (...args: never[]) => Promise<unknown>> = {
   unemployment_series: economy.unemploymentSeries,
   foreign_share_timeseries: economy.foreignShareTimeseries,
   region_names: economy.regionNames,
+  climate_cities: climate.climateCities,
+  climate_coverage: climate.climateCoverage,
+  climate_stripes: climate.climateStripes,
+  climate_threshold_days: climate.climateThresholdDays,
+  climate_month_heatmap: climate.climateMonthHeatmap,
+  warming_rate_ranking: climate.warmingRateRanking,
 };
 
 function normalise(value: unknown): unknown {
