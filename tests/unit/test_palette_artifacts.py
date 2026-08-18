@@ -39,6 +39,7 @@ def test_json_carries_every_role_in_both_modes():
         "ink_secondary",
         "ink_muted",
         "gridline",
+        "warning",
         "categorical",
         "diverging",
         "sequential",
@@ -64,6 +65,8 @@ def test_json_values_are_the_palette_values():
     assert data["ink_muted"]["dark"] == palette.INK_MUTED_DARK
     assert data["gridline"]["light"] == palette.GRIDLINE_LIGHT
     assert data["gridline"]["dark"] == palette.GRIDLINE_DARK
+    assert data["warning"]["light"] == palette.WARNING_LIGHT
+    assert data["warning"]["dark"] == palette.WARNING_DARK
 
 
 def test_css_matches_the_existing_reflex_custom_properties():

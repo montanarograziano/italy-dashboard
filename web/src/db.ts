@@ -136,22 +136,82 @@ function toPlainValue(value: unknown): unknown {
   return value;
 }
 
+/** Cache of in-flight/settled `runSql` calls, keyed on `sql` plus a stable
+ * serialisation of `params`. Caches the PROMISE, not just its resolved value:
+ * the hash router (router.tsx) unmounts a page's whole component tree on
+ * navigation, so revisiting any page re-mounts it and re-fires every one of
+ * its queries -- without this, that includes queries whose underlying data
+ * (the parquet snapshot baked into this build) has not changed at all within
+ * the session. Caching only the resolved array would still let two
+ * near-simultaneous callers (e.g. two components mounting together) both
+ * reach DuckDB before either resolves; caching the Promise itself means the
+ * second caller awaits the first's in-flight request instead.
+ *
+ * Never invalidated within a session, DELIBERATELY: unlike the Reflex
+ * backend's cache (keyed on a fingerprint of the mutable on-disk snapshot a
+ * long-lived Python process can refresh under it), this app's data is a set
+ * of parquet files fetched once at page load and never rewritten for the
+ * life of that load -- there is no event a static bundle could ever observe
+ * that means "the data changed", so there is nothing correct to invalidate
+ * on. Do not add a TTL/LRU/fingerprint here: it would be complexity in
+ * search of a problem that cannot occur in this architecture. A real data
+ * update always ships as a new deploy, i.e. a fresh page load, i.e. a fresh
+ * module instance of this cache.
+ */
+const resultCache = new Map<string, Promise<Record<string, unknown>[]>>();
+
+/** The cache key. Every `params` array in web/src/queries/*.ts is a flat list
+ * of strings, numbers, or `null` (verified by inspection, not assumed) --
+ * `JSON.stringify` distinguishes all three unambiguously (a string is
+ * quoted, `null` is bare, a number is bare but never equal to any string's
+ * quoted form), so two calls with different intended parameters can never
+ * collide here. The `sql` text is joined onto that with a NUL separator
+ * (never legal inside SQL, so it cannot itself be forged by SQL text that
+ * happens to end like a JSON array) rather than bare concatenation, which
+ * would otherwise theoretically let a crafted `sql` suffix collide with the
+ * start of a `params` JSON string.
+ */
+function cacheKey(sql: string, params: unknown[]): string {
+  return `${sql}\u0000${JSON.stringify(params)}`;
+}
+
 export async function runSql(
   sql: string,
   params: unknown[] = [],
 ): Promise<Record<string, unknown>[]> {
-  const con = await getConnection();
-  const stmt = await con.prepare(sql);
-  // `AsyncPreparedStatement.close()` releases its id in the WASM instance;
-  // never skip it, including on a query error, or a long-lived page that
-  // re-queries on every filter change leaks one statement per call.
-  try {
-    const table = params.length ? await stmt.query(...params) : await stmt.query();
-    return table.toArray().map((row) => {
-      const plain = row.toJSON() as Record<string, unknown>;
-      return Object.fromEntries(Object.entries(plain).map(([k, v]) => [k, toPlainValue(v)]));
-    });
-  } finally {
-    await stmt.close();
-  }
+  const key = cacheKey(sql, params);
+  const cached = resultCache.get(key);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    const con = await getConnection();
+    const stmt = await con.prepare(sql);
+    // `AsyncPreparedStatement.close()` releases its id in the WASM instance;
+    // never skip it, including on a query error, or a long-lived page that
+    // re-queries on every filter change leaks one statement per call.
+    try {
+      const table = params.length ? await stmt.query(...params) : await stmt.query();
+      return table.toArray().map((row) => {
+        const plain = row.toJSON() as Record<string, unknown>;
+        return Object.fromEntries(Object.entries(plain).map(([k, v]) => [k, toPlainValue(v)]));
+      });
+    } finally {
+      await stmt.close();
+    }
+  })();
+
+  resultCache.set(key, promise);
+  // A rejected query (e.g. hitting mart_climate_daily, deliberately excluded
+  // from this build -- see registerParquetViews above) must not poison this
+  // key forever: evict on rejection so the NEXT call gets a fresh attempt,
+  // same as if nothing had ever been cached. This `.catch` exists purely to
+  // evict and to keep the rejection from also surfacing as an unhandled
+  // promise rejection on this second reference to it; the `promise` returned
+  // below is untouched, so the original caller's rejection (and every
+  // concurrent caller already awaiting this same in-flight promise) is
+  // exactly what it would have been with no cache at all.
+  promise.catch(() => {
+    resultCache.delete(key);
+  });
+  return promise;
 }

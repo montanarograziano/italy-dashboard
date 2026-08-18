@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PlotFigure } from "../charts/plot";
 import { lineSeriesSpec } from "../charts/series";
 import { NATIONAL, foreignShareTimeseries, populationTimeseries, regionNames } from "../queries/economy";
-import { gridline, inkMuted, inkPrimary, inkSecondary, series, surface, type Mode } from "../theme";
+import { inkMuted, inkPrimary, inkSecondary, series, type Mode } from "../theme";
+import { Card, EmptyNote, Select } from "../ui";
 
 // The static frontend's population page. italy_dashboard/pages/population.py
 // (45 lines, two charts) is the reference for WHAT is shown, not for
@@ -15,24 +16,6 @@ import { gridline, inkMuted, inkPrimary, inkSecondary, series, surface, type Mod
 
 type Row = Record<string, unknown>;
 
-function Card({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
-  return (
-    <section
-      style={{
-        background: surface(),
-        border: `1px solid ${gridline()}`,
-        borderRadius: "10px",
-        padding: "1.25rem",
-        marginBottom: "1rem",
-      }}
-    >
-      <h3 style={{ color: inkPrimary(), margin: "0 0 0.25rem", fontSize: "1.05rem" }}>{title}</h3>
-      <p style={{ color: inkMuted(), fontSize: "0.85em", margin: "0 0 0.75rem" }}>{subtitle}</p>
-      {children}
-    </section>
-  );
-}
-
 function Loading() {
   return (
     <p className="loading-row" style={{ color: inkMuted(), margin: 0 }} aria-live="polite">
@@ -40,10 +23,6 @@ function Loading() {
       Loading data…
     </p>
   );
-}
-
-function EmptyNote({ children }: { children: ReactNode }) {
-  return <p style={{ color: inkMuted(), fontStyle: "italic", margin: 0 }}>{children}</p>;
 }
 
 export default function Population({ mode }: { mode: Mode }) {
@@ -113,7 +92,7 @@ export default function Population({ mode }: { mode: Mode }) {
         <h1 style={{ color: inkPrimary(), margin: 0 }}>Population &amp; migration</h1>
         <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
           Region{" "}
-          <select
+          <Select
             data-testid="population-region-select"
             value={region}
             onChange={(e) => setRegion(e.target.value)}
@@ -123,7 +102,7 @@ export default function Population({ mode }: { mode: Mode }) {
                 {r}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PlotFigure } from "../charts/plot";
 import { lineSeriesSpec } from "../charts/series";
 import { inflationSeries } from "../queries/static";
-import { gridline, inkMuted, inkPrimary, inkSecondary, series, surface, type Mode } from "../theme";
+import { inkMuted, inkPrimary, series, type Mode } from "../theme";
+import { Card, EmptyNote } from "../ui";
 
 // The static frontend's economy page. italy_dashboard/pages/economy.py (27
 // lines, one chart, no region selector -- inflation_series() takes none) is
@@ -11,24 +12,6 @@ import { gridline, inkMuted, inkPrimary, inkSecondary, series, surface, type Mod
 
 type Row = Record<string, unknown>;
 
-function Card({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
-  return (
-    <section
-      style={{
-        background: surface(),
-        border: `1px solid ${gridline()}`,
-        borderRadius: "10px",
-        padding: "1.25rem",
-        marginBottom: "1rem",
-      }}
-    >
-      <h3 style={{ color: inkPrimary(), margin: "0 0 0.25rem", fontSize: "1.05rem" }}>{title}</h3>
-      <p style={{ color: inkMuted(), fontSize: "0.85em", margin: "0 0 0.75rem" }}>{subtitle}</p>
-      {children}
-    </section>
-  );
-}
-
 function Loading() {
   return (
     <p className="loading-row" style={{ color: inkMuted(), margin: 0 }} aria-live="polite">
@@ -36,10 +19,6 @@ function Loading() {
       Loading data…
     </p>
   );
-}
-
-function EmptyNote({ children }: { children: ReactNode }) {
-  return <p style={{ color: inkMuted(), fontStyle: "italic", margin: 0 }}>{children}</p>;
 }
 
 export default function Economy({ mode }: { mode: Mode }) {

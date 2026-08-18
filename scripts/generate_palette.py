@@ -34,6 +34,7 @@ def build_json() -> str:
         },
         "ink_muted": {"light": palette.INK_MUTED_LIGHT, "dark": palette.INK_MUTED_DARK},
         "gridline": {"light": palette.GRIDLINE_LIGHT, "dark": palette.GRIDLINE_DARK},
+        "warning": {"light": palette.WARNING_LIGHT, "dark": palette.WARNING_DARK},
         "categorical": {
             "light": list(palette.CATEGORICAL_LIGHT),
             "dark": list(palette.CATEGORICAL_DARK),

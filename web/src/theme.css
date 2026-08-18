@@ -22,6 +22,28 @@ body {
     -apple-system,
     "Segoe UI",
     sans-serif;
+  /* Light reset, not a new design system: a sane reading line-height (the
+     browser default of ~1.2 is fine for a single line, cramped for the
+     multi-line body copy every caveat/subtitle in this app renders), plus
+     antialiasing that macOS/iOS WebKit does not apply by default outside it. */
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Zeroed so spacing is controlled by the components that use these elements
+   (Card/SectionHeading/EmptyNote in ui.tsx, every page's own `<h1>`), not by
+   the browser's built-in heading/paragraph margins -- every one of those
+   components already sets its own explicit `margin` inline, so this only
+   changes behaviour for an element that forgot to. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin: 0;
 }
 
 /* Indeterminate spinner for the initial load.
@@ -70,4 +92,87 @@ body {
   align-items: center;
   gap: 0.6em;
   font-style: italic;
+}
+
+/* Native <select> (ui.tsx's `Select`), restyled: `appearance: none` drops the
+ * OS chrome that painted every dropdown as a plain white box regardless of
+ * dark mode. Keyboard nav, typeahead and screen-reader semantics stay
+ * entirely native -- this is not a custom-built listbox.
+ *
+ * Colour comes from `currentColor`/an inline `borderColor`, same split as
+ * `.spinner` above: see `Select`'s own docstring (ui.tsx) for why the base
+ * border/background are set inline (static values, never touched by a
+ * pseudo-class here) while the focus ring alone reads `currentColor`.
+ */
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 6px;
+  padding: 0.35em 1.8em 0.35em 0.55em;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* The dropdown affordance `appearance: none` removes: a small CSS-only
+ * chevron on top of the (still native) select, not a custom listbox.
+ * `pointer-events: none` lets every click fall through to the select
+ * underneath, so the arrow is decoration only, never a separate hit target. */
+.select-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.select-wrap::after {
+  content: "";
+  position: absolute;
+  top: 45%;
+  right: 0.75em;
+  width: 0.5em;
+  height: 0.5em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-50%) rotate(45deg);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* Nav links and the colour-mode toggle (App.tsx): both set their own
+ * `color` inline from theme.ts already, so `currentColor` here needs no
+ * colour of its own -- same idiom as `.select`/`.spinner` above. Neither had
+ * any hover/focus affordance before this rule. */
+.nav-link,
+.mode-toggle {
+  border-radius: 4px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nav-link {
+  padding: 0.2em 0.4em;
+  margin: -0.2em -0.4em;
+}
+
+.nav-link:hover,
+.mode-toggle:hover {
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.nav-link:focus-visible,
+.mode-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 45%, transparent);
 }

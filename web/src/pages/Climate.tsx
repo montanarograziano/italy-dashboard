@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import provinceCapitalsCsv from "../../../dbt/seeds/province_capitals.csv?raw";
 import {
   bandTrendSpec,
@@ -27,7 +27,8 @@ import {
 } from "../queries/climateScope";
 import { climateReady, climateRegionReady } from "../queries/ready";
 import { climateAnnualSeries, climateDistribution, climateDistributionWindows } from "../queries/static";
-import { gridline, inkMuted, inkPrimary, inkSecondary, surface, type Mode } from "../theme";
+import { inkMuted, inkPrimary, inkSecondary, type Mode } from "../theme";
+import { Callout, Card, EmptyNote, SectionHeading, Select } from "../ui";
 
 // The static frontend's climate page. italy_dashboard/pages/climate.py is the
 // reference for WHAT is shown and HOW it is grouped (an Italia -> region ->
@@ -135,50 +136,6 @@ async function loadStripesGrid(limit: number): Promise<Row[]> {
     }),
   );
   return perCity.filter((rows) => rows.length > 0).flat();
-}
-
-function SectionHeading({ children }: { children: ReactNode }) {
-  return (
-    <h2 style={{ color: inkPrimary(), fontSize: "1.25rem", margin: "1.75rem 0 0.5rem" }}>{children}</h2>
-  );
-}
-
-function Card({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      style={{
-        background: surface(),
-        border: `1px solid ${gridline()}`,
-        borderRadius: "10px",
-        padding: "1.25rem",
-        marginBottom: "1rem",
-      }}
-    >
-      <h3 style={{ color: inkPrimary(), margin: "0 0 0.25rem", fontSize: "1.05rem" }}>{title}</h3>
-      {subtitle ? (
-        <p style={{ color: inkMuted(), fontSize: "0.85em", margin: "0 0 0.75rem" }}>{subtitle}</p>
-      ) : null}
-      {children}
-    </section>
-  );
-}
-
-/** A plain-words placeholder for "there is nothing to draw here, and here is
- * why" -- distinct from a chart rendered with zero marks, which looks like a
- * bug rather than an honest answer. See this file's header comment on the
- * distribution card for why this is the PRIMARY path for that card, not a
- * fallback.
- */
-function EmptyNote({ children }: { children: ReactNode }) {
-  return <p style={{ color: inkMuted(), fontStyle: "italic", margin: 0 }}>{children}</p>;
 }
 
 /** What the page is waiting for, so the wait can say which.
@@ -451,7 +408,7 @@ export default function Climate({ mode }: { mode: Mode }) {
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
           <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
             Region{" "}
-            <select
+            <Select
               data-testid="climate-region-select"
               value={region}
               onChange={(e) => void handleRegionChange(e.target.value)}
@@ -461,17 +418,17 @@ export default function Climate({ mode }: { mode: Mode }) {
                   {r}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
             City{" "}
-            <select data-testid="climate-city-select" value={city} onChange={(e) => setCity(e.target.value)}>
+            <Select data-testid="climate-city-select" value={city} onChange={(e) => setCity(e.target.value)}>
               {cityOptions.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
 
@@ -481,23 +438,17 @@ export default function Climate({ mode }: { mode: Mode }) {
         </p>
 
         {isNationalScope || isPartialRegionScope ? (
-          // Advisory text, not an alert: nothing failed, and it does not need
-          // re-announcing to screen readers every time the scope returns here
-          // (the Reflex counterpart uses `rx.callout` with no alert role).
-          <div
-            data-testid="climate-scope-note"
-            style={{
-              border: `1px solid ${gridline()}`,
-              borderRadius: "8px",
-              padding: "0.75rem 1rem",
-              color: inkSecondary(),
-              fontSize: "0.9em",
-            }}
-          >
+          // A data-quality caveat about the aggregate above (a northern-weighted
+          // "Italia" mean, or a region whose covered capitals are a fraction of
+          // the whole) -- Reflex's counterpart is an amber `rx.callout` with a
+          // warning icon (climate.py), which is exactly what `Callout` (ui.tsx)
+          // restores here; this used to be a plain bordered `<div>`, visually
+          // identical to a neutral "no data" message, and easy to miss.
+          <Callout testId="climate-scope-note">
             {isNationalScope
               ? CLIMATE_COVERAGE_NOTE
               : regionCompositionNote(region, regionCapitalCovered, regionCapitalTotal)}
-          </div>
+          </Callout>
         ) : null}
 
         <SectionHeading>Selected scope: {scopeName}</SectionHeading>
