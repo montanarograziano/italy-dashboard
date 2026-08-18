@@ -128,6 +128,17 @@ def missing_parquet_probe(harness_page) -> dict:
     return harness_page.evaluate("() => window.probeMissingParquet()")
 
 
+@pytest.fixture(scope="module")
+def run_sql_cache_probe(harness_page) -> dict:
+    """Exercises `db.ts`'s `runSql` result cache directly (harness.ts's
+    `probeRunSqlCache`), against the real memoised DuckDB-WASM connection this
+    page's other queries share. See that function's own comment for why
+    `SELECT ? AS echoed` rather than a real mart: this is testing the cache,
+    not data correctness.
+    """
+    return harness_page.evaluate("() => window.probeRunSqlCache()")
+
+
 def test_no_case_errored(results: dict):
     errors = {k: v for k, v in results.items() if isinstance(v, dict) and "__error__" in v}
     assert not errors, f"cases raised in the browser: {errors}"
@@ -299,3 +310,91 @@ def test_the_excluded_mart_cases_are_tagged_not_silently_tolerated(results: dict
     )
     for case_id, v in excluded.items():
         assert v["__excluded_from_static_build__"] == ["mart_climate_daily"], (case_id, v)
+
+
+# --------------------------------------------------------------------------
+# db.ts's `runSql` result cache. No Python reference exists for this one --
+# Reflex's own cache is keyed on a fingerprint of mutable on-disk data, a
+# different mechanism for a different reason (see runSql's module comment) --
+# so these assert on the harness's `probeRunSqlCache` directly instead of
+# against `expected.json`.
+
+
+def test_different_parameters_return_genuinely_different_results(run_sql_cache_probe: dict):
+    """The collision a broken cache KEY would cause: if `params` were dropped
+    from the key (or JSON-serialised ambiguously), a second call with
+    different parameters would wrongly reuse the first call's cached rows.
+
+    This is the test the task's own verification step asks to break on
+    purpose: dropping `params` from `cacheKey` in db.ts makes `different`
+    equal `first` here (both would resolve to whichever ran first), so this
+    assertion goes red exactly when that bug is present.
+    """
+    probe = run_sql_cache_probe
+    assert probe["first"] == [{"echoed": "hello"}], probe["first"]
+    assert probe["different"] == [{"echoed": "world"}], probe["different"]
+    assert probe["first"] != probe["different"], (
+        "two different parameter values produced the same rows -- the cache key "
+        "is not distinguishing them"
+    )
+
+
+def test_an_identical_repeat_call_does_not_re_issue_the_query(run_sql_cache_probe: dict):
+    """A cache hit must not touch `prepare` (and therefore never reaches
+    DuckDB) a second time for the exact same `(sql, params)`.
+
+    `prepareCalls` is a spy on the real, shared connection's `prepare` method
+    (harness.ts's `probeRunSqlCache`), so this counts real DB-facing calls,
+    not merely whether the two results look alike.
+    """
+    probe = run_sql_cache_probe
+    assert probe["prepareCallsAfterFirst"] == 1, probe
+    assert probe["repeat"] == probe["first"], probe
+    assert probe["prepareCallsAfterRepeat"] == probe["prepareCallsAfterFirst"], (
+        f"a repeat call with identical params re-issued the query: "
+        f"{probe['prepareCallsAfterFirst']} -> {probe['prepareCallsAfterRepeat']} prepare() calls"
+    )
+    # The DIFFERENT-parameters call right after must be a genuine cache MISS,
+    # or this pair of assertions would pass even with no cache at all.
+    assert probe["prepareCallsAfterDifferent"] == probe["prepareCallsAfterRepeat"] + 1, probe
+
+
+def test_concurrent_identical_calls_share_the_one_in_flight_request(run_sql_cache_probe: dict):
+    """Two callers racing to mount at once (e.g. two components reading the
+    same query near-simultaneously) must not both reach DuckDB.
+
+    Caching only the RESOLVED value would still let this pair race each other
+    to `prepare()` -- both start before either has resolved. Caching the
+    in-flight Promise itself is what this pins: exactly one `prepare()` call
+    for the pair, and both callers see the same rows.
+    """
+    probe = run_sql_cache_probe
+    assert probe["concurrentA"] == [{"echoed": "concurrent"}], probe["concurrentA"]
+    assert probe["concurrentB"] == probe["concurrentA"], probe
+    assert probe["prepareCallsAfterConcurrentPair"] == probe["prepareCallsAfterDifferent"] + 1, (
+        f"a concurrent pair of identical calls issued more than one query: "
+        f"{probe['prepareCallsAfterDifferent']} -> {probe['prepareCallsAfterConcurrentPair']} "
+        f"prepare() calls"
+    )
+
+
+def test_a_failed_query_is_not_cached_as_a_permanent_failure(run_sql_cache_probe: dict):
+    """A rejected `runSql` call (querying a table that does not exist -- the
+    same shape as the deliberately-excluded mart_climate_daily) must get a
+    FRESH attempt next time, not replay the same rejection forever.
+
+    Both attempts reject (the table never exists), but each must be its own
+    real `prepare()` call: if the first rejection were cached, the second
+    attempt's `prepareCalls` would not move at all.
+    """
+    probe = run_sql_cache_probe
+    assert probe["failureFirstAttemptRejected"] is True, probe
+    assert probe["failureSecondAttemptRejected"] is True, probe
+    assert (
+        probe["prepareCallsAfterFailureSecondAttempt"]
+        == probe["prepareCallsAfterFailureFirstAttempt"] + 1
+    ), (
+        f"a second attempt at the same failing query did not re-issue it: "
+        f"{probe['prepareCallsAfterFailureFirstAttempt']} -> "
+        f"{probe['prepareCallsAfterFailureSecondAttempt']} prepare() calls"
+    )

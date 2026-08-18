@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PlotFigure } from "../charts/plot";
 import { scatterSpec } from "../charts/scatter";
 import { climateCoverage } from "../queries/climate";
 import { crimeClimateScatter, crimeClimateStats } from "../queries/crimeClimate";
 import { crimeClimateReady } from "../queries/ready";
 import { gridline, inkMuted, inkPrimary, inkSecondary, series, surface, type Mode } from "../theme";
+import { Callout, Card, EmptyNote } from "../ui";
 
 // The static frontend's climate x crime page. italy_dashboard/pages/climate_crime.py
 // (its own docstring) is the reference for WHAT is shown, not for styling
@@ -103,24 +104,6 @@ const NO_CLIMATE_CRIME_TEXT =
   "data. Run  just refresh  and  just refresh-weather  (or  just sample), " +
   "then reload.";
 
-function Card({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
-  return (
-    <section
-      style={{
-        background: surface(),
-        border: `1px solid ${gridline()}`,
-        borderRadius: "10px",
-        padding: "1.25rem",
-        marginBottom: "1rem",
-      }}
-    >
-      <h3 style={{ color: inkPrimary(), margin: "0 0 0.25rem", fontSize: "1.05rem" }}>{title}</h3>
-      <p style={{ color: inkMuted(), fontSize: "0.85em", margin: "0 0 0.75rem" }}>{subtitle}</p>
-      {children}
-    </section>
-  );
-}
-
 function Loading() {
   return (
     <p className="loading-row" style={{ color: inkMuted(), margin: 0 }} aria-live="polite">
@@ -128,10 +111,6 @@ function Loading() {
       Loading data…
     </p>
   );
-}
-
-function EmptyNote({ children }: { children: ReactNode }) {
-  return <p style={{ color: inkMuted(), fontStyle: "italic", margin: 0 }}>{children}</p>;
 }
 
 function StatTile({ label, value, note, testId }: { label: string; value: string; note: string; testId: string }) {
@@ -246,37 +225,34 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
            * check while still arguing the wrong thing to anyone reading top
            * to bottom. `data-testid="cc-caveat"` is asserted (via
            * `compareDocumentPosition`) to precede `data-testid="cc-panel"`
-           * in tests/browser/test_static_app.py. */}
-          <p
-            data-testid="cc-caveat"
-            style={{
-              color: inkPrimary(),
-              border: `1px solid ${gridline()}`,
-              borderRadius: "8px",
-              padding: "0.85rem 1rem",
-              margin: "0 0 1rem",
-              fontSize: "0.9em",
-            }}
-          >
-            {CC_CAVEAT}
-          </p>
+           * in tests/browser/test_static_app.py.
+           *
+           * `Callout` (ui.tsx), not the plain bordered `<p>` this used to be:
+           * Reflex actually renders this one as a neutral gray/info callout
+           * (climate_crime.py), milder than the amber treatment below, but
+           * this is the single most load-bearing paragraph on the page (see
+           * the header comment above) and deserves to visually stand out,
+           * not blend into body text -- a deliberate, content-not-styling
+           * departure from Reflex's exact severity choice, not an oversight. */}
+          <div style={{ margin: "0 0 1rem" }}>
+            <Callout testId="cc-caveat">{CC_CAVEAT}</Callout>
+          </div>
 
           {/* Coverage, before either scatter: the raw view's whole argument
            * is a north-south confound, and partial, mostly-northern
-           * coverage can hide it and look like a null result instead. */}
-          <div
-            style={{
-              border: `1px solid ${gridline()}`,
-              borderRadius: "8px",
-              padding: "0.75rem 1rem",
-              margin: "0 0 1rem",
-            }}
-          >
-            <p style={{ color: inkPrimary(), fontWeight: 700, margin: "0 0 0.3rem", fontSize: "0.9em" }}>
-              Coverage: {coverage.capitals} of {coverage.capitals_total} capitals, {coverage.regions} of{" "}
-              {coverage.regions_total} regions, {coverage.year_start}-{coverage.year_end}
-            </p>
-            <p style={{ color: inkSecondary(), fontSize: "0.85em", margin: 0 }}>{CC_COVERAGE_NOTE}</p>
+           * coverage can hide it and look like a null result instead. Same
+           * shape as Climate.tsx's climate-scope-note, and the same fix:
+           * Reflex renders `cc_coverage_note` as an amber `rx.callout` with a
+           * warning icon (climate_crime.py) -- this used to be a plain
+           * bordered `<div>` with no colour or icon. The raw coverage line
+           * itself stays plain text, matching Climate.tsx's identical split
+           * between a plain stats line and a `Callout` for the caveat about it. */}
+          <p style={{ color: inkPrimary(), fontWeight: 700, margin: "0 0 0.4rem", fontSize: "0.9em" }}>
+            Coverage: {coverage.capitals} of {coverage.capitals_total} capitals, {coverage.regions} of{" "}
+            {coverage.regions_total} regions, {coverage.year_start}-{coverage.year_end}
+          </p>
+          <div style={{ margin: "0 0 1rem" }}>
+            <Callout>{CC_COVERAGE_NOTE}</Callout>
           </div>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>

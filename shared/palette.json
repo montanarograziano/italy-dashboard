@@ -20,6 +20,10 @@
     "light": "#e1e0d9",
     "dark": "#2e2e2c"
   },
+  "warning": {
+    "light": "#8f5e00",
+    "dark": "#e8b339"
+  },
   "categorical": {
     "light": [
       "#2a78d6",

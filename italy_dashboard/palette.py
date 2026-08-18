@@ -31,6 +31,22 @@ INK_MUTED_DARK = "#8a8983"
 GRIDLINE_LIGHT = "#e1e0d9"
 GRIDLINE_DARK = "#2e2e2c"
 
+# Warning/caveat accent: an amber distinct in hue (~40 degrees) from the
+# categorical orange (~17 degrees, CATEGORICAL_LIGHT[1]) so a data-quality
+# callout is never mistaken for a chart series. Not run through the
+# colourblind validator below (a UI chrome role, not chart-data, same as the
+# ink/gridline tokens above) -- picked instead by checking WCAG contrast
+# against SURFACE_LIGHT/SURFACE_DARK directly (>=4.5:1, AA for normal text):
+# #8f5e00 is 5.43:1 on SURFACE_LIGHT, #e8b339 is 9.07:1 on SURFACE_DARK.
+#
+# Consumed only by the static frontend's web/src/theme.ts (`warning()`),
+# for its `Callout` component. Reflex's own equivalent (`rx.callout(...,
+# color_scheme="amber")` in climate.py/climate_crime.py) gets its amber from
+# Radix's built-in theme rather than this palette, so italy_dashboard/theme.py
+# does not grow a matching accessor -- nothing there would call it.
+WARNING_LIGHT = "#8f5e00"
+WARNING_DARK = "#e8b339"
+
 # Categorical: fixed slot order, never cycled. Blue, orange, aqua in both modes,
 # so a series keeps its identity when the mode changes.
 CATEGORICAL_LIGHT = ("#2a78d6", "#eb6834", "#1baf7a")

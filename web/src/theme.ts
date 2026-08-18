@@ -57,3 +57,12 @@ export function inkMuted(): string {
 export function gridline(): string {
   return palette.gridline[currentMode()];
 }
+
+/** The amber accent for `Callout` (ui.tsx): a data-quality caveat about data
+ * that IS being shown, distinct in hue from `series(2)`'s categorical orange
+ * so a warning box is never mistaken for a chart series. See
+ * italy_dashboard/palette.py's WARNING_LIGHT/WARNING_DARK for how the values
+ * were chosen (contrast-checked against `surface()`, not eyeballed). */
+export function warning(): string {
+  return palette.warning[currentMode()];
+}

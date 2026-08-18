@@ -1,6 +1,6 @@
 import cases from "../../../shared/conformance/cases.json";
 import expected from "../../../shared/conformance/expected.json";
-import { openConnection, unavailableTables } from "../db";
+import { getConnection, openConnection, runSql, unavailableTables } from "../db";
 import * as climate from "../queries/climate";
 import * as climateScope from "../queries/climateScope";
 import * as crime from "../queries/crime";
@@ -78,6 +78,7 @@ declare global {
     runConformance: () => Promise<Record<string, unknown>>;
     implementedFunctions: () => string[];
     probeMissingParquet: () => Promise<MissingParquetProbe>;
+    probeRunSqlCache: () => Promise<RunSqlCacheProbe>;
   }
 }
 
@@ -85,6 +86,31 @@ export type MissingParquetProbe = {
   failed: string[];
   presentTableRows: number;
   missingTableError: string;
+};
+
+// `db.ts`'s `runSql` cache has no Python side to compare against (Reflex's
+// own cache is keyed on a fingerprint of mutable on-disk data, a different
+// mechanism entirely -- see runSql's module comment), so this is exercised
+// directly against the real connection rather than through cases.json/
+// expected.json. `SELECT ? AS echoed` is deliberately independent of every
+// real dataset: this is testing the CACHE, not data correctness (that is
+// already `test_ported_cases_match_the_python_reference`'s job), so it must
+// not be able to pass or fail because of which marts this build happens to
+// ship.
+export type RunSqlCacheProbe = {
+  prepareCallsAfterFirst: number;
+  prepareCallsAfterRepeat: number;
+  prepareCallsAfterDifferent: number;
+  prepareCallsAfterConcurrentPair: number;
+  prepareCallsAfterFailureFirstAttempt: number;
+  prepareCallsAfterFailureSecondAttempt: number;
+  first: unknown;
+  repeat: unknown;
+  different: unknown;
+  concurrentA: unknown;
+  concurrentB: unknown;
+  failureFirstAttemptRejected: boolean;
+  failureSecondAttemptRejected: boolean;
 };
 
 // The functions this harness claims to have ported. Read by the browser test so
@@ -112,6 +138,83 @@ window.probeMissingParquet = async () => {
   }
   await con.close();
   return { failed, presentTableRows, missingTableError };
+};
+
+// Spies on `prepare` (the first DB-facing call `runSql` makes per invocation,
+// before `stmt.query`) on the SAME memoised connection every query in this
+// app shares (`getConnection()`), so a `prepareCalls` increment means "this
+// `runSql` call actually reached DuckDB" and no increment means "the cache
+// served it". Restored in `finally` so this probe leaves no lasting effect on
+// the shared connection for whatever runs after it.
+window.probeRunSqlCache = async () => {
+  const con = await getConnection();
+  let prepareCalls = 0;
+  const originalPrepare = con.prepare.bind(con);
+  con.prepare = (async (text: string) => {
+    prepareCalls++;
+    return originalPrepare(text);
+  }) as typeof con.prepare;
+
+  try {
+    // Same SQL text, DIFFERENT params: exactly the shape a cache key that
+    // dropped `params` would collide on.
+    const first = await runSql("SELECT ? AS echoed", ["hello"]);
+    const prepareCallsAfterFirst = prepareCalls;
+
+    const repeat = await runSql("SELECT ? AS echoed", ["hello"]);
+    const prepareCallsAfterRepeat = prepareCalls;
+
+    const different = await runSql("SELECT ? AS echoed", ["world"]);
+    const prepareCallsAfterDifferent = prepareCalls;
+
+    // Two CONCURRENT calls, identical (new) params: proves the in-flight
+    // PROMISE is what gets cached, not just the resolved value -- both
+    // callers must share the one underlying `prepare`, not race to each
+    // issue their own.
+    const [concurrentA, concurrentB] = await Promise.all([
+      runSql("SELECT ? AS echoed", ["concurrent"]),
+      runSql("SELECT ? AS echoed", ["concurrent"]),
+    ]);
+    const prepareCallsAfterConcurrentPair = prepareCalls;
+
+    // A query that fails (an unknown table -- the same shape as hitting the
+    // deliberately-excluded mart_climate_daily) must NOT be cached as a
+    // permanent failure: the second attempt has to reach `prepare` again,
+    // not replay the first rejection forever.
+    let failureFirstAttemptRejected = false;
+    try {
+      await runSql("SELECT * FROM table_that_does_not_exist_anywhere");
+    } catch {
+      failureFirstAttemptRejected = true;
+    }
+    const prepareCallsAfterFailureFirstAttempt = prepareCalls;
+
+    let failureSecondAttemptRejected = false;
+    try {
+      await runSql("SELECT * FROM table_that_does_not_exist_anywhere");
+    } catch {
+      failureSecondAttemptRejected = true;
+    }
+    const prepareCallsAfterFailureSecondAttempt = prepareCalls;
+
+    return {
+      prepareCallsAfterFirst,
+      prepareCallsAfterRepeat,
+      prepareCallsAfterDifferent,
+      prepareCallsAfterConcurrentPair,
+      prepareCallsAfterFailureFirstAttempt,
+      prepareCallsAfterFailureSecondAttempt,
+      first,
+      repeat,
+      different,
+      concurrentA,
+      concurrentB,
+      failureFirstAttemptRejected,
+      failureSecondAttemptRejected,
+    };
+  } finally {
+    con.prepare = originalPrepare;
+  }
 };
 
 window.runConformance = async () => {

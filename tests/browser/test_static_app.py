@@ -284,6 +284,37 @@ def test_a_partial_region_scope_shows_a_composition_caveat(page, static_app):
     assert f"1 of {total} capitals" in note, note
 
 
+def test_the_climate_coverage_note_renders_as_a_prominent_callout_not_plain_text(page, static_app):
+    """The concrete visual regression this task exists to fix: before `Callout`
+    (ui.tsx) existed, `climate-scope-note` was a plain bordered `<div>` --
+    visually identical to `EmptyNote`'s neutral "no data" text, with no colour
+    and no icon, easy to miss on a page whose whole point is that this
+    aggregate is not what it looks like.
+
+    Two independent signals, either of which a reverted-to-plain-`<div>`
+    render would fail: an icon element (`Callout` always renders one, `EmptyNote`
+    /a plain `<div>` never do), and a background colour visibly different from
+    the page surface (a plain `<div>` never sets `background`, so it computes
+    to the surface colour showing through, or `transparent`).
+    """
+    page.goto(f"{static_app}/{CLIMATE_HREF}")  # region defaults to "Italia" -> the national coverage note
+    page.wait_for_selector("[data-testid='climate-scope-note']", timeout=30_000)
+
+    has_icon = page.eval_on_selector(
+        "[data-testid='climate-scope-note']", "el => el.querySelector('svg') !== null"
+    )
+    assert has_icon, "expected an icon inside the coverage-note callout, found none"
+
+    background = page.eval_on_selector(
+        "[data-testid='climate-scope-note']", "el => getComputedStyle(el).backgroundColor"
+    )
+    surface = page.evaluate("() => getComputedStyle(document.body).backgroundColor")
+    assert background not in (surface, "rgba(0, 0, 0, 0)", "transparent"), (
+        f"coverage-note callout background ({background}) is not visibly distinct "
+        f"from the plain page surface ({surface})"
+    )
+
+
 @pytest.mark.parametrize(
     ("slug", "testid"),
     [("economy", "inflation"), ("labor", "unemployment"), ("population", "resident")],

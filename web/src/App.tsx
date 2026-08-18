@@ -143,6 +143,7 @@ export default function App() {
         </span>
         <button
           type="button"
+          className="mode-toggle"
           onClick={cycle}
           style={{
             color: inkPrimary(),
@@ -172,6 +173,7 @@ export default function App() {
             <a
               key={r.slug}
               href={`#/${r.slug}`}
+              className="nav-link"
               aria-current={active ? "page" : undefined}
               style={{
                 color: active ? inkPrimary() : inkSecondary(),

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { hBarSpec } from "../charts/bar";
 import { PlotFigure } from "../charts/plot";
 import { scatterSpec } from "../charts/scatter";
@@ -23,6 +23,7 @@ import {
 import { martReady } from "../queries/ready";
 import { incomeCorrelations, incomeScatter, incomeYears } from "../queries/static";
 import { gridline, inkMuted, inkPrimary, inkSecondary, series, surface, type Mode } from "../theme";
+import { Card, EmptyNote, Select } from "../ui";
 
 // The static frontend's crime page. italy_dashboard/pages/crime.py (397
 // lines, two tabs, 11 chart calls) is the reference for WHAT is shown, not
@@ -121,24 +122,6 @@ const CRIME_SPLIT_OPTIONS: SplitOption[] = [
   { value: "offence", label: "Offence" },
 ];
 
-function Card({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
-  return (
-    <section
-      style={{
-        background: surface(),
-        border: `1px solid ${gridline()}`,
-        borderRadius: "10px",
-        padding: "1.25rem",
-        marginBottom: "1rem",
-      }}
-    >
-      <h3 style={{ color: inkPrimary(), margin: "0 0 0.25rem", fontSize: "1.05rem" }}>{title}</h3>
-      <p style={{ color: inkMuted(), fontSize: "0.85em", margin: "0 0 0.75rem" }}>{subtitle}</p>
-      {children}
-    </section>
-  );
-}
-
 function Loading() {
   return (
     <p className="loading-row" style={{ color: inkMuted(), margin: 0 }} aria-live="polite">
@@ -146,10 +129,6 @@ function Loading() {
       Loading data…
     </p>
   );
-}
-
-function EmptyNote({ children }: { children: ReactNode }) {
-  return <p style={{ color: inkMuted(), fontStyle: "italic", margin: 0 }}>{children}</p>;
 }
 
 function LabeledSelect({
@@ -178,13 +157,13 @@ function LabeledSelect({
       }}
     >
       {label}
-      <select data-testid={testId} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      <Select data-testid={testId} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
         {options.map((o) => (
           <option key={o} value={o}>
             {o}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }
@@ -211,7 +190,7 @@ function SplitBySelect({
       }}
     >
       Split by
-      <select
+      <Select
         data-testid={testId}
         value={value ?? "none"}
         onChange={(e) => onChange(e.target.value === "none" ? null : e.target.value)}
@@ -221,7 +200,7 @@ function SplitBySelect({
             {opt.label}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }
