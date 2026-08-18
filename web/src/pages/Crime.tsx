@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { hBarSpec } from "../charts/bar";
 import { PlotFigure } from "../charts/plot";
+import { scatterSpec } from "../charts/scatter";
 import { lineSeriesSpec } from "../charts/series";
 import {
   martBreakdown,
@@ -19,6 +20,7 @@ import {
   REGION_SCOPE,
   type Mart,
 } from "../queries/martEngine";
+import { incomeCorrelations, incomeScatter, incomeYears } from "../queries/static";
 import { gridline, inkMuted, inkPrimary, inkSecondary, series, surface, type Mode } from "../theme";
 
 // The static frontend's crime page. italy_dashboard/pages/crime.py (397
@@ -46,11 +48,15 @@ import { gridline, inkMuted, inkPrimary, inkSecondary, series, surface, type Mod
 // docstring. Selecting a province narrows harder than its region and wins
 // the single `region` slot, exactly like `_selections` in state.py.
 //
-// Dropped relative to the Reflex reference: the income-vs-offender-rate
-// scatter card (`OffendersState._refresh_income`, `income_scatter`,
-// `income_correlations`). It has no port in queries/crime.ts and is not
-// part of this task's interface -- the static build has no scatter-chart
-// spec and no income query to feed one.
+// The income-vs-offender-rate scatter card (`OffendersState._refresh_income`,
+// `_income_card` in crime.py) is independent of every other offenders
+// filter -- state.py's `_refresh_income` never reads `_selections()`, just
+// its own `income_year` -- so `IncomeCard` below owns its own year/data
+// state entirely rather than folding into `OffendersTab`'s big filter
+// effect. `incomeYears`/`incomeScatter`/`incomeCorrelations` live in
+// queries/static.ts (ported in this plan's prior task, alongside
+// `inflationSeries`), not queries/crime.ts -- easy to miss if only the
+// crime-specific query module is checked.
 //
 // Collapsed relative to the Reflex reference: `_trend_chart`'s four
 // rx.match branches (0/1/2/3 series) compile to four separate `line_chart`
@@ -604,7 +610,166 @@ function OffendersTab({ mode }: { mode: Mode }) {
           )}
         </div>
       </Card>
+
+      <IncomeCard mode={mode} />
     </div>
+  );
+}
+
+// Reflex's exact copy (translations.py's "income_missing" EN string),
+// reused verbatim rather than paraphrased: it names the real `just discover`
+// / `just refresh income_regional` recovery steps, which this app has no
+// business inventing its own wording for.
+const INCOME_MISSING_TEXT =
+  'Income data not fetched yet: find the dataflow with just discover "reddito disponibile", ' +
+  "set it in registry.yaml, then just refresh income_regional.";
+
+// Reflex's exact copy (translations.py's "income_caveat" EN string).
+const INCOME_CAVEAT_TEXT =
+  "Interpret with care: income correlates with urbanization, police presence, and reporting " +
+  "propensity. A regional association is not evidence about individuals (ecological fallacy).";
+
+/** Income vs offender rate, by region -- independent of every other filter
+ * on this tab (mirrors `OffendersState._refresh_income`, which never reads
+ * `_selections()`), so this owns its own year/data state entirely rather
+ * than joining `OffendersTab`'s big combined-filter effect.
+ *
+ * `ready` mirrors `OffendersState.income_ready` (`bool(income_years())`):
+ * whether the income mart has ANY usable year at all, independent of
+ * whether the currently selected year happens to have rows -- the
+ * `income_missing` callout is for "the mart was never built", not for
+ * "this one year is empty" (which the scatter's own `EmptyNote` covers).
+ */
+function IncomeCard({ mode }: { mode: Mode }) {
+  const [years, setYears] = useState<string[]>([]);
+  const [yearsLoaded, setYearsLoaded] = useState(false);
+  const [year, setYear] = useState("");
+  const [dataLoading, setDataLoading] = useState(true);
+  const [itl, setItl] = useState<Row[]>([]);
+  const [frg, setFrg] = useState<Row[]>([]);
+  const [corrItl, setCorrItl] = useState("—");
+  const [corrFrg, setCorrFrg] = useState("—");
+
+  useEffect(() => {
+    let cancelled = false;
+    void incomeYears().then((yrs) => {
+      if (cancelled) return;
+      setYears(yrs);
+      setYearsLoaded(true);
+      if (yrs.length > 0) setYear(yrs[0]!);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!year) return;
+    let cancelled = false;
+    setDataLoading(true);
+    void Promise.all([incomeScatter(year), incomeCorrelations(year)]).then(([scatter, corr]) => {
+      if (cancelled) return;
+      setItl(scatter.ITL ?? []);
+      setFrg(scatter.FRG ?? []);
+      setCorrItl(corr.ITL ?? "—");
+      setCorrFrg(corr.FRG ?? "—");
+      setDataLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [year]);
+
+  const ready = years.length > 0;
+
+  const scatterSpecMemo = useMemo(
+    () =>
+      scatterSpec(
+        [
+          { rows: itl, label: "Italians", color: series(1) },
+          { rows: frg, label: "Foreigners", color: series(2) },
+        ],
+        {
+          xKey: "income",
+          yKey: "rate",
+          xLabel: "Income per capita (EUR)",
+          yLabel: "Offenders per 1,000",
+          titleKey: "region",
+        },
+      ),
+    [itl, frg, mode],
+  );
+
+  return (
+    <Card
+      title="Income vs offender rate (regions)"
+      subtitle="Each dot is a region: income per capita (x) vs offenders per 1,000 residents of the group (y). Ecological correlation -- region-level association, not individual behavior."
+    >
+      {!yearsLoaded ? (
+        <Loading />
+      ) : !ready ? (
+        <div data-testid="crime-income-missing">
+          <EmptyNote>{INCOME_MISSING_TEXT}</EmptyNote>
+        </div>
+      ) : (
+        <div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "1.5em",
+              alignItems: "flex-end",
+              marginBottom: "0.75rem",
+            }}
+          >
+            <LabeledSelect
+              label="Year"
+              testId="crime-income-year-select"
+              options={years}
+              value={year}
+              onChange={setYear}
+            />
+            <div>
+              <p style={{ color: inkSecondary(), fontSize: "0.8em", margin: "0 0 0.2rem" }}>
+                Correlation (Italians)
+              </p>
+              {/* `corrItl`/`corrFrg` come straight from incomeCorrelations() (queries/static.ts),
+               * already formatted (e.g. "r = +0.42 (n=18)" or "—") -- rendered verbatim, same
+               * rule as the KPI tiles above: never reformatted. */}
+              <p
+                data-testid="crime-income-corr-italians"
+                style={{ color: inkPrimary(), fontWeight: 600, margin: 0 }}
+              >
+                {corrItl}
+              </p>
+            </div>
+            <div>
+              <p style={{ color: inkSecondary(), fontSize: "0.8em", margin: "0 0 0.2rem" }}>
+                Correlation (Foreigners)
+              </p>
+              <p
+                data-testid="crime-income-corr-foreigners"
+                style={{ color: inkPrimary(), fontWeight: 600, margin: 0 }}
+              >
+                {corrFrg}
+              </p>
+            </div>
+          </div>
+          <div data-testid="crime-income-scatter">
+            {dataLoading ? (
+              <Loading />
+            ) : itl.length === 0 && frg.length === 0 ? (
+              <EmptyNote>No income/rate data for {year}.</EmptyNote>
+            ) : (
+              <PlotFigure spec={scatterSpecMemo} />
+            )}
+          </div>
+          <p style={{ color: inkMuted(), fontSize: "0.75em", margin: "0.75rem 0 0" }}>
+            {INCOME_CAVEAT_TEXT}
+          </p>
+        </div>
+      )}
+    </Card>
   );
 }
 

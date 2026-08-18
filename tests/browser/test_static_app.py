@@ -286,6 +286,22 @@ def test_the_crime_page_kpis_render_python_formatted_strings(page, static_app):
     assert "," in text and "." not in text, text
 
 
+def test_the_crime_page_income_scatter_renders_real_points(page, static_app):
+    """The income-vs-offender-rate card must reach real data, not an empty chart.
+
+    An empty scatter with no explanation reads as broken, not as "no data" --
+    the same standing rule the other chart pages in this suite already
+    enforce (see `test_the_climate_page_renders_data_not_an_empty_state`).
+    `mart_crime_income`'s latest year (2024) carries 12 regions per
+    citizenship group, so this asserts a real, non-trivial point count
+    rather than merely "at least one".
+    """
+    page.goto(f"{static_app}/#/crime")
+    page.wait_for_selector("[data-testid='crime-income-scatter'] circle", timeout=30_000)
+    points = page.eval_on_selector_all("[data-testid='crime-income-scatter'] circle", "els => els.length")
+    assert points >= 20, points
+
+
 def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
     """Nav must not promise pages that do not exist.
 
