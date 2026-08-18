@@ -10,6 +10,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 STORAGE_KEY = "italy-dashboard-color-mode"
 
+# Task 1 (router.tsx) made "home" the default landing route (`#/` with no
+# hash, or none at all) -- every test below that exercises climate-specific
+# markup must navigate to the climate route explicitly, matching the exact
+# href its own nav link carries (`#/${slug}` in App.tsx). Only the palette
+# test below is route-independent (the body background is painted for every
+# route alike) and is left pointed at the bare `static_app` root.
+CLIMATE_HREF = "#/climate"
+
 
 @pytest.fixture(scope="module")
 def page(browser) -> Iterator:
@@ -56,7 +64,7 @@ def test_the_stripes_resolve_to_distinct_diverging_colours(page, static_app):
     colour, which is the failure mode that actually happens when a scale is
     misconfigured.
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-stripes'] rect", timeout=30_000)
     fills = page.eval_on_selector_all(
         "[data-testid='climate-stripes'] rect",
@@ -77,7 +85,7 @@ def test_a_diverging_colour_resolves_differently_across_data_theme_states(page, 
     property the stripe fill actually uses -- see queries/climate.ts's
     `withStripeFill`).
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-stripes'] rect", timeout=30_000)
 
     def first_bar_fill() -> str:
@@ -100,15 +108,42 @@ def test_a_diverging_colour_resolves_differently_across_data_theme_states(page, 
 
 
 def test_the_climate_page_renders_data_not_an_empty_state(page, static_app):
-    """The default landing view must reach real data, not sit on a spinner.
+    """The climate route must reach real data, not sit on a spinner.
 
     Asserting the page merely 'loaded' would pass while every chart is empty,
     which is what a broken parquet path looks like.
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-annual'] path", timeout=30_000)
     marks = page.eval_on_selector_all("[data-testid='climate-annual'] path", "els => els.length")
     assert marks > 0, "no marks drawn in the annual series chart"
+
+
+def test_year_axes_render_without_a_thousands_separator(page, static_app):
+    """F6: Plot's default numeric tick formatter groups thousands, so a bare
+    year axis (no `tickFormat`) read `2,024` instead of `2024` -- pre-existing
+    on the climate page, multiplied across every chart this plan added that
+    shares `lineSeriesSpec`'s x-axis or climate.tsx's own year-axis builders.
+    Checks one chart from each of the two fixed spec builders
+    (`lineSeriesSpec` via economy, `bandTrendSpec` via climate) rather than
+    every affected chart, since the fix is the same one-line `tickFormat` in
+    both places and a regression would show up on either sample alike.
+    """
+    page.goto(f"{static_app}/#/economy")
+    page.wait_for_selector("[data-testid='inflation'] path", timeout=30_000)
+    economy_ticks = page.eval_on_selector_all(
+        "[data-testid='inflation'] [aria-label='x-axis tick label'] text", "els => els.map(e => e.textContent)"
+    )
+    assert economy_ticks, "no x-axis ticks found on the inflation chart"
+    assert not any("," in t for t in economy_ticks), economy_ticks
+
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
+    page.wait_for_selector("[data-testid='climate-annual'] path", timeout=30_000)
+    climate_ticks = page.eval_on_selector_all(
+        "[data-testid='climate-annual'] [aria-label='x-axis tick label'] text", "els => els.map(e => e.textContent)"
+    )
+    assert climate_ticks, "no x-axis ticks found on the climate annual chart"
+    assert not any("," in t for t in climate_ticks), climate_ticks
 
 
 def test_the_stripes_grid_renders_visible_cells(page, static_app):
@@ -116,8 +151,7 @@ def test_the_stripes_grid_renders_visible_cells(page, static_app):
     `width="0"` -- no explicit `width` (Plot defaults to 640), so 12 `fx`
     facets of 76 year-bands each divided down to ~0.64px per band before
     `inset: 0.5` (a full pixel removed) clamped every one to zero. The card
-    was a blank box with 12 overlapping labels under it, on the default
-    landing view of the only page in this deploy.
+    was a blank box with 12 overlapping labels under it, on the climate page.
 
     Deliberately does NOT `wait_for_selector` with the default `visible`
     state: a zero-width `<rect>` is still attached to the DOM, but Playwright
@@ -127,7 +161,7 @@ def test_the_stripes_grid_renders_visible_cells(page, static_app):
     rather than fail. `state="attached"` only waits for the elements to
     exist; the actual check is the geometry assertion below.
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
     widths = page.eval_on_selector_all(
         "[data-testid='climate-grid'] rect",
@@ -152,7 +186,7 @@ def test_the_stripes_grid_has_no_phantom_facet_at_italia_scope(page, static_app)
     The grid always renders `loadStripesGrid(12)`'s top-12 cities (Climate.tsx),
     so 12 is a real invariant of the code being exercised here, not a guess.
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
     labels = page.eval_on_selector_all(
         "[data-testid='climate-grid'] [aria-label='fx-axis tick label'] text",
@@ -183,7 +217,7 @@ def test_a_plot_baked_colour_repaints_on_mode_toggle(page, static_app):
     (`series(1)`): light `#eb6834` = rgb(235, 104, 52), dark `#de5c27` =
     rgb(222, 92, 39) -- the same pair the final review measured by hand.
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     # Deterministic starting point regardless of what an earlier test in this
     # module (or a previous run reusing this profile) left behind: clear the
     # persisted choice and reload so App mounts on "system".
@@ -227,7 +261,7 @@ def test_a_partial_region_scope_shows_a_composition_caveat(page, static_app):
         "fixture assumption broken: Puglia should have more than 1 capital in the seed"
     )
 
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
     page.select_option("[data-testid='climate-region-select']", "Puglia")
     # The caveat depends on `climateCityOptions("Puglia")` resolving (async),
@@ -248,3 +282,208 @@ def test_a_partial_region_scope_shows_a_composition_caveat(page, static_app):
         "expected a composition caveat at partial region scope (Puglia), found none"
     )
     assert f"1 of {total} capitals" in note, note
+
+
+@pytest.mark.parametrize(
+    ("slug", "testid"),
+    [("economy", "inflation"), ("labor", "unemployment"), ("population", "resident")],
+)
+def test_each_simple_page_renders_marks_not_an_empty_chart(page, static_app, slug, testid):
+    """A page that loaded but drew nothing is what a wrong region string looks like.
+
+    These queries return [] for an unrecognised region name rather than raising,
+    so asserting the page merely rendered would pass with every chart empty.
+    """
+    page.goto(f"{static_app}/#/{slug}")
+    page.wait_for_selector(f"[data-testid='{testid}'] path", timeout=30_000)
+    count = page.eval_on_selector_all(f"[data-testid='{testid}'] path", "els => els.length")
+    assert count > 0, (slug, testid)
+
+
+def test_the_crime_page_kpis_render_python_formatted_strings(page, static_app):
+    """KPI strings come from the query layer already formatted.
+
+    Python renders `584,514` with a comma; JavaScript's toLocaleString('it-IT')
+    renders `584.514`. A UI that reformats would show a plausible-looking but
+    different number, so this asserts the comma survives to the DOM.
+    """
+    page.goto(f"{static_app}/#/crime")
+    page.wait_for_selector("[data-testid='crime-kpi-total']", timeout=30_000)
+    text = page.eval_on_selector("[data-testid='crime-kpi-total']", "e => e.textContent")
+    assert "," in text and "." not in text, text
+
+
+def test_the_crime_page_income_scatter_renders_real_points(page, static_app):
+    """The income-vs-offender-rate card must reach real data, not an empty chart.
+
+    An empty scatter with no explanation reads as broken, not as "no data" --
+    the same standing rule the other chart pages in this suite already
+    enforce (see `test_the_climate_page_renders_data_not_an_empty_state`).
+    `mart_crime_income`'s latest year (2024) carries 12 regions per
+    citizenship group, so this asserts a real, non-trivial point count
+    rather than merely "at least one".
+    """
+    page.goto(f"{static_app}/#/crime")
+    page.wait_for_selector("[data-testid='crime-income-scatter'] circle", timeout=30_000)
+    points = page.eval_on_selector_all("[data-testid='crime-income-scatter'] circle", "els => els.length")
+    assert points >= 20, points
+
+
+def test_the_crime_page_correlation_strings_render_verbatim(page, static_app):
+    """`incomeCorrelations()` returns already-formatted `"r = ... (n=...)"`
+    strings, the same rule as the KPI tiles: rendered as-is, never recomputed
+    or reformatted in the UI. This pins the exact strings for the mart's
+    latest year (2024) against a direct query, so a page that recalculated
+    the correlation itself -- or reformatted the sign, precision, or `n` --
+    would fail here even though nothing about the request or response shape
+    looks wrong.
+    """
+    page.goto(f"{static_app}/#/crime")
+    page.wait_for_selector("[data-testid='crime-income-corr-italians']", timeout=30_000)
+    italians = page.eval_on_selector("[data-testid='crime-income-corr-italians']", "e => e.textContent")
+    foreigners = page.eval_on_selector("[data-testid='crime-income-corr-foreigners']", "e => e.textContent")
+    assert italians == "r = -0.78 (n=12)", italians
+    assert foreigners == "r = +0.46 (n=12)", foreigners
+
+
+def test_the_crime_page_method_note_is_present_verbatim(page, static_app):
+    """The final review (F1) found `method_note` missing from the offenders
+    tab entirely: no statement anywhere that the headline totals are counts
+    rather than rates, that citizenship is not residence status, or that a
+    cross-crime total counts a person once per crime type -- on the page
+    that publishes a 37.3% foreign-share figure and a 6.1x rate ratio. Pins
+    the exact English copy against `italy_dashboard.translations.EN`
+    directly (not a hand-retyped copy in this test) so a paraphrase,
+    truncation, or reordering would fail here even though the paragraph is
+    technically present.
+    """
+    import italy_dashboard.translations as translations
+
+    expected = translations.EN["method_note"]
+    page.goto(f"{static_app}/#/crime")
+    page.wait_for_selector("[data-testid='crime-method-note']", timeout=30_000)
+    text = page.eval_on_selector("[data-testid='crime-method-note']", "e => e.textContent")
+    assert text == expected, text
+
+
+def test_the_climate_crime_caveat_is_present_and_above_the_charts(page, static_app):
+    """The caveat is load-bearing: the two panels exist to show that the naive
+    correlation is misleading, and without the paragraph the page reads as
+    asserting a causal claim it explicitly disclaims.
+
+    Asserting mere presence would pass with the text buried at the bottom, so
+    this also checks it precedes the first chart in document order.
+    """
+    page.goto(f"{static_app}/#/climate-crime")
+    page.wait_for_selector("[data-testid='cc-caveat']", timeout=30_000)
+    text = page.eval_on_selector("[data-testid='cc-caveat']", "e => e.textContent")
+    for word in ("ECOLOGICAL", "ANNUAL", "UNDERPOWERED"):
+        assert word in text, (word, text[:200])
+    precedes = page.evaluate(
+        """() => {
+            const caveat = document.querySelector("[data-testid='cc-caveat']");
+            const chart = document.querySelector("[data-testid='cc-panel']");
+            return !!(caveat && chart) &&
+                (caveat.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+        }"""
+    )
+    assert precedes, "the caveat must appear before the charts, not after them"
+
+
+def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
+    """Nav must not promise pages that do not exist.
+
+    The app shipped with zero <a> elements precisely so nothing could 404; this
+    is the test that keeps that true once links exist. Asserting the link count
+    alone would pass with every link pointing at a blank page.
+    """
+    page.goto(static_app)
+    slugs = page.eval_on_selector_all("nav a", "els => els.map(e => e.getAttribute('href'))")
+    assert len(slugs) >= 7, slugs
+    for slug in slugs:
+        page.goto(f"{static_app}/{slug}")
+        page.wait_for_selector("main h1", timeout=30_000)
+        assert page.eval_on_selector("main h1", "e => e.textContent.trim()"), slug
+
+
+# Task 5 (deploy verification): the one route-independent invariant that
+# actually matters for a static host with no rewrite rule (see
+# docs/12-deployment.md's "Routing" section) -- a wrong asset path, a JS chunk
+# that failed to load, or an accidentally-shipped/accidentally-excluded mart
+# would all show up here as a bad response somewhere in this walk.
+_ROUTE_READY_SELECTORS = {
+    "home": "main h1",  # no chart by design (four KPI tiles only); the heading is the whole signal
+    "economy": "[data-testid='inflation'] path",
+    "labor": "[data-testid='unemployment'] path",
+    "population": "[data-testid='resident'] path",
+    "crime": "[data-testid='crime-offenders-trend'] path",
+    "climate": "[data-testid='climate-annual'] path",
+    "climate-crime": "[data-testid='cc-panel'] circle",
+}
+
+
+def test_only_the_deliberately_excluded_mart_404s_across_every_route(page, built_static_app):
+    """Walking all seven routes must produce exactly one kind of non-2xx
+    response: `marts/mart_climate_daily.parquet` (10 MB for one chart,
+    excluded from the static build by `scripts/stage_web_data.py`) and
+    DuckDB-WASM's own glob-fallback probe against that same path.
+
+    Deliberately uses `built_static_app` (a real `npm run build`, served by a
+    plain HTTP server), not the module's usual `static_app` (Vite's dev
+    server): see `built_static_app`'s docstring in conftest.py for why Vite's
+    dev server cannot be trusted for this specific check -- it has its own
+    SPA fallback, keyed on the request's `Accept` header rather than the
+    URL, that a plain `fetch()` call (what DuckDB-WASM's httpfs reader sends)
+    triggers just as reliably as `vite preview`'s does.
+
+    `getConnection()` (db.ts) registers a view for every dataset in `PARQUET`
+    -- including the excluded one -- SEQUENTIALLY before any query on that
+    connection resolves, and that registration reruns on every full
+    navigation (a fresh JS module, a fresh connection singleton). Waiting for
+    each route's own chart marks (not just its heading) before moving on
+    guarantees that route's registration pass has actually completed and its
+    network activity captured, rather than racing a navigation that aborts
+    it mid-flight.
+
+    Any *other* 404 -- a missing asset, a wrong path, a JS chunk that failed
+    to load -- is a real bug this test exists to catch.
+    """
+    bad_responses: list[tuple[int, str]] = []
+
+    def record(response) -> None:
+        if response.status >= 400:
+            bad_responses.append((response.status, response.url))
+
+    page.on("response", record)
+    try:
+        for slug, ready_selector in _ROUTE_READY_SELECTORS.items():
+            # This module's `page` fixture is shared across every test in the
+            # file (see its docstring). `built_static_app` is a different
+            # origin (its own port) from whatever `static_app` URL earlier
+            # tests left this page on, so the FIRST iteration below is
+            # already a genuine cross-origin navigation; `about:blank` in
+            # between guards the REMAINING iterations too, where successive
+            # `goto`s differ only by hash against the same
+            # `built_static_app` origin -- ruling out any same-document
+            # optimisation a repeated hash-only URL might otherwise get, so
+            # every route gets a fresh JS module load and therefore a fresh
+            # `getConnection()` singleton, re-registering every `PARQUET`
+            # view (including the excluded one) from scratch.
+            page.goto("about:blank")
+            page.goto(f"{built_static_app}/#/{slug}")
+            page.wait_for_selector(ready_selector, timeout=30_000)
+    finally:
+        page.remove_listener("response", record)
+
+    unexpected = [
+        (status, url) for status, url in bad_responses if "mart_climate_daily.parquet" not in url
+    ]
+    assert not unexpected, (
+        f"unexpected non-2xx response(s) while walking every route: {unexpected}\n"
+        f"(all bad responses seen: {bad_responses})"
+    )
+    assert any("mart_climate_daily.parquet" in url for _, url in bad_responses), (
+        "expected marts/mart_climate_daily.parquet to 404 at least once across all seven "
+        "routes; none was observed -- check scripts/stage_web_data.py's EXCLUDED_FROM_STATIC_BUILD "
+        "and that web/public-data was actually staged before this build"
+    )

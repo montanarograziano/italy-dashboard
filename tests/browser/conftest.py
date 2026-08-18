@@ -330,3 +330,63 @@ def static_app(_require_chromium: None) -> Iterator[str]:
         yield base_url
     finally:
         _terminate(proc)
+
+
+@pytest.fixture(scope="session")
+def built_static_app(_require_chromium: None) -> Iterator[str]:
+    """Build the static frontend for real (`npm run build`) and serve
+    `web/dist` with a plain HTTP server; yield its base URL.
+
+    NOT a second way to reach `static_app` (Vite's dev server) -- the two
+    disagree on a property that matters for any test inspecting network
+    response codes. `marts/mart_climate_daily.parquet` is deliberately
+    excluded from the static build (see `scripts/stage_web_data.py`), and
+    `docs/12-deployment.md` warns against verifying that exclusion with
+    `vite preview`, whose SPA fallback returns `200` with `index.html` for
+    any unmatched path. Vite's DEV server (what `static_app` spawns) turns
+    out to have the exact same fallback active by default: read straight out
+    of `htmlFallbackMiddleware` in `web/node_modules/vite/dist/node/chunks/`,
+    it triggers whenever a request's `Accept` header is absent, empty, or
+    `*/*` -- regardless of the URL's file extension -- and a plain `fetch()`
+    call with no explicit `Accept` (exactly what DuckDB-WASM's httpfs reader
+    sends) matches that condition. Confirmed by hand: `curl` against a
+    running `npm run dev` returns `200`/`text/html` for the missing parquet
+    with a default `Accept`, and a real `404` only once `Accept:
+    application/octet-stream` is forced. So `static_app` cannot tell a
+    genuine 404 apart from this fallback either -- only a plain server with
+    no SPA fallback at all (what this fixture spawns, matching Netlify's
+    default of no rewrite rule) can.
+
+    Set `BUILT_STATIC_APP_BASE_URL` to point at an already-built,
+    already-served `web/dist` instead of building/serving one here.
+    """
+    if base_url := os.environ.get("BUILT_STATIC_APP_BASE_URL"):
+        _wait_until_reachable(base_url)
+        yield base_url
+        return
+    subprocess.run(
+        ["npm", "run", "build"],
+        cwd=REPO_ROOT / "web",
+        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+        check=True,
+    )
+    dist_dir = REPO_ROOT / "web" / "dist"
+    port = _free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    output: list[str] = []
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "http.server", "-d", str(dist_dir), "-b", "127.0.0.1", str(port)],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+    drain_thread = Thread(target=_drain_output, args=(proc, output), daemon=True)
+    drain_thread.start()
+    try:
+        _wait_until_serving(proc, base_url, output, label="`python -m http.server` (built dist)")
+        yield base_url
+    finally:
+        _terminate(proc)
