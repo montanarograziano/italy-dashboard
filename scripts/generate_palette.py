@@ -27,6 +27,13 @@ def build_json() -> str:
     data = {
         "_comment": f"{HEADER} {EDIT_WARNING}",
         "surface": {"light": palette.SURFACE_LIGHT, "dark": palette.SURFACE_DARK},
+        "ink_primary": {"light": palette.INK_PRIMARY_LIGHT, "dark": palette.INK_PRIMARY_DARK},
+        "ink_secondary": {
+            "light": palette.INK_SECONDARY_LIGHT,
+            "dark": palette.INK_SECONDARY_DARK,
+        },
+        "ink_muted": {"light": palette.INK_MUTED_LIGHT, "dark": palette.INK_MUTED_DARK},
+        "gridline": {"light": palette.GRIDLINE_LIGHT, "dark": palette.GRIDLINE_DARK},
         "categorical": {
             "light": list(palette.CATEGORICAL_LIGHT),
             "dark": list(palette.CATEGORICAL_DARK),

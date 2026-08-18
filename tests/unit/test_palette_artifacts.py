@@ -33,7 +33,16 @@ def test_committed_css_matches_the_generator():
 
 def test_json_carries_every_role_in_both_modes():
     data = json.loads(generate_palette.build_json())
-    for role in ("surface", "categorical", "diverging", "sequential"):
+    for role in (
+        "surface",
+        "ink_primary",
+        "ink_secondary",
+        "ink_muted",
+        "gridline",
+        "categorical",
+        "diverging",
+        "sequential",
+    ):
         assert set(data[role]) == {"light", "dark"}, role
 
 
@@ -47,6 +56,14 @@ def test_json_values_are_the_palette_values():
     assert data["sequential"]["dark"] == list(palette.SEQUENTIAL_DARK)
     assert data["surface"]["light"] == palette.SURFACE_LIGHT
     assert data["surface"]["dark"] == palette.SURFACE_DARK
+    assert data["ink_primary"]["light"] == palette.INK_PRIMARY_LIGHT
+    assert data["ink_primary"]["dark"] == palette.INK_PRIMARY_DARK
+    assert data["ink_secondary"]["light"] == palette.INK_SECONDARY_LIGHT
+    assert data["ink_secondary"]["dark"] == palette.INK_SECONDARY_DARK
+    assert data["ink_muted"]["light"] == palette.INK_MUTED_LIGHT
+    assert data["ink_muted"]["dark"] == palette.INK_MUTED_DARK
+    assert data["gridline"]["light"] == palette.GRIDLINE_LIGHT
+    assert data["gridline"]["dark"] == palette.GRIDLINE_DARK
 
 
 def test_css_matches_the_existing_reflex_custom_properties():

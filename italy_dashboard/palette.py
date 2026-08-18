@@ -17,6 +17,20 @@ from __future__ import annotations
 SURFACE_LIGHT = "#fcfcfb"
 SURFACE_DARK = "#1a1a19"
 
+# UI text and gridline tokens (not chart-data colours, so not run through the
+# colourblind validator below). Shared with the static frontend via
+# scripts/generate_palette.py so its body text and gridlines match Reflex's:
+# italy_dashboard/theme.py wraps these in rx.color_mode_cond rather than
+# hardcoding its own copies.
+INK_PRIMARY_LIGHT = "#0b0b0b"
+INK_PRIMARY_DARK = "#f4f4f2"
+INK_SECONDARY_LIGHT = "#52514e"
+INK_SECONDARY_DARK = "#b8b7b2"
+INK_MUTED_LIGHT = "#898781"
+INK_MUTED_DARK = "#8a8983"
+GRIDLINE_LIGHT = "#e1e0d9"
+GRIDLINE_DARK = "#2e2e2c"
+
 # Categorical: fixed slot order, never cycled. Blue, orange, aqua in both modes,
 # so a series keeps its identity when the mode changes.
 CATEGORICAL_LIGHT = ("#2a78d6", "#eb6834", "#1baf7a")
