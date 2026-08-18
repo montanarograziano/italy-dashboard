@@ -41,13 +41,26 @@ paintShell();
 
 export default function App() {
   const [choice, setChoice] = useState<Choice>(readStoredChoice);
+  // The RESOLVED mode ("system" collapsed to whatever it means right now),
+  // lifted into state so it can be a dependency of downstream `useMemo`s.
+  // theme.ts's accessors (series/gridline/inkPrimary/divergingSteps) are read
+  // at Plot SPEC-BUILD time, and Climate.tsx's chart specs are memoised on
+  // data only -- a mode change touches neither the data nor (by itself) any
+  // state Climate.tsx owns, so without this the chart DOM is never rebuilt
+  // and every Plot-baked colour is stuck on whichever mode was active on
+  // first render. Only colour paths driven live by CSS (the body background,
+  // the stripes' `var(--div-N)` cell fill) were ever exempt from that bug.
+  const [mode, setMode] = useState<Mode>(currentMode);
 
   // Re-paint if the OS preference changes while "system" is selected -- the
   // toggle below handles the explicit-choice case itself, on click.
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const onSystemChange = () => {
-      if (readStoredChoice() === "system") paintShell();
+      if (readStoredChoice() === "system") {
+        paintShell();
+        setMode(currentMode());
+      }
     };
     media.addEventListener("change", onSystemChange);
     return () => media.removeEventListener("change", onSystemChange);
@@ -63,6 +76,7 @@ export default function App() {
     applyChoice(next);
     paintShell();
     setChoice(next);
+    setMode(currentMode());
   }
 
   return (
@@ -88,10 +102,10 @@ export default function App() {
             cursor: "pointer",
           }}
         >
-          Colour mode: {choice} (currently {currentMode()})
+          Colour mode: {choice} (currently {mode})
         </button>
       </div>
-      <Climate />
+      <Climate mode={mode} />
     </main>
   );
 }

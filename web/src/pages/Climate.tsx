@@ -25,7 +25,7 @@ import {
 } from "../queries/climateScope";
 import { climateReady, climateRegionReady } from "../queries/ready";
 import { climateAnnualSeries, climateDistribution, climateDistributionWindows } from "../queries/static";
-import { gridline, inkMuted, inkPrimary, inkSecondary, surface } from "../theme";
+import { gridline, inkMuted, inkPrimary, inkSecondary, surface, type Mode } from "../theme";
 
 // The static frontend's climate page. italy_dashboard/pages/climate.py is the
 // reference for WHAT is shown and HOW it is grouped (an Italia -> region ->
@@ -156,7 +156,7 @@ function Loading() {
 
 type Phase = "loading" | "no-data" | "ready";
 
-export default function Climate() {
+export default function Climate({ mode }: { mode: Mode }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [coverage, setCoverage] = useState<Coverage>(EMPTY_COVERAGE);
 
@@ -290,17 +290,29 @@ export default function Climate() {
   // PlotFigure's effect keys on `[spec]`, so an object rebuilt on every
   // render (e.g. inline in JSX) would be a new identity every time and would
   // re-render the chart on every keystroke/scope change, not just real data
-  // changes.
-  const annualSpec = useMemo(() => bandTrendSpec(annual), [annual]);
-  const stripesChartSpec = useMemo(() => stripesSpec(stripes), [stripes]);
-  const thresholdsChartSpec = useMemo(() => thresholdSpec(thresholds), [thresholds]);
-  const heatmapSpec = useMemo(() => monthHeatmapSpec(heatmap), [heatmap]);
+  // changes. `mode` is a dependency of every one of them for a second
+  // reason: theme.ts's accessors (series/gridline/inkPrimary/divergingSteps)
+  // are read once, at spec-build time, so a colour-mode toggle that changes
+  // neither the rows nor the highlight would otherwise never rebuild the
+  // spec, leaving the chart's Plot-baked colours stuck on whichever mode was
+  // active on first render (only the CSS-driven `var(--div-N)` paths were
+  // ever exempt from this).
+  const annualSpec = useMemo(() => bandTrendSpec(annual), [annual, mode]);
+  const stripesChartSpec = useMemo(() => stripesSpec(stripes), [stripes, mode]);
+  const thresholdsChartSpec = useMemo(() => thresholdSpec(thresholds), [thresholds, mode]);
+  const heatmapSpec = useMemo(() => monthHeatmapSpec(heatmap), [heatmap, mode]);
   const distributionChartSpec = useMemo(
     () => (distributionWindows ? distributionSpec(distribution, distributionWindows) : null),
-    [distribution, distributionWindows],
+    [distribution, distributionWindows, mode],
   );
-  const rankingChartSpec = useMemo(() => rankingSpec(ranking, highlightedCity), [ranking, highlightedCity]);
-  const gridChartSpec = useMemo(() => facetedStripesSpec(grid, highlightedCity), [grid, highlightedCity]);
+  const rankingChartSpec = useMemo(
+    () => rankingSpec(ranking, highlightedCity),
+    [ranking, highlightedCity, mode],
+  );
+  const gridChartSpec = useMemo(
+    () => facetedStripesSpec(grid, highlightedCity),
+    [grid, highlightedCity, mode],
+  );
 
   if (phase === "loading") {
     return <Loading />;

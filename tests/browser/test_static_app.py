@@ -4,6 +4,8 @@ import pytest
 
 pytestmark = pytest.mark.browser
 
+STORAGE_KEY = "italy-dashboard-color-mode"
+
 
 @pytest.fixture(scope="module")
 def page(browser) -> Iterator:
@@ -156,3 +158,50 @@ def test_the_stripes_grid_has_no_phantom_facet_at_italia_scope(page, static_app)
     assert len(labels) == 12, (
         f"expected exactly 12 city facets at Italia scope, got {len(labels)}: {labels}"
     )
+
+
+def test_a_plot_baked_colour_repaints_on_mode_toggle(page, static_app):
+    """F3: `theme.ts`'s accessors (series/gridline/inkPrimary/divergingSteps)
+    are read at Plot SPEC-BUILD time, and Climate.tsx used to memoise every
+    chart spec on data only -- so toggling colour mode repainted the body
+    background and the stripes' CSS-driven `var(--div-N)` fill (the existing
+    test above), but left every Plot-baked colour, e.g. the ranking bar's
+    `series(1)`, stuck on whichever mode was active on first render.
+
+    Unlike the diverging-colour test above, this must exercise the real
+    toggle (App.tsx's button), not poke `data-theme` directly: a direct
+    attribute mutation resolves through the CSS cascade with no JS involved,
+    which is exactly the mechanism that already worked and is not what this
+    finding is about. Clicking the button is what drives App's `mode` state,
+    which is what the fix threads into Climate's `useMemo` dependencies.
+
+    Exact rgb values from `shared/palette.json`'s categorical scale, index 1
+    (`series(1)`): light `#eb6834` = rgb(235, 104, 52), dark `#de5c27` =
+    rgb(222, 92, 39) -- the same pair the final review measured by hand.
+    """
+    page.goto(static_app)
+    # Deterministic starting point regardless of what an earlier test in this
+    # module (or a previous run reusing this profile) left behind: clear the
+    # persisted choice and reload so App mounts on "system".
+    page.evaluate(f"window.localStorage.removeItem('{STORAGE_KEY}')")
+    page.reload()
+    page.wait_for_selector("[data-testid='climate-ranking'] rect", timeout=30_000)
+
+    def first_ranking_bar_fill() -> str:
+        return page.eval_on_selector(
+            "[data-testid='climate-ranking'] rect",
+            "el => getComputedStyle(el).fill",
+        )
+
+    toggle = page.get_by_role("button", name="Colour mode")
+    try:
+        toggle.click()  # system -> light (deterministic: choice starts at "system")
+        light_fill = first_ranking_bar_fill()
+        assert light_fill == "rgb(235, 104, 52)", light_fill
+
+        toggle.click()  # light -> dark
+        dark_fill = first_ranking_bar_fill()
+        assert dark_fill == "rgb(222, 92, 39)", dark_fill
+    finally:
+        # Leave no persisted choice behind for whichever test runs next.
+        page.evaluate(f"window.localStorage.removeItem('{STORAGE_KEY}')")
