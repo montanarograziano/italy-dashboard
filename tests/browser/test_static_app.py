@@ -31,6 +31,40 @@ def test_the_stripes_resolve_to_distinct_diverging_colours(page, static_app):
     assert len(fills) >= 4, fills
 
 
+def test_a_diverging_colour_resolves_differently_across_data_theme_states(page, static_app):
+    """The static shell switches modes via a `data-theme` ATTRIBUTE on <html>
+    (App.tsx), not the `.dark` CLASS Reflex/Radix uses. `shared/palette.css`
+    used to define `--div-N` only for `:root`/`.dark`, so this attribute never
+    switched anything: dark mode rendered the warming stripes in the LIGHT
+    diverging ramp, on a dark surface, and no test caught it because every
+    other check either inspects the render tree (never resolves a browser's
+    CSS cascade) or reads `shared/palette.json` directly (theme.ts's
+    JS-computed `currentMode()`, a separate mechanism from the CSS custom
+    property the stripe fill actually uses -- see queries/climate.ts's
+    `withStripeFill`).
+    """
+    page.goto(static_app)
+    page.wait_for_selector("[data-testid='climate-stripes'] rect", timeout=30_000)
+
+    def first_bar_fill() -> str:
+        return page.eval_on_selector(
+            "[data-testid='climate-stripes'] rect",
+            "el => getComputedStyle(el).fill",
+        )
+
+    page.evaluate("document.documentElement.dataset.theme = 'light'")
+    light_fill = first_bar_fill()
+
+    page.evaluate("document.documentElement.dataset.theme = 'dark'")
+    dark_fill = first_bar_fill()
+
+    assert dark_fill != light_fill, (
+        f"a stripe bar's diverging colour did not change between data-theme "
+        f"states (light={light_fill!r}, dark={dark_fill!r}); the generated "
+        f"CSS is not actually keyed off the [data-theme] attribute"
+    )
+
+
 def test_the_climate_page_renders_data_not_an_empty_state(page, static_app):
     """The default landing view must reach real data, not sit on a spinner.
 

@@ -51,23 +51,15 @@ def build_json() -> str:
 
 
 def build_css() -> str:
-    """The diverging ramp as CSS custom properties, both modes.
+    """The diverging ramp as CSS custom properties, all three colour-mode states.
 
-    Deliberately identical in property names and values to what
-    `palette.diverging_css_vars()` injects into the Reflex app, so the warming
-    stripes resolve to the same colours on both sites.
+    Delegates the body to `palette.diverging_css_vars()` rather than
+    re-deriving it: that function is what the Reflex app injects inline, and
+    duplicating its selector logic here is exactly how the two could drift
+    (see its docstring for why `.dark`, `[data-theme="dark"]` and a guarded
+    `prefers-color-scheme` media query are all three needed).
     """
-    lines = [f"/* {HEADER} */", f"/* {EDIT_WARNING} */", ""]
-    lines.append(":root {")
-    for i, colour in enumerate(palette.DIVERGING_LIGHT):
-        lines.append(f"  --div-{i}: {colour};")
-    lines.append("}")
-    lines.append("")
-    lines.append(".dark {")
-    for i, colour in enumerate(palette.DIVERGING_DARK):
-        lines.append(f"  --div-{i}: {colour};")
-    lines.append("}")
-    return "\n".join(lines) + "\n"
+    return f"/* {HEADER} */\n/* {EDIT_WARNING} */\n\n{palette.diverging_css_vars()}"
 
 
 def main() -> int:

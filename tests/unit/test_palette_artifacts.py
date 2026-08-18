@@ -79,6 +79,37 @@ def test_css_matches_the_existing_reflex_custom_properties():
         assert f"--div-{i}: {colour};" in reflex_css
 
 
+def test_css_covers_the_static_apps_data_theme_attribute():
+    """Reflex/Radix toggle a `.dark` CLASS; the static shell (web/src/App.tsx)
+    sets a `data-theme` ATTRIBUTE on <html> instead and never uses `.dark` at
+    all. A generator that emits only `.dark` leaves --div-N frozen at its
+    light values in the static app: dark mode would render the warming
+    stripes in the light diverging ramp. Regression test for that.
+    """
+    css = generate_palette.build_css()
+    assert '[data-theme="dark"]' in css
+
+
+def test_css_covers_system_preference_with_a_guard_that_still_lets_explicit_choices_win():
+    """The third state (neither frontend's shell sets anything -- the static
+    app's default "system" choice) must follow `prefers-color-scheme`, but
+    that fallback must not override an explicit choice.
+
+    Reflex's own ThemeProvider toggles `.light`/`.dark` directly on
+    `document.documentElement` (i.e. on `:root`), so the guard must exclude
+    `.light` too, not only `.dark`: excluding only `.dark` would still match
+    `:root.light` and re-flip a Reflex user who explicitly chose light mode
+    back to dark whenever their OS prefers dark -- a regression in the live,
+    canonical app.
+    """
+    css = generate_palette.build_css()
+    assert "@media (prefers-color-scheme: dark)" in css
+    assert ":not(.dark)" in css
+    assert ":not(.light)" in css
+    assert ':not([data-theme="dark"])' in css
+    assert ':not([data-theme="light"])' in css
+
+
 @pytest.mark.parametrize("mode", ["light", "dark"])
 def test_diverging_midpoint_stays_neutral_in_the_artifact(mode: str):
     """A tinted midpoint would break the diverging encoding on the static site."""
