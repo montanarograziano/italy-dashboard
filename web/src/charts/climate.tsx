@@ -87,7 +87,13 @@ export function stripesSpec(rows: Row[]): Plot.PlotOptions {
   return {
     x: { label: null },
     y: { axis: null },
-    marks: [Plot.cell(rows, { x: "period", fill: "fill", inset: 0.5 })],
+    // `x: year` (the numeric accessor above), not `x: "period"`: Plot's
+    // `Cell` mark hardcodes its x scale `type` to "band" regardless of the
+    // channel's underlying value type, so this changes nothing about the
+    // banding -- it only stops Plot's own heuristic from seeing numeric-
+    // looking strings on an ordinal scale and logging "some data ... are
+    // strings that appear to be numbers" to the console on every render.
+    marks: [Plot.cell(rows, { x: year, fill: "fill", inset: 0.5 })],
   };
 }
 
@@ -160,7 +166,7 @@ export function facetedStripesSpec(rows: Row[], highlight: string = ""): Plot.Pl
       // produced F1's zero-width cells; the faceted grid does not need the
       // single-chart variant's inset because adjacent cells are already
       // visually separated by the gap the diverging fills create.
-      Plot.cell(rows, { x: "period", fill: "fill", fx: "city", inset: 0 }),
+      Plot.cell(rows, { x: year, fill: "fill", fx: "city", inset: 0 }),
       ...(highlight ? [Plot.frame({ fx: highlight, stroke: inkPrimary(), strokeWidth: 3 })] : []),
     ],
   };

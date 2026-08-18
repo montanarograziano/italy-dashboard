@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import provinceCapitalsCsv from "../../../dbt/seeds/province_capitals.csv?raw";
 import {
   bandTrendSpec,
@@ -225,6 +225,13 @@ export default function Climate({ mode }: { mode: Mode }) {
   const [distributionUnavailable, setDistributionUnavailable] = useState(false);
   const [distributionErrored, setDistributionErrored] = useState(false);
 
+  // Guards handleRegionChange's await: two region changes fired in quick
+  // succession race, and with no ordering guarantee the FIRST request's
+  // `climateCityOptions` can resolve after the second's, overwriting the
+  // already-current options with stale ones. Only the most recent call's
+  // result is applied.
+  const regionRequestRef = useRef(0);
+
   // Initial load: mart readiness, coverage (shown even when the mart isn't
   // ready, same as ClimateState.load in state.py), and the cross-city data.
   useEffect(() => {
@@ -315,9 +322,13 @@ export default function Climate({ mode }: { mode: Mode }) {
   }, [phase, region, city]);
 
   async function handleRegionChange(next: string) {
+    const requestId = ++regionRequestRef.current;
     setRegion(next);
     setCity("All"); // city cascades from region: broaden back out, matching ClimateState.set_region
-    setCityOptions(await climateCityOptions(next));
+    const options = await climateCityOptions(next);
+    if (requestId === regionRequestRef.current) {
+      setCityOptions(options);
+    }
   }
 
   const isCityScope = city !== "All";
@@ -407,7 +418,7 @@ export default function Climate({ mode }: { mode: Mode }) {
         </label>
         <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
           City{" "}
-          <select value={city} onChange={(e) => setCity(e.target.value)}>
+          <select data-testid="climate-city-select" value={city} onChange={(e) => setCity(e.target.value)}>
             {cityOptions.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -423,8 +434,10 @@ export default function Climate({ mode }: { mode: Mode }) {
       </p>
 
       {isNationalScope || isPartialRegionScope ? (
+        // Advisory text, not an alert: nothing failed, and it does not need
+        // re-announcing to screen readers every time the scope returns here
+        // (the Reflex counterpart uses `rx.callout` with no alert role).
         <div
-          role="alert"
           data-testid="climate-scope-note"
           style={{
             border: `1px solid ${gridline()}`,
