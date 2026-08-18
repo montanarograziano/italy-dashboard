@@ -1,11 +1,20 @@
 # Deployment
 
+Two deployments exist, of two different frontends. **Render is canonical**:
+it serves the Reflex app (Python backend, server-driven state over a
+websocket) and is what the dashboard's URL is meant to be. **Netlify serves
+the static (TypeScript/DuckDB-WASM) frontend under `web/`**: no backend, no
+websocket, every query runs client-side against parquet fetched over HTTP.
+The two are separate sites with separate data-shipping rules; see
+[Netlify](#netlify-the-static-frontend) below for the second one. This page
+covers Render first, then Netlify.
+
 The dashboard runs on [Render](https://render.com)'s free tier as a single
 Docker container. Render gives one exposed port, terminates TLS itself, and
 spins the service down when idle, none of which matches Reflex's default
 shape (a compiled React frontend on 3000, a Starlette/FastAPI plus websocket
-backend on 8000). This page covers how that gap is closed, what's genuinely
-verified to work, and the caveats that come with the free tier.
+backend on 8000). This section covers how that gap is closed, what's
+genuinely verified to work, and the caveats that come with the free tier.
 
 ## The single-port shape
 
@@ -204,3 +213,122 @@ with `render.yaml`. There is no CI step that builds and bakes data
 automatically: build locally (or in whatever pipeline you set up) from a
 checkout with real data, then let Render build the image from the same
 Dockerfile. Redeploy after every data refresh you want published.
+
+## Netlify (the static frontend)
+
+`web/` is a second, independent frontend: plain React + Observable Plot,
+querying parquet directly in the browser through DuckDB-WASM, no backend at
+all. It ships as a static site on [Netlify](https://netlify.com), configured
+by `netlify.toml` at the repo root. **Render remains canonical** — this is a
+separate deployment of a currently much smaller surface (one page, Climate,
+against the seven-plus the Reflex app has), built and deployed on its own
+schedule.
+
+### What builds
+
+```toml
+command = "python3 scripts/stage_web_data.py && npm --prefix web ci && npm --prefix web run build"
+publish = "web/dist"
+```
+
+`scripts/stage_web_data.py` copies the parquet the app is allowed to ship
+into `web/public-data/` (gitignored), which is what `web/vite.config.ts`'s
+`publicDir` actually points at — never `data/` directly, which is 14 MB
+tracked but ~850 MB on a working checkout (raw CSVs, `dbt.duckdb`, the
+weather cache, every mart). The allowlist (`STAGED`) is derived from
+`web/src/db.ts`'s own `PARQUET` list, so it cannot silently drift from what
+the app registers; `web/package.json`'s `predev`/`prebuild` hooks run the
+same script automatically, so `npm run dev`, `npm run build`, and this
+Netlify command all publish identically. A from-clone `npm --prefix web run
+build` now produces a **4.7 MB** `web/dist` (was 875 MB before staging was
+introduced, because `publicDir` used to copy all of `data/` verbatim).
+
+**Called with plain `python3`, not `uv run`.** Netlify's build image does
+not include `uv` — checked against both the current
+["Available software at build time"](https://docs.netlify.com/build/configure-builds/available-software-at-build-time/)
+docs and `netlify/build-image`'s own `included_software.md`; neither lists
+it, only Python itself plus pip and Pipenv. `stage_web_data.py` has zero
+third-party imports (stdlib only) precisely so it doesn't need one.
+
+### What ships, and what's deliberately excluded
+
+`STAGED` is every dataset in `web/src/db.ts`'s `PARQUET` list **except**
+`marts/mart_climate_daily` — 10 MB of the 14 MB tracked snapshot, for one
+chart (the distribution histograms). `web/src/db.ts::registerParquetViews`
+tolerates its absence (skips the view, records the miss, every other query
+is unaffected), and the climate page's distribution card shows an
+explanatory empty state instead of erroring when a city scope needs it.
+Precomputing that one chart's data at build time — the spec's long-term
+answer — is out of scope for this deploy; see the plan's self-review for why.
+
+### Headers: none added, on purpose
+
+DuckDB-WASM's `selectBundle` picks its cross-origin-isolated, multi-threaded
+`coi` bundle only when the browser is actually cross-origin-isolated (needs
+`Cross-Origin-Opener-Policy` + `Cross-Origin-Embedder-Policy`) **and** the
+bundle set it was given includes one. `web/src/db.ts` calls
+`duckdb.selectBundle(duckdb.getJsDelivrBundles())`, and
+`getJsDelivrBundles()` never returns a `coi` entry at all (confirmed by
+reading `@duckdb/duckdb-wasm`'s `dist/duckdb-browser.mjs` and
+`dist/types/src/platform.d.ts`) — only `mvp` and `eh`. COOP/COEP would
+therefore have **zero effect** on bundle selection here: the app always
+resolves to the `eh` (exception-handling, single-threaded) bundle in any
+browser with WebAssembly exception support, which is every current major
+browser. Confirmed empirically too (see Verification): every DuckDB-WASM
+request in a built, statically-served `web/dist` was for
+`duckdb-eh.wasm`/`duckdb-browser-eh.worker.js`, and `window.crossOriginIsolated`
+was `false`. Adding COEP anyway would only add risk: `require-corp` blocks
+cross-origin subresources unless they opt in, and this page's DuckDB
+wasm/workers, and the parquet extension, all load from jsDelivr/
+`extensions.duckdb.org` — cross-origin CDNs this app depends on working.
+
+### Verification
+
+Local proof, `npm --prefix web run build` then serving `web/dist` with a
+plain static file server (not `vite preview`: it applies an SPA fallback
+that returns `200` with `index.html`'s content for a request that doesn't
+match any file, which would have hidden the very 404 this exclusion is
+supposed to produce — a plain server, matching Netlify's default of no
+rewrite rule, gives the real status), driven with Playwright:
+
+- The climate page reaches real data: the annual-series chart has marks on
+  first load (~2.3s from navigation to marks rendered, locally, including
+  DuckDB-WASM's ~3-5 MB initial download — not the same as a cold Netlify
+  edge request, but the right order of magnitude to expect).
+- The colour-mode toggle actually repaints: body background
+  `rgb(252, 252, 251)` (light) → `rgb(26, 26, 25)` (dark), and a stripe
+  bar's `fill` resolved to `rgb(76, 77, 76)` — the dark diverging ramp's
+  neutral midpoint (`#4c4d4c`), confirming the Fix 0 palette CSS actually
+  switches modes in a real built bundle, not only under `vite dev`.
+- The distribution card shows its explanatory text, no thrown page errors.
+- Every request returned 2xx **except** `marts/mart_climate_daily.parquet`
+  (and DuckDB's own glob-fallback probe on that same path), both `404` — no
+  other dataset 404s.
+
+Not yet verified: an actual deployed Netlify URL. See below.
+
+### What's left to deploy (manual, one-time)
+
+This repo does not create Netlify sites or push to a hosting provider. To
+finish the deploy:
+
+1. Create a Netlify site from this repository (Netlify UI: **Add new site →
+   Import an existing project**, or `netlify init` with the Netlify CLI),
+   pointing at the `static-app-shell` branch (or whatever branch/tag this
+   lands on). Netlify will read `netlify.toml` automatically; no manual
+   build-command configuration needed.
+2. **The build host needs the real data.** Unlike Render (which bakes in
+   whatever the building checkout has), Netlify builds from a fresh clone
+   of the repo, which after a merge to the tracked branch has the 14 MB of
+   git-tracked parquet checked in — that's sufficient, no extra data step
+   is needed on Netlify's side, *provided the branch actually has current
+   data committed* (`just refresh`/`just sample` + `just transform`,
+   committed, same as any other data update).
+3. Trigger the first deploy and confirm the build log actually runs
+   `scripts/stage_web_data.py` before `vite build` (its stdout prints how
+   many of the 13 staged datasets it found).
+4. Once live, re-run the Verification checks above against the real URL —
+   particularly the DuckDB-WASM bundle choice and `crossOriginIsolated`,
+   which this doc predicts from source but a browser hitting Netlify's
+   actual response headers is the real proof — and record the first-load
+   time and the deployed URL here.
