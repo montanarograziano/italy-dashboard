@@ -1,0 +1,25 @@
+/* Layout and typography resets only -- no colour here. Colour is applied by
+   App.tsx from shared/palette.json (via theme.ts), because a CSS file cannot
+   read JSON: see theme.ts for why the body background/text colour is set
+   from JS instead of a rule in this file. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
