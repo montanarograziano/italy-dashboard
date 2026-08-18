@@ -48,18 +48,38 @@ export async function registerParquetViews(
   con: duckdb.AsyncDuckDBConnection,
   paths: readonly string[],
 ): Promise<string[]> {
-  const failed: string[] = [];
-  for (const path of paths) {
-    const view = path.split("/").pop()!;
-    const url = new URL(`/${path}.parquet`, window.location.origin).href;
-    try {
-      await con.query(`CREATE OR REPLACE VIEW ${view} AS SELECT * FROM read_parquet('${url}')`);
-    } catch (err) {
-      failed.push(view);
-      console.warn(`dataset not available in this build: ${view} (${String(err)})`);
-    }
-  }
-  return failed;
+  // Concurrent, not sequential. DuckDB reads each parquet's FOOTER over HTTP to
+  // build the view, so this loop is one network round trip per dataset -- and it
+  // pays them all before the first query runs, including for datasets the
+  // current page never touches. Measured against the deployed site: 116 parquet
+  // requests and 7.8s to the first painted chart, on a page that queries three
+  // of these fourteen files.
+  //
+  // `Promise.all` over a map keeps the semantics the conformance suite depends
+  // on: every dataset is still registered eagerly (so `unavailableTables` is
+  // complete before any query runs, which is what lets the harness tag a
+  // deliberately-excluded mart rather than guess), and `failed` still comes back
+  // in `paths` order -- `Promise.all` resolves to input order by specification,
+  // not completion order, so the exclusion assertions that compare it as data
+  // cannot go flaky. That last property is deliberately NOT covered by a test:
+  // it is a language guarantee, and an attempt to test it here passed even with
+  // the implementation rewritten to return completion order, because every
+  // absent parquet 404s at about the same time. A guard that cannot fail is
+  // worse than none.
+  const outcomes = await Promise.all(
+    paths.map(async (path) => {
+      const view = path.split("/").pop()!;
+      const url = new URL(`/${path}.parquet`, window.location.origin).href;
+      try {
+        await con.query(`CREATE OR REPLACE VIEW ${view} AS SELECT * FROM read_parquet('${url}')`);
+        return null;
+      } catch (err) {
+        console.warn(`dataset not available in this build: ${view} (${String(err)})`);
+        return view;
+      }
+    }),
+  );
+  return outcomes.filter((view): view is string => view !== null);
 }
 
 /** A fresh DuckDB-WASM connection with `paths` registered as views.

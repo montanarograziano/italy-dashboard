@@ -23,3 +23,51 @@ body {
     "Segoe UI",
     sans-serif;
 }
+
+/* Indeterminate spinner for the initial load.
+ *
+ * Indeterminate on purpose: most of the wait is DuckDB-WASM fetching its worker,
+ * wasm and parquet extension from jsDelivr, and those fetches belong to duckdb's
+ * own loader -- we cannot observe their progress. A determinate bar here would
+ * have to invent its percentages, which is worse than no number at all.
+ *
+ * Colour comes from `currentColor`, so the caller sets it from theme.ts and this
+ * file hardcodes nothing.
+ */
+.spinner {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spinner-rotate 0.7s linear infinite;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Respect a reader who has asked for less motion: keep the affordance, drop the
+ * spin. A pulsing outline still reads as "working" without animating position. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: spinner-fade 1.4s ease-in-out infinite;
+    border-top-color: currentColor;
+    opacity: 0.5;
+  }
+  @keyframes spinner-fade {
+    50% {
+      opacity: 1;
+    }
+  }
+}
+
+.loading-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  font-style: italic;
+}
