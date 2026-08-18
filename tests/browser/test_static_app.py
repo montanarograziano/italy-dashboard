@@ -357,3 +357,86 @@ def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
         page.goto(f"{static_app}/{slug}")
         page.wait_for_selector("main h1", timeout=30_000)
         assert page.eval_on_selector("main h1", "e => e.textContent.trim()"), slug
+
+
+# Task 5 (deploy verification): the one route-independent invariant that
+# actually matters for a static host with no rewrite rule (see
+# docs/12-deployment.md's "Routing" section) -- a wrong asset path, a JS chunk
+# that failed to load, or an accidentally-shipped/accidentally-excluded mart
+# would all show up here as a bad response somewhere in this walk.
+_ROUTE_READY_SELECTORS = {
+    "home": "main h1",  # no chart by design (four KPI tiles only); the heading is the whole signal
+    "economy": "[data-testid='inflation'] path",
+    "labor": "[data-testid='unemployment'] path",
+    "population": "[data-testid='resident'] path",
+    "crime": "[data-testid='crime-offenders-trend'] path",
+    "climate": "[data-testid='climate-annual'] path",
+    "climate-crime": "[data-testid='cc-panel'] circle",
+}
+
+
+def test_only_the_deliberately_excluded_mart_404s_across_every_route(page, built_static_app):
+    """Walking all seven routes must produce exactly one kind of non-2xx
+    response: `marts/mart_climate_daily.parquet` (10 MB for one chart,
+    excluded from the static build by `scripts/stage_web_data.py`) and
+    DuckDB-WASM's own glob-fallback probe against that same path.
+
+    Deliberately uses `built_static_app` (a real `npm run build`, served by a
+    plain HTTP server), not the module's usual `static_app` (Vite's dev
+    server): see `built_static_app`'s docstring in conftest.py for why Vite's
+    dev server cannot be trusted for this specific check -- it has its own
+    SPA fallback, keyed on the request's `Accept` header rather than the
+    URL, that a plain `fetch()` call (what DuckDB-WASM's httpfs reader sends)
+    triggers just as reliably as `vite preview`'s does.
+
+    `getConnection()` (db.ts) registers a view for every dataset in `PARQUET`
+    -- including the excluded one -- SEQUENTIALLY before any query on that
+    connection resolves, and that registration reruns on every full
+    navigation (a fresh JS module, a fresh connection singleton). Waiting for
+    each route's own chart marks (not just its heading) before moving on
+    guarantees that route's registration pass has actually completed and its
+    network activity captured, rather than racing a navigation that aborts
+    it mid-flight.
+
+    Any *other* 404 -- a missing asset, a wrong path, a JS chunk that failed
+    to load -- is a real bug this test exists to catch.
+    """
+    bad_responses: list[tuple[int, str]] = []
+
+    def record(response) -> None:
+        if response.status >= 400:
+            bad_responses.append((response.status, response.url))
+
+    page.on("response", record)
+    try:
+        for slug, ready_selector in _ROUTE_READY_SELECTORS.items():
+            # This module's `page` fixture is shared across every test in the
+            # file (see its docstring). `built_static_app` is a different
+            # origin (its own port) from whatever `static_app` URL earlier
+            # tests left this page on, so the FIRST iteration below is
+            # already a genuine cross-origin navigation; `about:blank` in
+            # between guards the REMAINING iterations too, where successive
+            # `goto`s differ only by hash against the same
+            # `built_static_app` origin -- ruling out any same-document
+            # optimisation a repeated hash-only URL might otherwise get, so
+            # every route gets a fresh JS module load and therefore a fresh
+            # `getConnection()` singleton, re-registering every `PARQUET`
+            # view (including the excluded one) from scratch.
+            page.goto("about:blank")
+            page.goto(f"{built_static_app}/#/{slug}")
+            page.wait_for_selector(ready_selector, timeout=30_000)
+    finally:
+        page.remove_listener("response", record)
+
+    unexpected = [
+        (status, url) for status, url in bad_responses if "mart_climate_daily.parquet" not in url
+    ]
+    assert not unexpected, (
+        f"unexpected non-2xx response(s) while walking every route: {unexpected}\n"
+        f"(all bad responses seen: {bad_responses})"
+    )
+    assert any("mart_climate_daily.parquet" in url for _, url in bad_responses), (
+        "expected marts/mart_climate_daily.parquet to 404 at least once across all seven "
+        "routes; none was observed -- check scripts/stage_web_data.py's EXCLUDED_FROM_STATIC_BUILD "
+        "and that web/public-data was actually staged before this build"
+    )

@@ -220,9 +220,32 @@ Dockerfile. Redeploy after every data refresh you want published.
 querying parquet directly in the browser through DuckDB-WASM, no backend at
 all. It ships as a static site on [Netlify](https://netlify.com), configured
 by `netlify.toml` at the repo root. **Render remains canonical** — this is a
-separate deployment of a currently much smaller surface (one page, Climate,
-against the seven-plus the Reflex app has), built and deployed on its own
-schedule.
+separate deployment that now serves the same seven pages the Reflex app does
+(home, economy, labor, population, crime, climate, climate × crime), built
+and deployed on its own schedule.
+
+### Routing: hash-based, and deliberately no rewrite rule
+
+Seven pages need client-side routing, but this app uses `#/slug` hash
+routes (`web/src/router.tsx`'s `useRoute`/`ROUTES`, consumed by
+`App.tsx`), not real paths handled by a history-API router. The reason is
+tied directly to the excluded-mart behaviour above: a real-path router
+needs a server-side catch-all (Netlify's `[[redirects]] from="/*"
+to="/index.html"`) so a deep link like `/crime` doesn't 404 against a
+static host that only has `index.html` on disk. That catch-all would also
+intercept the request for `marts/mart_climate_daily.parquet` — a genuine,
+deliberate 404 (see above) — and rewrite it to a `200` with `index.html`'s
+HTML content instead. `registerParquetViews` (`web/src/db.ts`) would then
+hand that HTML to DuckDB-WASM's parquet reader as if it were the file,
+turning a tolerated, recorded absence into a hard parse error on every
+page that touches the mart, not a clean skip.
+
+Hash routes never hit the server for a route change at all — the browser
+resolves everything after `#` client-side, so there is nothing for a
+rewrite rule to do and therefore no reason to add one. `netlify.toml` has
+no `[[redirects]]` block, on purpose, and should stay that way; adding one
+"to be safe" would silently break the one 404 this deploy relies on being
+real.
 
 ### What builds
 
@@ -285,25 +308,49 @@ wasm/workers, and the parquet extension, all load from jsDelivr/
 ### Verification
 
 Local proof, `npm --prefix web run build` then serving `web/dist` with a
-plain static file server (not `vite preview`: it applies an SPA fallback
-that returns `200` with `index.html`'s content for a request that doesn't
-match any file, which would have hidden the very 404 this exclusion is
-supposed to produce — a plain server, matching Netlify's default of no
-rewrite rule, gives the real status), driven with Playwright:
+plain static file server (not `vite preview`, and — a finding worth
+recording, since it is easy to assume otherwise — not Vite's own **dev**
+server either: both apply an SPA fallback that returns `200` with
+`index.html`'s content for a request that doesn't match any file. Reading
+`htmlFallbackMiddleware` directly (`web/node_modules/vite/dist/node/chunks/`)
+shows it triggers on the request's `Accept` header — absent, empty, or
+`*/*` — not on the URL's file extension, and a plain `fetch()` with no
+explicit `Accept` (exactly what DuckDB-WASM's httpfs reader sends) matches
+that condition regardless of whether the path ends in `.parquet`. Confirmed
+by hand: a bare `curl` against a running `npm run dev` gets `200`/`text/html`
+for the missing mart; only forcing `Accept: application/octet-stream` gets
+the real `404`. Only a plain server with no SPA fallback at all — matching
+Netlify's default of no rewrite rule — gives the real status), driven with
+Playwright:
 
-- The climate page reaches real data: the annual-series chart has marks on
-  first load (~2.3s from navigation to marks rendered, locally, including
-  DuckDB-WASM's ~3-5 MB initial download — not the same as a cold Netlify
-  edge request, but the right order of magnitude to expect).
+- `web/dist` measured **4.8 MB** from a from-clone build (baseline was
+  4.7 MB with only the climate page shipped) — six added pages contributed
+  JavaScript, not data; the 13 staged parquet are unchanged.
+- All seven routes (home, economy, labor, population, crime, climate,
+  climate × crime) render a heading, draw real chart marks (not an empty
+  chart), and repaint on the colour-mode toggle. The climate page's
+  annual-series chart reaches real data on first load (~2.3s from
+  navigation to marks rendered locally, including DuckDB-WASM's ~3-5 MB
+  initial download — not the same as a cold Netlify edge request, but the
+  right order of magnitude to expect); the climate × crime panel scatter
+  draws 200+ points; home has no chart by design (four KPI tiles only) and
+  is verified by heading + toggle alone.
 - The colour-mode toggle actually repaints: body background
   `rgb(252, 252, 251)` (light) → `rgb(26, 26, 25)` (dark), and a stripe
   bar's `fill` resolved to `rgb(76, 77, 76)` — the dark diverging ramp's
   neutral midpoint (`#4c4d4c`), confirming the Fix 0 palette CSS actually
   switches modes in a real built bundle, not only under `vite dev`.
 - The distribution card shows its explanatory text, no thrown page errors.
-- Every request returned 2xx **except** `marts/mart_climate_daily.parquet`
-  (and DuckDB's own glob-fallback probe on that same path), both `404` — no
-  other dataset 404s.
+- Walking all seven routes, every request returned 2xx **except**
+  `marts/mart_climate_daily.parquet` (and DuckDB's own glob-fallback probe
+  on that same path), both `404` — no other dataset 404s, and no missing
+  JS chunk or asset on any route. `tests/browser/test_static_app.py` now
+  asserts this as a standing regression check, against a dedicated
+  `built_static_app` fixture (`tests/browser/conftest.py`: a real
+  `npm run build`, served by a plain `http.server`) rather than the rest of
+  the file's usual `static_app` (Vite's dev server) — for the `Accept`-header
+  reason above, `static_app` cannot tell a genuine 404 apart from Vite's own
+  fallback either, so it is not a substitute for this one check.
 
 Not yet verified: an actual deployed Netlify URL. See below.
 
