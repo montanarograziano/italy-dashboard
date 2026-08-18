@@ -263,13 +263,36 @@ def test_the_excluded_mart_cases_are_tagged_not_silently_tolerated(results: dict
     marker, not as an unexplained `__error__` (indistinguishable from a real
     regression) or, worse, a silent pass that would happen to hide a real
     regression in some OTHER, unrelated table becoming unavailable.
+
+    `expected_ids` is pinned to the exact three case ids, NOT derived from
+    `CASE_FUNCTIONS` by function name: deriving it from the function names
+    would let a fourth case added to either
+    `climate_distribution`/`climate_distribution_windows` slip in silently,
+    since the set on both sides of the comparison would grow together. Pin
+    the ids and this catches that; a name-derived set could not.
+
+    Limitation this test does NOT close (recorded rather than solved, per the
+    final review): tagging in harness.ts is `message.includes(table)`, a
+    substring test on the thrown error's message. With the mart absent,
+    *every* failure inside `climate_distribution`/`climate_distribution_windows`
+    -- including a genuinely broken port of either function, not just the
+    table being missing -- produces the same
+    `Catalog Error: Table with name mart_climate_daily does not exist!`
+    message, so a broken port and a correct absence are indistinguishable
+    here. That is inherent to excluding the table rather than a flaw in this
+    assertion; catching it would need a case that runs against a build where
+    the mart IS present.
     """
     excluded = {k: v for k, v in results.items() if _is_excluded_from_static_build(v)}
     expected_ids = {
-        case_id
-        for case_id, fn in CASE_FUNCTIONS.items()
-        if fn in {"climate_distribution", "climate_distribution_windows"}
+        "climate_distribution_windows_torino",
+        "climate_distribution_windows_unknown",
+        "climate_distribution_torino",
     }
+    assert expected_ids <= set(CASE_FUNCTIONS), (
+        "expected_ids references a case id no longer in the conformance matrix; "
+        "update this pin alongside shared/conformance/cases.json"
+    )
     assert set(excluded) == expected_ids, (
         f"expected exactly the mart_climate_daily-dependent cases tagged "
         f"__excluded_from_static_build__: got {sorted(excluded)}, expected {sorted(expected_ids)}"
