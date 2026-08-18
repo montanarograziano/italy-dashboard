@@ -10,6 +10,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 STORAGE_KEY = "italy-dashboard-color-mode"
 
+# Task 1 (router.tsx) made "home" the default landing route (`#/` with no
+# hash, or none at all) -- every test below that exercises climate-specific
+# markup must navigate to the climate route explicitly, matching the exact
+# href its own nav link carries (`#/${slug}` in App.tsx). Only the palette
+# test below is route-independent (the body background is painted for every
+# route alike) and is left pointed at the bare `static_app` root.
+CLIMATE_HREF = "#/climate"
+
 
 @pytest.fixture(scope="module")
 def page(browser) -> Iterator:
@@ -56,7 +64,7 @@ def test_the_stripes_resolve_to_distinct_diverging_colours(page, static_app):
     colour, which is the failure mode that actually happens when a scale is
     misconfigured.
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-stripes'] rect", timeout=30_000)
     fills = page.eval_on_selector_all(
         "[data-testid='climate-stripes'] rect",
@@ -77,7 +85,7 @@ def test_a_diverging_colour_resolves_differently_across_data_theme_states(page, 
     property the stripe fill actually uses -- see queries/climate.ts's
     `withStripeFill`).
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-stripes'] rect", timeout=30_000)
 
     def first_bar_fill() -> str:
@@ -100,12 +108,12 @@ def test_a_diverging_colour_resolves_differently_across_data_theme_states(page, 
 
 
 def test_the_climate_page_renders_data_not_an_empty_state(page, static_app):
-    """The default landing view must reach real data, not sit on a spinner.
+    """The climate route must reach real data, not sit on a spinner.
 
     Asserting the page merely 'loaded' would pass while every chart is empty,
     which is what a broken parquet path looks like.
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-annual'] path", timeout=30_000)
     marks = page.eval_on_selector_all("[data-testid='climate-annual'] path", "els => els.length")
     assert marks > 0, "no marks drawn in the annual series chart"
@@ -116,8 +124,7 @@ def test_the_stripes_grid_renders_visible_cells(page, static_app):
     `width="0"` -- no explicit `width` (Plot defaults to 640), so 12 `fx`
     facets of 76 year-bands each divided down to ~0.64px per band before
     `inset: 0.5` (a full pixel removed) clamped every one to zero. The card
-    was a blank box with 12 overlapping labels under it, on the default
-    landing view of the only page in this deploy.
+    was a blank box with 12 overlapping labels under it, on the climate page.
 
     Deliberately does NOT `wait_for_selector` with the default `visible`
     state: a zero-width `<rect>` is still attached to the DOM, but Playwright
@@ -127,7 +134,7 @@ def test_the_stripes_grid_renders_visible_cells(page, static_app):
     rather than fail. `state="attached"` only waits for the elements to
     exist; the actual check is the geometry assertion below.
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
     widths = page.eval_on_selector_all(
         "[data-testid='climate-grid'] rect",
@@ -152,7 +159,7 @@ def test_the_stripes_grid_has_no_phantom_facet_at_italia_scope(page, static_app)
     The grid always renders `loadStripesGrid(12)`'s top-12 cities (Climate.tsx),
     so 12 is a real invariant of the code being exercised here, not a guess.
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
     labels = page.eval_on_selector_all(
         "[data-testid='climate-grid'] [aria-label='fx-axis tick label'] text",
@@ -183,7 +190,7 @@ def test_a_plot_baked_colour_repaints_on_mode_toggle(page, static_app):
     (`series(1)`): light `#eb6834` = rgb(235, 104, 52), dark `#de5c27` =
     rgb(222, 92, 39) -- the same pair the final review measured by hand.
     """
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     # Deterministic starting point regardless of what an earlier test in this
     # module (or a previous run reusing this profile) left behind: clear the
     # persisted choice and reload so App mounts on "system".
@@ -227,7 +234,7 @@ def test_a_partial_region_scope_shows_a_composition_caveat(page, static_app):
         "fixture assumption broken: Puglia should have more than 1 capital in the seed"
     )
 
-    page.goto(static_app)
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
     page.select_option("[data-testid='climate-region-select']", "Puglia")
     # The caveat depends on `climateCityOptions("Puglia")` resolving (async),
@@ -248,3 +255,19 @@ def test_a_partial_region_scope_shows_a_composition_caveat(page, static_app):
         "expected a composition caveat at partial region scope (Puglia), found none"
     )
     assert f"1 of {total} capitals" in note, note
+
+
+def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
+    """Nav must not promise pages that do not exist.
+
+    The app shipped with zero <a> elements precisely so nothing could 404; this
+    is the test that keeps that true once links exist. Asserting the link count
+    alone would pass with every link pointing at a blank page.
+    """
+    page.goto(static_app)
+    slugs = page.eval_on_selector_all("nav a", "els => els.map(e => e.getAttribute('href'))")
+    assert len(slugs) >= 7, slugs
+    for slug in slugs:
+        page.goto(f"{static_app}/{slug}")
+        page.wait_for_selector("main h1", timeout=30_000)
+        assert page.eval_on_selector("main h1", "e => e.textContent.trim()"), slug

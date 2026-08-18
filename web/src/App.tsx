@@ -1,8 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Climate from "./pages/Climate";
-import { currentMode, gridline, inkPrimary, surface, type Mode } from "./theme";
+import Home from "./pages/Home";
+import { ROUTES, useRoute } from "./router";
+import { currentMode, gridline, inkMuted, inkPrimary, inkSecondary, surface, type Mode } from "./theme";
 
 type Choice = Mode | "system";
+
+/** Placeholder for a nav-registered page this plan hasn't built yet
+ * (crime, population, climate-crime, labor, economy -- see the plan's
+ * progress ledger: Task 1 only builds the router, nav and home page).
+ * Every ROUTES entry must resolve to something with an `<h1>` so the nav
+ * link test (`test_every_nav_link_reaches_a_page_that_renders`) can tell
+ * "not built yet" apart from "genuinely broken link" -- an UNREGISTERED
+ * slug (matching no ROUTES entry at all) still renders nothing, which is
+ * what lets that same test catch a dangling link once one exists.
+ */
+function ComingSoon({ label }: { label: string }) {
+  return (
+    <div>
+      <h1 style={{ color: inkPrimary(), margin: "0 0 0.35rem" }}>{label}</h1>
+      <p style={{ color: inkMuted() }}>This page hasn&apos;t been built yet.</p>
+    </div>
+  );
+}
 
 const STORAGE_KEY = "italy-dashboard-color-mode";
 
@@ -79,17 +99,41 @@ export default function App() {
     setMode(currentMode());
   }
 
+  // Route switch: the entire nav must be additive from here on -- every
+  // later task in this plan only ADDS a `case` (or replaces a `ComingSoon`
+  // with a real import), never touches `useRoute`/`ROUTES` themselves (see
+  // router.tsx's docstring and the plan's pre-flight scan). An unregistered
+  // slug (in neither this switch nor ROUTES) renders nothing, on purpose --
+  // see `ComingSoon`'s docstring above for why that is load-bearing for the
+  // nav-link test, not an oversight.
+  const route = useRoute();
+  const routeDef = ROUTES.find((r) => r.slug === route);
+  let page: ReactNode;
+  switch (route) {
+    case "home":
+      page = <Home />;
+      break;
+    case "climate":
+      page = <Climate mode={mode} />;
+      break;
+    default:
+      page = routeDef ? <ComingSoon label={routeDef.label} /> : null;
+  }
+
   return (
-    <main style={{ padding: "1.5rem", maxWidth: "1100px", margin: "0 auto" }}>
+    <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "1.5rem" }}>
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: "1rem",
+          flexWrap: "wrap",
         }}
       >
-        <h1 style={{ color: inkPrimary() }}>Italy Dashboard</h1>
+        <span style={{ color: inkPrimary(), fontSize: "1.25em", fontWeight: 700 }}>
+          Italy Dashboard
+        </span>
         <button
           type="button"
           onClick={cycle}
@@ -105,7 +149,36 @@ export default function App() {
           Colour mode: {choice} (currently {mode})
         </button>
       </div>
-      <Climate mode={mode} />
-    </main>
+      <nav
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "1.25rem",
+          margin: "1rem 0 1.5rem",
+          paddingBottom: "0.75rem",
+          borderBottom: `1px solid ${gridline()}`,
+        }}
+      >
+        {ROUTES.map((r) => {
+          const active = r.slug === route;
+          return (
+            <a
+              key={r.slug}
+              href={`#/${r.slug}`}
+              aria-current={active ? "page" : undefined}
+              style={{
+                color: active ? inkPrimary() : inkSecondary(),
+                fontWeight: active ? 700 : 400,
+                fontSize: "0.95em",
+                textDecoration: "none",
+              }}
+            >
+              {r.label}
+            </a>
+          );
+        })}
+      </nav>
+      <main>{page}</main>
+    </div>
   );
 }
