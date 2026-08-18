@@ -181,14 +181,37 @@ function EmptyNote({ children }: { children: ReactNode }) {
   return <p style={{ color: inkMuted(), fontStyle: "italic", margin: 0 }}>{children}</p>;
 }
 
-function Loading() {
-  return <EmptyNote>Loading…</EmptyNote>;
+/** What the page is waiting for, so the wait can say which.
+ *
+ * These two are genuinely distinguishable and worth distinguishing: "engine" is
+ * DuckDB-WASM fetching its worker, wasm and parquet extension from jsDelivr,
+ * which is most of the wait on a cold load and explains why nothing has appeared
+ * yet; "data" means the engine is up and the queries are running, so something is
+ * about to. The boundary is real rather than cosmetic -- the readiness check is
+ * the first call that forces `getConnection()`, so it resolving IS the engine
+ * being ready.
+ */
+type LoadStage = "engine" | "data";
+
+const LOAD_STAGE_LABEL: Record<LoadStage, string> = {
+  engine: "Starting the query engine…",
+  data: "Loading data…",
+};
+
+function Loading({ stage }: { stage: LoadStage }) {
+  return (
+    <p className="loading-row" style={{ color: inkMuted(), margin: 0 }} aria-live="polite">
+      <span className="spinner" aria-hidden="true" />
+      {LOAD_STAGE_LABEL[stage]}
+    </p>
+  );
 }
 
 type Phase = "loading" | "no-data" | "ready";
 
 export default function Climate({ mode }: { mode: Mode }) {
   const [phase, setPhase] = useState<Phase>("loading");
+  const [loadStage, setLoadStage] = useState<LoadStage>("engine");
   const [coverage, setCoverage] = useState<Coverage>(EMPTY_COVERAGE);
 
   const [regionOptions, setRegionOptions] = useState<string[]>([]);
@@ -238,6 +261,8 @@ export default function Climate({ mode }: { mode: Mode }) {
     let cancelled = false;
     void (async () => {
       const [climateOk, regionOk] = await Promise.all([climateReady(), climateRegionReady()]);
+      // The engine is up: those two calls are the first to force getConnection().
+      if (!cancelled) setLoadStage("data");
       const cov = await climateCoverage();
       if (cancelled) return;
       setCoverage(cov as Coverage);
@@ -387,7 +412,7 @@ export default function Climate({ mode }: { mode: Mode }) {
   );
 
   if (phase === "loading") {
-    return <Loading />;
+    return <Loading stage={loadStage} />;
   }
   if (phase === "no-data") {
     return (
@@ -461,7 +486,7 @@ export default function Climate({ mode }: { mode: Mode }) {
       >
         <div data-testid="climate-annual">
           {scopeLoading ? (
-            <Loading />
+            <Loading stage="data" />
           ) : annual.length === 0 ? (
             <EmptyNote>No annual temperature data for {scopeName}.</EmptyNote>
           ) : (
@@ -473,7 +498,7 @@ export default function Climate({ mode }: { mode: Mode }) {
       <Card title="Anomaly against the 1981-2010 normal" subtitle="Degrees Celsius above or below the own 1981-2010 average.">
         <div data-testid="climate-stripes">
           {scopeLoading ? (
-            <Loading />
+            <Loading stage="data" />
           ) : stripes.length === 0 ? (
             <EmptyNote>No anomaly data for {scopeName}.</EmptyNote>
           ) : (
@@ -488,7 +513,7 @@ export default function Climate({ mode }: { mode: Mode }) {
       >
         <div data-testid="climate-thresholds">
           {scopeLoading ? (
-            <Loading />
+            <Loading stage="data" />
           ) : thresholds.length === 0 ? (
             <EmptyNote>No threshold-day data for {scopeName}.</EmptyNote>
           ) : (
@@ -512,7 +537,7 @@ export default function Climate({ mode }: { mode: Mode }) {
               readings. Pick a city above to see it.
             </EmptyNote>
           ) : scopeLoading ? (
-            <Loading />
+            <Loading stage="data" />
           ) : distributionUnavailable ? (
             <EmptyNote>
               Daily temperature data isn't included in this build, so the distribution chart isn't
@@ -538,7 +563,7 @@ export default function Climate({ mode }: { mode: Mode }) {
           {!isCityScope ? (
             <EmptyNote>The month-by-month grid needs a single city too — pick one above to see it.</EmptyNote>
           ) : scopeLoading ? (
-            <Loading />
+            <Loading stage="data" />
           ) : heatmap.length === 0 ? (
             <EmptyNote>No monthly data for {city}.</EmptyNote>
           ) : (
