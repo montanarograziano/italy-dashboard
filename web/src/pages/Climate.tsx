@@ -10,6 +10,7 @@ import {
   thresholdSpec,
 } from "../charts/climate";
 import { PlotFigure } from "../charts/plot";
+import { unavailableTables } from "../db";
 import {
   climateCoverage,
   climateMonthHeatmap,
@@ -216,8 +217,13 @@ export default function Climate({ mode }: { mode: Mode }) {
   // registerParquetViews docstring); a query that needs it fails loudly
   // rather than returning an empty result. This is the ONE place that
   // failure is expected and turned into an explanatory card instead of an
-  // uncaught rejection -- see the effect below.
+  // uncaught rejection -- see the effect below. `distributionErrored` is the
+  // OTHER outcome: a real failure (a network blip, a malformed row, a broken
+  // port) that is NOT the table being absent -- `unavailableTables` (db.ts)
+  // is what tells the two apart, so a transient error no longer renders the
+  // same "isn't included in this build" claim a deliberate exclusion does.
   const [distributionUnavailable, setDistributionUnavailable] = useState(false);
+  const [distributionErrored, setDistributionErrored] = useState(false);
 
   // Initial load: mart readiness, coverage (shown even when the mart isn't
   // ready, same as ClimateState.load in state.py), and the cross-city data.
@@ -272,13 +278,24 @@ export default function Climate({ mode }: { mode: Mode }) {
       let distRows: Row[] = [];
       let windows: Windows | null = null;
       let distFailed = false;
+      let distErrored = false;
       if (isCityScope) {
         heatmapRows = await climateMonthHeatmap(city);
         try {
           windows = await climateDistributionWindows(city);
           distRows = windows ? await climateDistribution(city) : [];
-        } catch {
-          distFailed = true;
+        } catch (err) {
+          // Claim exclusion only when the table really is unavailable in
+          // this build -- any other failure (a network blip, a malformed
+          // row, a genuine port bug) is a real error, not a deliberate
+          // product decision, and must not render the same sentence one
+          // produces.
+          if (unavailableTables.has("mart_climate_daily")) {
+            distFailed = true;
+          } else {
+            distErrored = true;
+            console.error(`climate distribution query failed for ${city}:`, err);
+          }
         }
       }
       if (cancelled) return;
@@ -289,6 +306,7 @@ export default function Climate({ mode }: { mode: Mode }) {
       setDistribution(distRows);
       setDistributionWindows(windows);
       setDistributionUnavailable(distFailed);
+      setDistributionErrored(distErrored);
       setScopeLoading(false);
     })();
     return () => {
@@ -486,6 +504,10 @@ export default function Climate({ mode }: { mode: Mode }) {
             <EmptyNote>
               Daily temperature data isn't included in this build, so the distribution chart isn't
               available for any city.
+            </EmptyNote>
+          ) : distributionErrored ? (
+            <EmptyNote>
+              Couldn't load the daily-maxima distribution for {city} just now. Reloading the page may help.
             </EmptyNote>
           ) : !distributionChartSpec ? (
             <EmptyNote>{city} doesn't have two complete years of daily data to compare yet.</EmptyNote>
