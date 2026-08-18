@@ -257,6 +257,22 @@ def test_a_partial_region_scope_shows_a_composition_caveat(page, static_app):
     assert f"1 of {total} capitals" in note, note
 
 
+@pytest.mark.parametrize(
+    ("slug", "testid"),
+    [("economy", "inflation"), ("labor", "unemployment"), ("population", "resident")],
+)
+def test_each_simple_page_renders_marks_not_an_empty_chart(page, static_app, slug, testid):
+    """A page that loaded but drew nothing is what a wrong region string looks like.
+
+    These queries return [] for an unrecognised region name rather than raising,
+    so asserting the page merely rendered would pass with every chart empty.
+    """
+    page.goto(f"{static_app}/#/{slug}")
+    page.wait_for_selector(f"[data-testid='{testid}'] path", timeout=30_000)
+    count = page.eval_on_selector_all(f"[data-testid='{testid}'] path", "els => els.length")
+    assert count > 0, (slug, testid)
+
+
 def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
     """Nav must not promise pages that do not exist.
 

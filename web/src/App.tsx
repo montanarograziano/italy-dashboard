@@ -1,14 +1,17 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Climate from "./pages/Climate";
+import Economy from "./pages/Economy";
 import Home from "./pages/Home";
+import Labor from "./pages/Labor";
+import Population from "./pages/Population";
 import { ROUTES, useRoute } from "./router";
 import { currentMode, gridline, inkMuted, inkPrimary, inkSecondary, surface, type Mode } from "./theme";
 
 type Choice = Mode | "system";
 
 /** Placeholder for a nav-registered page this plan hasn't built yet
- * (crime, population, climate-crime, labor, economy -- see the plan's
- * progress ledger: Task 1 only builds the router, nav and home page).
+ * (crime, climate-crime -- see the plan's progress ledger: Task 1 built the
+ * router, nav and home page, Task 2 added economy, labor and population).
  * Every ROUTES entry must resolve to something with an `<h1>` so the nav
  * link test (`test_every_nav_link_reaches_a_page_that_renders`) can tell
  * "not built yet" apart from "genuinely broken link" -- an UNREGISTERED
@@ -115,6 +118,15 @@ export default function App() {
       break;
     case "climate":
       page = <Climate mode={mode} />;
+      break;
+    case "economy":
+      page = <Economy mode={mode} />;
+      break;
+    case "labor":
+      page = <Labor mode={mode} />;
+      break;
+    case "population":
+      page = <Population mode={mode} />;
       break;
     default:
       page = routeDef ? <ComingSoon label={routeDef.label} /> : null;
