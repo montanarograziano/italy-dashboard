@@ -1,6 +1,6 @@
 import cases from "../../../shared/conformance/cases.json";
 import expected from "../../../shared/conformance/expected.json";
-import { openConnection } from "../db";
+import { openConnection, unavailableTables } from "../db";
 import * as climate from "../queries/climate";
 import * as climateScope from "../queries/climateScope";
 import * as crime from "../queries/crime";
@@ -125,7 +125,19 @@ window.runConformance = async () => {
     try {
       out[c.id] = normalise(await (fn as (...a: unknown[]) => Promise<unknown>)(...c.args));
     } catch (err) {
-      out[c.id] = { __error__: String(err) };
+      // getConnection() (db.ts) records, in `unavailableTables`, which
+      // registered views could not be created -- in a static build that's
+      // exactly `["mart_climate_daily"]` (excluded by design, see
+      // scripts/stage_web_data.py). A case that fails BECAUSE its query
+      // touches one of those tables is a known, documented divergence from
+      // the Python reference (which runs against the full snapshot), not a
+      // conformance regression: tag it distinctly so the test can tell the
+      // two apart, same as `__unported__` is distinct from a real failure.
+      const message = String(err);
+      const missing = [...unavailableTables].filter((table) => message.includes(table));
+      out[c.id] = missing.length
+        ? { __excluded_from_static_build__: missing, message }
+        : { __error__: message };
     }
   }
   document.getElementById("status")!.textContent = "done";

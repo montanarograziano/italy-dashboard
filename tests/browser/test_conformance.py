@@ -54,6 +54,16 @@ def _is_unported(value: object) -> bool:
     return isinstance(value, dict) and "__unported__" in value
 
 
+def _is_excluded_from_static_build(value: object) -> bool:
+    """A case whose query touches a table the static build deliberately
+    excludes (harness.ts tags this distinctly from `__error__`; see its
+    `runConformance` docstring). `mart_climate_daily` is the only such table
+    (scripts/stage_web_data.py), so today this is exactly the three
+    `climate_distribution`/`climate_distribution_windows` cases.
+    """
+    return isinstance(value, dict) and "__excluded_from_static_build__" in value
+
+
 @pytest.fixture(scope="module")
 def vite_server():
     """Serve web/src plus the repo's data/ directory, as the deployed site will."""
@@ -220,7 +230,7 @@ def test_ported_cases_match_the_python_reference(results: dict):
     """
     mismatches = {}
     for case_id, actual in results.items():
-        if _is_unported(actual):
+        if _is_unported(actual) or _is_excluded_from_static_build(actual):
             continue
         want = EXPECTED["results"][case_id]
         if actual != want:
@@ -243,3 +253,26 @@ def test_no_case_is_unported(results: dict):
         f"{len(unported)} of {len(results)} cases have no TypeScript port: "
         f"{unported}. Port them, or remove them from shared/conformance/cases.json."
     )
+
+
+def test_the_excluded_mart_cases_are_tagged_not_silently_tolerated(results: dict):
+    """`mart_climate_daily` is excluded from the static build by design (Task
+    4, scripts/stage_web_data.py), so its dependent cases MUST diverge from
+    the Python reference (which runs against the full snapshot) -- but that
+    divergence must show up as the explicit `__excluded_from_static_build__`
+    marker, not as an unexplained `__error__` (indistinguishable from a real
+    regression) or, worse, a silent pass that would happen to hide a real
+    regression in some OTHER, unrelated table becoming unavailable.
+    """
+    excluded = {k: v for k, v in results.items() if _is_excluded_from_static_build(v)}
+    expected_ids = {
+        case_id
+        for case_id, fn in CASE_FUNCTIONS.items()
+        if fn in {"climate_distribution", "climate_distribution_windows"}
+    }
+    assert set(excluded) == expected_ids, (
+        f"expected exactly the mart_climate_daily-dependent cases tagged "
+        f"__excluded_from_static_build__: got {sorted(excluded)}, expected {sorted(expected_ids)}"
+    )
+    for case_id, v in excluded.items():
+        assert v["__excluded_from_static_build__"] == ["mart_climate_daily"], (case_id, v)

@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "python3 ../scripts/stage_web_data.py",
     "dev": "vite",
+    "prebuild": "python3 ../scripts/stage_web_data.py",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
