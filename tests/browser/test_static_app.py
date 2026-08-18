@@ -1,6 +1,34 @@
+from collections.abc import Iterator
+
 import pytest
 
 pytestmark = pytest.mark.browser
+
+
+@pytest.fixture(scope="module")
+def page(browser) -> Iterator:
+    """Override pytest-playwright's function-scoped `page` with one shared by
+    every test in this module.
+
+    F5: 2 of 3 full-suite runs of this file went red, a different test each
+    time, all 30-second `wait_for_selector` timeouts, 4/4 green in isolation --
+    load/ordering sensitivity, not a real assertion failure. Each test used to
+    get its own fresh `BrowserContext` (pytest-playwright's default `page`
+    fixture), so each paid a full cold DuckDB-WASM boot with an EMPTY disk
+    cache for the jsDelivr CDN fetch, competing with whatever else the full
+    suite has running. Sharing one page (and therefore one context, and its
+    cache) for the module is the same shape `test_conformance.py`'s
+    module-scoped `harness_page` already uses. Each test still calls
+    `page.goto(static_app)` itself -- a real navigation that resets the app's
+    own JS module state (the DuckDB connection singleton in db.ts, the
+    colour-mode listener in App.tsx) between tests, so only the network cache
+    is shared, not application state.
+    """
+    p = browser.new_page()
+    try:
+        yield p
+    finally:
+        p.close()
 
 
 def test_the_shell_paints_the_palette_surface(page, static_app):
