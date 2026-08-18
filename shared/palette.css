@@ -11,7 +11,7 @@
   --div-6: #cc5e34;
 }
 
-.dark {
+.dark, [data-theme="dark"] {
   --div-0: #005acb;
   --div-1: #2072d0;
   --div-2: #4986d4;
@@ -19,4 +19,16 @@
   --div-4: #ef7344;
   --div-5: #de5c27;
   --div-6: #c34f1e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.dark):not(.light):not([data-theme="dark"]):not([data-theme="light"]) {
+    --div-0: #005acb;
+    --div-1: #2072d0;
+    --div-2: #4986d4;
+    --div-3: #4c4d4c;
+    --div-4: #ef7344;
+    --div-5: #de5c27;
+    --div-6: #c34f1e;
+  }
 }

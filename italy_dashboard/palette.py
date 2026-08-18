@@ -17,6 +17,20 @@ from __future__ import annotations
 SURFACE_LIGHT = "#fcfcfb"
 SURFACE_DARK = "#1a1a19"
 
+# UI text and gridline tokens (not chart-data colours, so not run through the
+# colourblind validator below). Shared with the static frontend via
+# scripts/generate_palette.py so its body text and gridlines match Reflex's:
+# italy_dashboard/theme.py wraps these in rx.color_mode_cond rather than
+# hardcoding its own copies.
+INK_PRIMARY_LIGHT = "#0b0b0b"
+INK_PRIMARY_DARK = "#f4f4f2"
+INK_SECONDARY_LIGHT = "#52514e"
+INK_SECONDARY_DARK = "#b8b7b2"
+INK_MUTED_LIGHT = "#898781"
+INK_MUTED_DARK = "#8a8983"
+GRIDLINE_LIGHT = "#e1e0d9"
+GRIDLINE_DARK = "#2e2e2c"
+
 # Categorical: fixed slot order, never cycled. Blue, orange, aqua in both modes,
 # so a series keeps its identity when the mode changes.
 CATEGORICAL_LIGHT = ("#2a78d6", "#eb6834", "#1baf7a")
@@ -68,13 +82,57 @@ def diverging_bucket(anomaly: float, half_range: float = 1.5) -> int:
     return max(0, min(DIVERGING_STEPS - 1, index))
 
 
+_EXPLICIT_DARK_SELECTOR = '.dark, [data-theme="dark"]'
+
+# Guards the system-preference fallback below so an explicit choice, in
+# EITHER frontend's convention, always wins over the OS setting.
+#
+# Both `.dark` and `.light` are excluded, not just `.dark`: Reflex's own
+# ThemeProvider (web/utils/react-theme.js in the compiled `.web/` output)
+# toggles `.light`/`.dark` directly on `document.documentElement` -- i.e. on
+# this same `:root` -- via `root.classList.add(resolvedTheme)`. A guard that
+# only excluded `.dark` would still match `:root.light` and let this query
+# re-flip a Reflex user who explicitly chose light back to dark whenever
+# their OS prefers dark. `[data-theme="dark"]`/`[data-theme="light"]` are the
+# static app's equivalent explicit markers (App.tsx sets the attribute only
+# on an explicit choice, deleting it for "system").
+_NO_EXPLICIT_CHOICE = ':not(.dark):not(.light):not([data-theme="dark"]):not([data-theme="light"])'
+
+
 def diverging_css_vars() -> str:
-    """CSS custom properties for the diverging ramp, both modes.
+    """CSS custom properties for the diverging ramp, covering all three
+    colour-mode states both frontends need.
 
     A per-datum colour cannot be a build-time constant, so the stripe chart
-    emits `var(--div-N)` per bar and lets CSS resolve the mode. Everything that
-    is not per-datum uses rx.color_mode_cond instead.
+    emits `var(--div-N)` per bar and lets CSS resolve the mode. Everything
+    that is not per-datum uses rx.color_mode_cond instead.
+
+    Three rules, not two:
+    - `:root` -- the light palette. Also what a pre-hydration page paints
+      before either frontend's JS has run.
+    - an explicit dark choice -- `.dark` is Reflex/Radix's convention
+      (a class toggled on `document.documentElement`); `[data-theme="dark"]`
+      is the static shell's (an attribute on `<html>`, see web/src/App.tsx).
+      Both frontends are listed on one rule so the two stay in lockstep.
+    - system preference, via `prefers-color-scheme`, guarded by
+      `_NO_EXPLICIT_CHOICE` so it only ever applies when NEITHER frontend has
+      recorded an explicit choice on `:root`.
+
+    Previously this emitted only `:root`/`.dark`: correct for Reflex, but the
+    static shell sets `data-theme` rather than a class, so its dark mode never
+    switched the ramp at all, and its default (no attribute, system-driven)
+    state matched neither rule. See tests/unit/test_palette_artifacts.py and
+    tests/browser/test_static_app.py for the regression tests.
     """
     light = "\n".join(f"  --div-{i}: {c};" for i, c in enumerate(DIVERGING_LIGHT))
     dark = "\n".join(f"  --div-{i}: {c};" for i, c in enumerate(DIVERGING_DARK))
-    return f":root {{\n{light}\n}}\n\n.dark {{\n{dark}\n}}\n"
+    dark_indented = "\n".join(f"    --div-{i}: {c};" for i, c in enumerate(DIVERGING_DARK))
+    return (
+        f":root {{\n{light}\n}}\n"
+        "\n"
+        f"{_EXPLICIT_DARK_SELECTOR} {{\n{dark}\n}}\n"
+        "\n"
+        "@media (prefers-color-scheme: dark) {\n"
+        f"  :root{_NO_EXPLICIT_CHOICE} {{\n{dark_indented}\n  }}\n"
+        "}\n"
+    )

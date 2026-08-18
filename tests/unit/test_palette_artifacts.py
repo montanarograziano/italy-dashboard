@@ -33,7 +33,16 @@ def test_committed_css_matches_the_generator():
 
 def test_json_carries_every_role_in_both_modes():
     data = json.loads(generate_palette.build_json())
-    for role in ("surface", "categorical", "diverging", "sequential"):
+    for role in (
+        "surface",
+        "ink_primary",
+        "ink_secondary",
+        "ink_muted",
+        "gridline",
+        "categorical",
+        "diverging",
+        "sequential",
+    ):
         assert set(data[role]) == {"light", "dark"}, role
 
 
@@ -47,6 +56,14 @@ def test_json_values_are_the_palette_values():
     assert data["sequential"]["dark"] == list(palette.SEQUENTIAL_DARK)
     assert data["surface"]["light"] == palette.SURFACE_LIGHT
     assert data["surface"]["dark"] == palette.SURFACE_DARK
+    assert data["ink_primary"]["light"] == palette.INK_PRIMARY_LIGHT
+    assert data["ink_primary"]["dark"] == palette.INK_PRIMARY_DARK
+    assert data["ink_secondary"]["light"] == palette.INK_SECONDARY_LIGHT
+    assert data["ink_secondary"]["dark"] == palette.INK_SECONDARY_DARK
+    assert data["ink_muted"]["light"] == palette.INK_MUTED_LIGHT
+    assert data["ink_muted"]["dark"] == palette.INK_MUTED_DARK
+    assert data["gridline"]["light"] == palette.GRIDLINE_LIGHT
+    assert data["gridline"]["dark"] == palette.GRIDLINE_DARK
 
 
 def test_css_matches_the_existing_reflex_custom_properties():
@@ -60,6 +77,37 @@ def test_css_matches_the_existing_reflex_custom_properties():
     for i, colour in enumerate(palette.DIVERGING_LIGHT):
         assert f"--div-{i}: {colour};" in css
         assert f"--div-{i}: {colour};" in reflex_css
+
+
+def test_css_covers_the_static_apps_data_theme_attribute():
+    """Reflex/Radix toggle a `.dark` CLASS; the static shell (web/src/App.tsx)
+    sets a `data-theme` ATTRIBUTE on <html> instead and never uses `.dark` at
+    all. A generator that emits only `.dark` leaves --div-N frozen at its
+    light values in the static app: dark mode would render the warming
+    stripes in the light diverging ramp. Regression test for that.
+    """
+    css = generate_palette.build_css()
+    assert '[data-theme="dark"]' in css
+
+
+def test_css_covers_system_preference_with_a_guard_that_still_lets_explicit_choices_win():
+    """The third state (neither frontend's shell sets anything -- the static
+    app's default "system" choice) must follow `prefers-color-scheme`, but
+    that fallback must not override an explicit choice.
+
+    Reflex's own ThemeProvider toggles `.light`/`.dark` directly on
+    `document.documentElement` (i.e. on `:root`), so the guard must exclude
+    `.light` too, not only `.dark`: excluding only `.dark` would still match
+    `:root.light` and re-flip a Reflex user who explicitly chose light mode
+    back to dark whenever their OS prefers dark -- a regression in the live,
+    canonical app.
+    """
+    css = generate_palette.build_css()
+    assert "@media (prefers-color-scheme: dark)" in css
+    assert ":not(.dark)" in css
+    assert ":not(.light)" in css
+    assert ':not([data-theme="dark"])' in css
+    assert ':not([data-theme="light"])' in css
 
 
 @pytest.mark.parametrize("mode", ["light", "dark"])

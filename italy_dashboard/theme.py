@@ -42,10 +42,10 @@ FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
 _LIGHT = {
     "SURFACE": palette.SURFACE_LIGHT,
     "PAGE_BG": "#f9f9f7",
-    "INK_PRIMARY": "#0b0b0b",
-    "INK_SECONDARY": "#52514e",
-    "INK_MUTED": "#898781",
-    "GRIDLINE": "#e1e0d9",
+    "INK_PRIMARY": palette.INK_PRIMARY_LIGHT,
+    "INK_SECONDARY": palette.INK_SECONDARY_LIGHT,
+    "INK_MUTED": palette.INK_MUTED_LIGHT,
+    "GRIDLINE": palette.GRIDLINE_LIGHT,
     "AXIS": "#c3c2b7",
     "BORDER": "rgba(11,11,11,0.10)",
 }
@@ -54,10 +54,10 @@ _LIGHT = {
 _DARK = {
     "SURFACE": palette.SURFACE_DARK,
     "PAGE_BG": "#131312",
-    "INK_PRIMARY": "#f4f4f2",
-    "INK_SECONDARY": "#b8b7b2",
-    "INK_MUTED": "#8a8983",
-    "GRIDLINE": "#2e2e2c",
+    "INK_PRIMARY": palette.INK_PRIMARY_DARK,
+    "INK_SECONDARY": palette.INK_SECONDARY_DARK,
+    "INK_MUTED": palette.INK_MUTED_DARK,
+    "GRIDLINE": palette.GRIDLINE_DARK,
     "AXIS": "#3d3d3a",
     "BORDER": "rgba(244,244,242,0.12)",
 }

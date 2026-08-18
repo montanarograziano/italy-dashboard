@@ -4,6 +4,22 @@
     "light": "#fcfcfb",
     "dark": "#1a1a19"
   },
+  "ink_primary": {
+    "light": "#0b0b0b",
+    "dark": "#f4f4f2"
+  },
+  "ink_secondary": {
+    "light": "#52514e",
+    "dark": "#b8b7b2"
+  },
+  "ink_muted": {
+    "light": "#898781",
+    "dark": "#8a8983"
+  },
+  "gridline": {
+    "light": "#e1e0d9",
+    "dark": "#2e2e2c"
+  },
   "categorical": {
     "light": [
       "#2a78d6",
