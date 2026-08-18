@@ -20,6 +20,7 @@ import {
   REGION_SCOPE,
   type Mart,
 } from "../queries/martEngine";
+import { martReady } from "../queries/ready";
 import { incomeCorrelations, incomeScatter, incomeYears } from "../queries/static";
 import { gridline, inkMuted, inkPrimary, inkSecondary, series, surface, type Mode } from "../theme";
 
@@ -74,6 +75,24 @@ const OFFENDERS_MART: Mart = [
   "mart_offenders",
   ["region", "indicator", "crime", "sex", "age", "citizenship"],
 ];
+
+// Reflex's exact copy (translations.py's "no_mart" EN string), reused
+// verbatim by both tabs' mart-readiness gate below -- same rule as every
+// other caveat/callout string in this file, and the same text
+// `_no_mart_callout()` renders in the Reflex reference (crime.py).
+const NO_MART_TEXT =
+  "Data mart not built yet. Run  just refresh  (or  just sample), which " +
+  "rebuilds the dbt marts, then reload.";
+
+// Reflex's exact copy (translations.py's "method_note" EN string), rendered
+// at the end of the offenders tab only -- crime.py:226, right after
+// _income_card() -- never on the convictions tab, which has no equivalent
+// call in the Reflex reference either.
+const METHOD_NOTE_TEXT =
+  "Counts, not rates, unless stated: compare groups only against their " +
+  "population denominators. Citizenship distinguishes Italian vs foreign " +
+  "nationals; residence status (regular/irregular) is not part of ISTAT " +
+  "statistics. Cross-crime totals count a person once per crime type.";
 
 // `value: null` means "no split" (the trend chart's plain single total).
 // Every other value is a mart dimension name, passed straight through to
@@ -283,16 +302,47 @@ function OffendersTab({ mode }: { mode: Mode }) {
   const [share, setShare] = useState<Row[]>([]);
   const [kpi, setKpi] = useState<Record<string, string>>(EMPTY_OFFENDERS_KPIS);
 
-  // Options, years and the latest-year caption: fetched once. Mirrors
-  // OffendersState.load's initial reads (state.py), including the
-  // default-away-from-ALL indicator guard documented at the top of this file.
+  // `null` = still checking, `false` = confirmed absent, `true` = confirmed
+  // present. Mirrors OffendersState.load's `self.mart_ready =
+  // q.mart_ready(q.OFFENDERS_MART)` guard (state.py), checked before
+  // anything else -- every effect below is gated on this being `true`, so a
+  // missing mart never fires a query against a view that was never
+  // registered (see F3 in the plan's final review: previously every one of
+  // these ran regardless, leaving an unhandled rejection and an indefinite
+  // spinner rather than the `_no_mart_callout()` the Reflex reference shows).
+  const [martOk, setMartOk] = useState<boolean | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([
-      martOptions(OFFENDERS_MART),
-      martYears(OFFENDERS_MART),
-      martLatestYear(OFFENDERS_MART),
-    ]).then(([opts, yrs, latest]) => {
+    void martReady(OFFENDERS_MART).then((ok) => {
+      if (!cancelled) setMartOk(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Options, years and the latest-year caption: fetched once the mart is
+  // confirmed ready. Mirrors OffendersState.load's initial reads (state.py),
+  // including the default-away-from-ALL indicator guard documented at the
+  // top of this file.
+  useEffect(() => {
+    if (martOk !== true) return;
+    let cancelled = false;
+    // Sequential, not Promise.all: DuckDB-WASM serialises every query on one
+    // worker regardless (this project's own prior-plan finding, recorded in
+    // db.ts's registerParquetViews -- concurrent dispatch only adds queueing
+    // overhead, never real parallelism), so firing these one at a time costs
+    // nothing in the normal case and stops the later ones from ever being
+    // sent at all once the user has navigated away mid-effect (see the plan's
+    // final review, F2: a `Promise.all` here fires every query before
+    // `cancelled` can ever be observed true).
+    void (async () => {
+      const opts = await martOptions(OFFENDERS_MART);
+      if (cancelled) return;
+      const yrs = await martYears(OFFENDERS_MART);
+      if (cancelled) return;
+      const latest = await martLatestYear(OFFENDERS_MART);
       if (cancelled) return;
       setOptions({
         region: opts.region ?? [ALL],
@@ -306,18 +356,22 @@ function OffendersTab({ mode }: { mode: Mode }) {
       setLatestYear(latest);
       if (yrs.length > 0) setBreakdownYear(yrs[0]!);
       if (opts.indicator && opts.indicator.length > 2) setIndicator(opts.indicator[1]!);
-    });
+    })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [martOk]);
 
   // Province options cascade from the region, and a region change always
   // broadens the province selection back to "All" -- mirrors
   // OffendersState.set_region_filter doing both together. Runs on mount too
   // (region starts at ALL), which is what supplies the initial province list
-  // without a second, separate fetch.
+  // without a second, separate fetch. Gated on martOk for the same reason as
+  // the effect above: `martProvinceOptions` is a DISTINCT over the whole
+  // mart, one of the more expensive queries on this page, and firing it
+  // against a mart that doesn't exist is pure waste.
   useEffect(() => {
+    if (martOk !== true) return;
     let cancelled = false;
     setProvince(ALL);
     void martProvinceOptions(OFFENDERS_MART, region).then((opts) => {
@@ -326,12 +380,13 @@ function OffendersTab({ mode }: { mode: Mode }) {
     return () => {
       cancelled = true;
     };
-  }, [region]);
+  }, [region, martOk]);
 
   // Every derived chart/KPI refreshes together whenever any filter changes --
   // mirrors OffendersState._refresh, called after every individual setter in
   // the Reflex reference.
   useEffect(() => {
+    if (martOk !== true) return;
     let cancelled = false;
     setLoading(true);
     const usingProvince = province !== ALL;
@@ -344,19 +399,30 @@ function OffendersTab({ mode }: { mode: Mode }) {
       age,
       citizenship,
     };
-    void Promise.all([
-      martTrendPivot(OFFENDERS_MART, selections, splitBy),
-      martBreakdown(OFFENDERS_MART, "crime", selections, 10, breakdownYear || null),
+    // Sequential, not Promise.all -- see the options effect above for why:
+    // this is the effect the plan's final review measured directly (F2),
+    // firing six queries at once on every filter change, then leaving all
+    // six queued on DuckDB-WASM's one worker even after the user has
+    // navigated to a different page entirely. A `cancelled` check between
+    // each one means at most the single query already in flight at the
+    // moment of navigation still runs to completion -- not all six.
+    void (async () => {
+      const trend = await martTrendPivot(OFFENDERS_MART, selections, splitBy);
+      if (cancelled) return;
+      const crimeBreakdown = await martBreakdown(OFFENDERS_MART, "crime", selections, 10, breakdownYear || null);
+      if (cancelled) return;
       // Rates and the region ranking use resident-population denominators,
       // which exist per REGION only (not per province), and the raw
       // citizenship/crime filter values -- mirrors OffendersState._refresh's
       // identical choice to route these two around the province-aware
       // `selections` object above.
-      offenderRates(region, crime),
-      regionRateRanking(breakdownYear || null, citizenship, crime),
-      offenderForeignShare(selections),
-      offendersKpis(selections),
-    ]).then(([trend, crimeBreakdown, ratesRows, rankingRows, shareRows, kpis]) => {
+      const ratesRows = await offenderRates(region, crime);
+      if (cancelled) return;
+      const rankingRows = await regionRateRanking(breakdownYear || null, citizenship, crime);
+      if (cancelled) return;
+      const shareRows = await offenderForeignShare(selections);
+      if (cancelled) return;
+      const kpis = await offendersKpis(selections);
       if (cancelled) return;
       const [rows, labels] = trend;
       setTrendRows(rows);
@@ -367,11 +433,11 @@ function OffendersTab({ mode }: { mode: Mode }) {
       setShare(shareRows);
       setKpi(kpis);
       setLoading(false);
-    });
+    })();
     return () => {
       cancelled = true;
     };
-  }, [region, province, indicator, crime, sex, age, citizenship, splitBy, breakdownYear]);
+  }, [region, province, indicator, crime, sex, age, citizenship, splitBy, breakdownYear, martOk]);
 
   // `mode` is a dependency of every memo below: theme.ts's accessors
   // (series/gridline) are read at spec-build time, not render time -- see
@@ -421,6 +487,16 @@ function OffendersTab({ mode }: { mode: Mode }) {
     setCitizenship(ALL);
     setSplitBy(null);
     setIndicator(options.indicator.length > 2 ? options.indicator[1]! : ALL);
+  }
+
+  // Mirrors `data_gate(has_loaded, mart_ready, <content>, _no_mart_callout())`
+  // in the Reflex reference (crime.py) -- checked before any of the content
+  // below, which assumes the mart exists.
+  if (martOk === null) {
+    return <Loading />;
+  }
+  if (martOk === false) {
+    return <EmptyNote>{NO_MART_TEXT}</EmptyNote>;
   }
 
   return (
@@ -612,6 +688,10 @@ function OffendersTab({ mode }: { mode: Mode }) {
       </Card>
 
       <IncomeCard mode={mode} />
+
+      <p data-testid="crime-method-note" style={{ color: inkMuted(), fontSize: "0.8em" }}>
+        {METHOD_NOTE_TEXT}
+      </p>
     </div>
   );
 }
@@ -667,14 +747,18 @@ function IncomeCard({ mode }: { mode: Mode }) {
     if (!year) return;
     let cancelled = false;
     setDataLoading(true);
-    void Promise.all([incomeScatter(year), incomeCorrelations(year)]).then(([scatter, corr]) => {
+    // Sequential, not Promise.all -- see OffendersTab's identical note above.
+    void (async () => {
+      const scatter = await incomeScatter(year);
+      if (cancelled) return;
+      const corr = await incomeCorrelations(year);
       if (cancelled) return;
       setItl(scatter.ITL ?? []);
       setFrg(scatter.FRG ?? []);
       setCorrItl(corr.ITL ?? "—");
       setCorrFrg(corr.FRG ?? "—");
       setDataLoading(false);
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -802,35 +886,58 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
   const [byOffence, setByOffence] = useState<Row[]>([]);
   const [byRegion, setByRegion] = useState<Row[]>([]);
 
-  // Options, years and the latest-year caption: fetched once. Mirrors
-  // CrimeState.load's initial reads (state.py); the crime mart has no
-  // indicator-style dimension, so (unlike the offenders tab) every filter
-  // here defaults to plain ALL, no exception.
+  // Same mart-readiness gate as OffendersTab above, against CRIME_MART
+  // instead of OFFENDERS_MART -- mirrors CrimeState.load's
+  // `self.mart_ready = q.mart_ready(q.CRIME_MART)` guard and this tab's own
+  // `data_gate(has_loaded, mart_ready, ..., _no_mart_callout())` in the
+  // Reflex reference (crime.py's `_convictions_tab`).
+  const [martOk, setMartOk] = useState<boolean | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([martOptions(CRIME_MART), martYears(CRIME_MART), martLatestYear(CRIME_MART)]).then(
-      ([opts, yrs, latest]) => {
-        if (cancelled) return;
-        setOptions({
-          region: opts.region ?? [ALL],
-          offence: opts.offence ?? [ALL],
-          sex: opts.sex ?? [ALL],
-          age: opts.age ?? [ALL],
-        });
-        setYears(yrs);
-        setLatestYear(latest);
-        if (yrs.length > 0) setBreakdownYear(yrs[0]!);
-      },
-    );
+    void martReady(CRIME_MART).then((ok) => {
+      if (!cancelled) setMartOk(ok);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
 
+  // Options, years and the latest-year caption: fetched once the mart is
+  // confirmed ready. Mirrors CrimeState.load's initial reads (state.py); the
+  // crime mart has no indicator-style dimension, so (unlike the offenders
+  // tab) every filter here defaults to plain ALL, no exception.
+  useEffect(() => {
+    if (martOk !== true) return;
+    let cancelled = false;
+    // Sequential, not Promise.all -- see OffendersTab's identical note above.
+    void (async () => {
+      const opts = await martOptions(CRIME_MART);
+      if (cancelled) return;
+      const yrs = await martYears(CRIME_MART);
+      if (cancelled) return;
+      const latest = await martLatestYear(CRIME_MART);
+      if (cancelled) return;
+      setOptions({
+        region: opts.region ?? [ALL],
+        offence: opts.offence ?? [ALL],
+        sex: opts.sex ?? [ALL],
+        age: opts.age ?? [ALL],
+      });
+      setYears(yrs);
+      setLatestYear(latest);
+      if (yrs.length > 0) setBreakdownYear(yrs[0]!);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [martOk]);
+
   // Province options cascade from the region; see OffendersTab's identical
   // effect above for why the reset lives here rather than in the region
   // select's own onChange.
   useEffect(() => {
+    if (martOk !== true) return;
     let cancelled = false;
     setProvince(ALL);
     void martProvinceOptions(CRIME_MART, region).then((opts) => {
@@ -839,9 +946,10 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
     return () => {
       cancelled = true;
     };
-  }, [region]);
+  }, [region, martOk]);
 
   useEffect(() => {
+    if (martOk !== true) return;
     let cancelled = false;
     setLoading(true);
     const usingProvince = province !== ALL;
@@ -852,11 +960,13 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
       sex,
       age,
     };
-    void Promise.all([
-      martTrendPivot(CRIME_MART, selections, splitBy),
-      martBreakdown(CRIME_MART, "offence", selections, 10, breakdownYear || null),
-      martBreakdown(CRIME_MART, "region", selections, 25, breakdownYear || null),
-    ]).then(([trend, offenceBreakdown, regionBreakdown]) => {
+    // Sequential, not Promise.all -- see OffendersTab's identical note above.
+    void (async () => {
+      const trend = await martTrendPivot(CRIME_MART, selections, splitBy);
+      if (cancelled) return;
+      const offenceBreakdown = await martBreakdown(CRIME_MART, "offence", selections, 10, breakdownYear || null);
+      if (cancelled) return;
+      const regionBreakdown = await martBreakdown(CRIME_MART, "region", selections, 25, breakdownYear || null);
       if (cancelled) return;
       const [rows, labels] = trend;
       setTrendRows(rows);
@@ -864,11 +974,11 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
       setByOffence(offenceBreakdown);
       setByRegion(regionBreakdown);
       setLoading(false);
-    });
+    })();
     return () => {
       cancelled = true;
     };
-  }, [region, province, offence, sex, age, splitBy, breakdownYear]);
+  }, [region, province, offence, sex, age, splitBy, breakdownYear, martOk]);
 
   const trendSpec = useMemo(() => {
     const seriesDefs =
@@ -883,6 +993,16 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
     [byOffence, mode],
   );
   const byRegionSpec = useMemo(() => hBarSpec(byRegion, { xLabel: "Convictions", color: series(1) }), [byRegion, mode]);
+
+  // Mirrors `data_gate(has_loaded, mart_ready, <content>, _no_mart_callout())`
+  // in the Reflex reference (crime.py) -- see OffendersTab's identical gate
+  // above.
+  if (martOk === null) {
+    return <Loading />;
+  }
+  if (martOk === false) {
+    return <EmptyNote>{NO_MART_TEXT}</EmptyNote>;
+  }
 
   return (
     <div>

@@ -69,14 +69,20 @@ export default function Population({ mode }: { mode: Mode }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void Promise.all([populationTimeseries(region), foreignShareTimeseries(region)]).then(
-      ([res, share]) => {
-        if (cancelled) return;
-        setResidents(res);
-        setForeignShare(share);
-        setLoading(false);
-      },
-    );
+    // Sequential, not Promise.all: DuckDB-WASM serialises every query on one
+    // worker regardless (this project's own prior-plan finding), so this
+    // costs nothing in the normal case, and the `cancelled` check between the
+    // two stops the second from ever firing once the user has navigated away
+    // (see the plan's final review, F2).
+    void (async () => {
+      const res = await populationTimeseries(region);
+      if (cancelled) return;
+      const share = await foreignShareTimeseries(region);
+      if (cancelled) return;
+      setResidents(res);
+      setForeignShare(share);
+      setLoading(false);
+    })();
     return () => {
       cancelled = true;
     };

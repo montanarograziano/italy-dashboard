@@ -259,10 +259,21 @@ export default function Climate({ mode }: { mode: Mode }) {
   // ready, same as ClimateState.load in state.py), and the cross-city data.
   useEffect(() => {
     let cancelled = false;
+    // Sequential throughout, not Promise.all: DuckDB-WASM serialises every
+    // query on one worker regardless (this project's own prior-plan finding,
+    // recorded in db.ts's registerParquetViews), so batching several at once
+    // costs nothing in the normal case and only adds queueing overhead --
+    // and a `cancelled` check between each one means a user who navigates
+    // away mid-load stops this effect from firing its REMAINING queries at
+    // all, rather than every one of them landing on the worker ahead of
+    // whichever page is opened next (see the plan's final review, F2).
     void (async () => {
-      const [climateOk, regionOk] = await Promise.all([climateReady(), climateRegionReady()]);
+      const climateOk = await climateReady();
+      if (cancelled) return;
+      const regionOk = await climateRegionReady();
+      if (cancelled) return;
       // The engine is up: those two calls are the first to force getConnection().
-      if (!cancelled) setLoadStage("data");
+      setLoadStage("data");
       const cov = await climateCoverage();
       if (cancelled) return;
       setCoverage(cov as Coverage);
@@ -270,12 +281,13 @@ export default function Climate({ mode }: { mode: Mode }) {
         setPhase("no-data");
         return;
       }
-      const [regions, cities, top20, gridRows] = await Promise.all([
-        climateRegionOptions(),
-        climateCityOptions("Italia"),
-        warmingRateRanking(20),
-        loadStripesGrid(12),
-      ]);
+      const regions = await climateRegionOptions();
+      if (cancelled) return;
+      const cities = await climateCityOptions("Italia");
+      if (cancelled) return;
+      const top20 = await warmingRateRanking(20);
+      if (cancelled) return;
+      const gridRows = await loadStripesGrid(12);
       if (cancelled) return;
       setRegionOptions(regions);
       setCityOptions(cities);
@@ -300,12 +312,14 @@ export default function Climate({ mode }: { mode: Mode }) {
     let cancelled = false;
     setScopeLoading(true);
     const isCityScope = city !== "All";
+    // Sequential, not Promise.all -- see the initial-load effect above for why.
     void (async () => {
-      const [annualRows, stripeRows, thresholdRows] = await Promise.all([
-        isCityScope ? climateAnnualSeries(city) : climateRegionAnnualSeries(region),
-        isCityScope ? climateStripes(city) : climateRegionStripes(region),
-        isCityScope ? climateThresholdDays(city) : climateRegionThresholdDays(region),
-      ]);
+      const annualRows = await (isCityScope ? climateAnnualSeries(city) : climateRegionAnnualSeries(region));
+      if (cancelled) return;
+      const stripeRows = await (isCityScope ? climateStripes(city) : climateRegionStripes(region));
+      if (cancelled) return;
+      const thresholdRows = await (isCityScope ? climateThresholdDays(city) : climateRegionThresholdDays(region));
+      if (cancelled) return;
       let heatmapRows: Row[] = [];
       let distRows: Row[] = [];
       let windows: Windows | null = null;
@@ -313,8 +327,10 @@ export default function Climate({ mode }: { mode: Mode }) {
       let distErrored = false;
       if (isCityScope) {
         heatmapRows = await climateMonthHeatmap(city);
+        if (cancelled) return;
         try {
           windows = await climateDistributionWindows(city);
+          if (cancelled) return;
           distRows = windows ? await climateDistribution(city) : [];
         } catch (err) {
           // Claim exclusion only when the table really is unavailable in
@@ -411,191 +427,199 @@ export default function Climate({ mode }: { mode: Mode }) {
     [grid, highlightedCity, mode],
   );
 
-  if (phase === "loading") {
-    return <Loading stage={loadStage} />;
-  }
-  if (phase === "no-data") {
-    return (
-      <EmptyNote>
-        No temperature data yet. Run <code>just refresh-weather</code> (or <code>just sample</code> for
-        synthetic dev data), then reload.
-      </EmptyNote>
-    );
-  }
-
+  // The heading renders unconditionally, regardless of `phase` -- a
+  // heading is not data and should never wait on a query. Previously
+  // `<h1>Climate</h1>` lived inside the "ready" branch only, so `main h1`
+  // meant "the data arrived", not "the route rendered": under DuckDB-WASM
+  // query contention from an abandoned previous page (see the plan's final
+  // review, F2), that made `main h1` a multi-second-to-30-second wait
+  // instead of an instant one, which is what made
+  // `test_every_nav_link_reaches_a_page_that_renders` flaky rather than the
+  // environment-load coincidence it was first taken for.
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-        <h1 style={{ color: inkPrimary(), margin: 0 }}>Climate</h1>
-        <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
-          Region{" "}
-          <select
-            data-testid="climate-region-select"
-            value={region}
-            onChange={(e) => void handleRegionChange(e.target.value)}
+      <h1 style={{ color: inkPrimary(), margin: "0 0 1rem" }}>Climate</h1>
+      {phase === "loading" ? (
+        <Loading stage={loadStage} />
+      ) : phase === "no-data" ? (
+        <EmptyNote>
+          No temperature data yet. Run <code>just refresh-weather</code> (or <code>just sample</code> for
+          synthetic dev data), then reload.
+        </EmptyNote>
+      ) : (
+        <>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
+            Region{" "}
+            <select
+              data-testid="climate-region-select"
+              value={region}
+              onChange={(e) => void handleRegionChange(e.target.value)}
+            >
+              {regionOptions.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
+            City{" "}
+            <select data-testid="climate-city-select" value={city} onChange={(e) => setCity(e.target.value)}>
+              {cityOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <p style={{ color: inkSecondary(), fontSize: "0.9em", fontWeight: 600 }}>
+          Coverage: {coverage.capitals} of {coverage.capitals_total} capitals, {coverage.regions} of{" "}
+          {coverage.regions_total} regions, {coverage.year_start}-{coverage.year_end}
+        </p>
+
+        {isNationalScope || isPartialRegionScope ? (
+          // Advisory text, not an alert: nothing failed, and it does not need
+          // re-announcing to screen readers every time the scope returns here
+          // (the Reflex counterpart uses `rx.callout` with no alert role).
+          <div
+            data-testid="climate-scope-note"
+            style={{
+              border: `1px solid ${gridline()}`,
+              borderRadius: "8px",
+              padding: "0.75rem 1rem",
+              color: inkSecondary(),
+              fontSize: "0.9em",
+            }}
           >
-            {regionOptions.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
-          City{" "}
-          <select data-testid="climate-city-select" value={city} onChange={(e) => setCity(e.target.value)}>
-            {cityOptions.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+            {isNationalScope
+              ? CLIMATE_COVERAGE_NOTE
+              : regionCompositionNote(region, regionCapitalCovered, regionCapitalTotal)}
+          </div>
+        ) : null}
 
-      <p style={{ color: inkSecondary(), fontSize: "0.9em", fontWeight: 600 }}>
-        Coverage: {coverage.capitals} of {coverage.capitals_total} capitals, {coverage.regions} of{" "}
-        {coverage.regions_total} regions, {coverage.year_start}-{coverage.year_end}
-      </p>
+        <SectionHeading>Selected scope: {scopeName}</SectionHeading>
 
-      {isNationalScope || isPartialRegionScope ? (
-        // Advisory text, not an alert: nothing failed, and it does not need
-        // re-announcing to screen readers every time the scope returns here
-        // (the Reflex counterpart uses `rx.callout` with no alert role).
-        <div
-          data-testid="climate-scope-note"
-          style={{
-            border: `1px solid ${gridline()}`,
-            borderRadius: "8px",
-            padding: "0.75rem 1rem",
-            color: inkSecondary(),
-            fontSize: "0.9em",
-          }}
+        <Card
+          title="Annual temperature"
+          subtitle="Annual mean (thin line), the min-max band each year (shaded), and a 10-year centred rolling average (heavy line)."
         >
-          {isNationalScope
-            ? CLIMATE_COVERAGE_NOTE
-            : regionCompositionNote(region, regionCapitalCovered, regionCapitalTotal)}
-        </div>
-      ) : null}
+          <div data-testid="climate-annual">
+            {scopeLoading ? (
+              <Loading stage="data" />
+            ) : annual.length === 0 ? (
+              <EmptyNote>No annual temperature data for {scopeName}.</EmptyNote>
+            ) : (
+              <PlotFigure spec={annualSpec} />
+            )}
+          </div>
+        </Card>
 
-      <SectionHeading>Selected scope: {scopeName}</SectionHeading>
+        <Card title="Anomaly against the 1981-2010 normal" subtitle="Degrees Celsius above or below the own 1981-2010 average.">
+          <div data-testid="climate-stripes">
+            {scopeLoading ? (
+              <Loading stage="data" />
+            ) : stripes.length === 0 ? (
+              <EmptyNote>No anomaly data for {scopeName}.</EmptyNote>
+            ) : (
+              <PlotFigure spec={stripesChartSpec} />
+            )}
+          </div>
+        </Card>
 
-      <Card
-        title="Annual temperature"
-        subtitle="Annual mean (thin line), the min-max band each year (shaded), and a 10-year centred rolling average (heavy line)."
-      >
-        <div data-testid="climate-annual">
-          {scopeLoading ? (
-            <Loading stage="data" />
-          ) : annual.length === 0 ? (
-            <EmptyNote>No annual temperature data for {scopeName}.</EmptyNote>
-          ) : (
-            <PlotFigure spec={annualSpec} />
-          )}
-        </div>
-      </Card>
+        <Card
+          title="Hot days, tropical nights and frost days"
+          subtitle="Days per year with max ≥ 30°C, min ≥ 20°C and min ≤ 0°C."
+        >
+          <div data-testid="climate-thresholds">
+            {scopeLoading ? (
+              <Loading stage="data" />
+            ) : thresholds.length === 0 ? (
+              <EmptyNote>No threshold-day data for {scopeName}.</EmptyNote>
+            ) : (
+              <PlotFigure spec={thresholdsChartSpec} />
+            )}
+          </div>
+        </Card>
 
-      <Card title="Anomaly against the 1981-2010 normal" subtitle="Degrees Celsius above or below the own 1981-2010 average.">
-        <div data-testid="climate-stripes">
-          {scopeLoading ? (
-            <Loading stage="data" />
-          ) : stripes.length === 0 ? (
-            <EmptyNote>No anomaly data for {scopeName}.</EmptyNote>
-          ) : (
-            <PlotFigure spec={stripesChartSpec} />
-          )}
-        </div>
-      </Card>
+        <Card
+          title="Distribution of daily maxima"
+          subtitle={
+            isCityScope && distributionChartSpec
+              ? "Share of days per 2°C bucket, the city's record split into an early and a late window."
+              : undefined
+          }
+        >
+          <div data-testid="climate-distribution">
+            {!isCityScope ? (
+              <EmptyNote>
+                Daily histograms need a single city: the regional mart holds yearly aggregates, not daily
+                readings. Pick a city above to see it.
+              </EmptyNote>
+            ) : scopeLoading ? (
+              <Loading stage="data" />
+            ) : distributionUnavailable ? (
+              <EmptyNote>
+                Daily temperature data isn't included in this build, so the distribution chart isn't
+                available for any city.
+              </EmptyNote>
+            ) : distributionErrored ? (
+              <EmptyNote>
+                Couldn't load the daily-maxima distribution for {city} just now. Reloading the page may help.
+              </EmptyNote>
+            ) : !distributionChartSpec ? (
+              <EmptyNote>{city} doesn't have two complete years of daily data to compare yet.</EmptyNote>
+            ) : (
+              <PlotFigure spec={distributionChartSpec} />
+            )}
+          </div>
+        </Card>
 
-      <Card
-        title="Hot days, tropical nights and frost days"
-        subtitle="Days per year with max ≥ 30°C, min ≥ 20°C and min ≤ 0°C."
-      >
-        <div data-testid="climate-thresholds">
-          {scopeLoading ? (
-            <Loading stage="data" />
-          ) : thresholds.length === 0 ? (
-            <EmptyNote>No threshold-day data for {scopeName}.</EmptyNote>
-          ) : (
-            <PlotFigure spec={thresholdsChartSpec} />
-          )}
-        </div>
-      </Card>
+        <Card
+          title="Month-by-month anomaly"
+          subtitle={isCityScope && heatmap.length > 0 ? "Each cell is one month's anomaly against 1981-2010; unobserved months are left blank, not zero." : undefined}
+        >
+          <div data-testid="climate-heatmap">
+            {!isCityScope ? (
+              <EmptyNote>The month-by-month grid needs a single city too — pick one above to see it.</EmptyNote>
+            ) : scopeLoading ? (
+              <Loading stage="data" />
+            ) : heatmap.length === 0 ? (
+              <EmptyNote>No monthly data for {city}.</EmptyNote>
+            ) : (
+              <PlotFigure spec={heatmapSpec} />
+            )}
+          </div>
+        </Card>
 
-      <Card
-        title="Distribution of daily maxima"
-        subtitle={
-          isCityScope && distributionChartSpec
-            ? "Share of days per 2°C bucket, the city's record split into an early and a late window."
-            : undefined
-        }
-      >
-        <div data-testid="climate-distribution">
-          {!isCityScope ? (
-            <EmptyNote>
-              Daily histograms need a single city: the regional mart holds yearly aggregates, not daily
-              readings. Pick a city above to see it.
-            </EmptyNote>
-          ) : scopeLoading ? (
-            <Loading stage="data" />
-          ) : distributionUnavailable ? (
-            <EmptyNote>
-              Daily temperature data isn't included in this build, so the distribution chart isn't
-              available for any city.
-            </EmptyNote>
-          ) : distributionErrored ? (
-            <EmptyNote>
-              Couldn't load the daily-maxima distribution for {city} just now. Reloading the page may help.
-            </EmptyNote>
-          ) : !distributionChartSpec ? (
-            <EmptyNote>{city} doesn't have two complete years of daily data to compare yet.</EmptyNote>
-          ) : (
-            <PlotFigure spec={distributionChartSpec} />
-          )}
-        </div>
-      </Card>
+        <SectionHeading>Across Italy</SectionHeading>
+        {cityOutsideRankingNote ? <EmptyNote>{cityOutsideRankingNote}</EmptyNote> : null}
 
-      <Card
-        title="Month-by-month anomaly"
-        subtitle={isCityScope && heatmap.length > 0 ? "Each cell is one month's anomaly against 1981-2010; unobserved months are left blank, not zero." : undefined}
-      >
-        <div data-testid="climate-heatmap">
-          {!isCityScope ? (
-            <EmptyNote>The month-by-month grid needs a single city too — pick one above to see it.</EmptyNote>
-          ) : scopeLoading ? (
-            <Loading stage="data" />
-          ) : heatmap.length === 0 ? (
-            <EmptyNote>No monthly data for {city}.</EmptyNote>
-          ) : (
-            <PlotFigure spec={heatmapSpec} />
-          )}
-        </div>
-      </Card>
+        <Card
+          title="Fastest-warming cities"
+          subtitle="Degrees Celsius per decade, ordinary least squares over annual means. Not filtered by the selection above — the selected city (if any) is outlined instead."
+        >
+          <div data-testid="climate-ranking">
+            {ranking.length === 0 ? <EmptyNote>No ranking data.</EmptyNote> : <PlotFigure spec={rankingChartSpec} />}
+          </div>
+        </Card>
 
-      <SectionHeading>Across Italy</SectionHeading>
-      {cityOutsideRankingNote ? <EmptyNote>{cityOutsideRankingNote}</EmptyNote> : null}
-
-      <Card
-        title="Fastest-warming cities"
-        subtitle="Degrees Celsius per decade, ordinary least squares over annual means. Not filtered by the selection above — the selected city (if any) is outlined instead."
-      >
-        <div data-testid="climate-ranking">
-          {ranking.length === 0 ? <EmptyNote>No ranking data.</EmptyNote> : <PlotFigure spec={rankingChartSpec} />}
-        </div>
-      </Card>
-
-      <Card
-        title="Warming stripes across cities"
-        subtitle="Fastest-warming capitals, same colour scale in every panel. Not filtered by the selection above — the selected city's panel (if present) is ringed instead."
-      >
-        <div data-testid="climate-grid">
-          {grid.length === 0 ? (
-            <EmptyNote>No grid data.</EmptyNote>
-          ) : (
-            <PlotFigure spec={gridChartSpec} scrollable />
-          )}
-        </div>
-      </Card>
+        <Card
+          title="Warming stripes across cities"
+          subtitle="Fastest-warming capitals, same colour scale in every panel. Not filtered by the selection above — the selected city's panel (if present) is ringed instead."
+        >
+          <div data-testid="climate-grid">
+            {grid.length === 0 ? (
+              <EmptyNote>No grid data.</EmptyNote>
+            ) : (
+              <PlotFigure spec={gridChartSpec} scrollable />
+            )}
+          </div>
+        </Card>
+        </>
+      )}
     </div>
   );
 }

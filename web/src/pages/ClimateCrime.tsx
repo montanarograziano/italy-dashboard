@@ -174,15 +174,25 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
   // fetched once `crimeClimateReady()` is true.
   useEffect(() => {
     let cancelled = false;
+    // Sequential, not Promise.all: DuckDB-WASM serialises every query on one
+    // worker regardless (this project's own prior-plan finding), so this
+    // costs nothing in the normal case, and a `cancelled` check between each
+    // stage stops the REST of this effect from ever firing once the user has
+    // navigated away, rather than every query landing on the worker ahead of
+    // whichever page opens next (see the plan's final review, F2).
     void (async () => {
-      const [ready, cov] = await Promise.all([crimeClimateReady(), climateCoverage()]);
+      const ready = await crimeClimateReady();
+      if (cancelled) return;
+      const cov = await climateCoverage();
       if (cancelled) return;
       setCoverage(cov as Coverage);
       if (!ready) {
         setPhase("no-data");
         return;
       }
-      const [scatter, s] = await Promise.all([crimeClimateScatter(), crimeClimateStats()]);
+      const scatter = await crimeClimateScatter();
+      if (cancelled) return;
+      const s = await crimeClimateStats();
       if (cancelled) return;
       setRawPoints(scatter.raw);
       setPanelPoints(scatter.panel);

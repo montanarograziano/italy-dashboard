@@ -119,6 +119,33 @@ def test_the_climate_page_renders_data_not_an_empty_state(page, static_app):
     assert marks > 0, "no marks drawn in the annual series chart"
 
 
+def test_year_axes_render_without_a_thousands_separator(page, static_app):
+    """F6: Plot's default numeric tick formatter groups thousands, so a bare
+    year axis (no `tickFormat`) read `2,024` instead of `2024` -- pre-existing
+    on the climate page, multiplied across every chart this plan added that
+    shares `lineSeriesSpec`'s x-axis or climate.tsx's own year-axis builders.
+    Checks one chart from each of the two fixed spec builders
+    (`lineSeriesSpec` via economy, `bandTrendSpec` via climate) rather than
+    every affected chart, since the fix is the same one-line `tickFormat` in
+    both places and a regression would show up on either sample alike.
+    """
+    page.goto(f"{static_app}/#/economy")
+    page.wait_for_selector("[data-testid='inflation'] path", timeout=30_000)
+    economy_ticks = page.eval_on_selector_all(
+        "[data-testid='inflation'] [aria-label='x-axis tick label'] text", "els => els.map(e => e.textContent)"
+    )
+    assert economy_ticks, "no x-axis ticks found on the inflation chart"
+    assert not any("," in t for t in economy_ticks), economy_ticks
+
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
+    page.wait_for_selector("[data-testid='climate-annual'] path", timeout=30_000)
+    climate_ticks = page.eval_on_selector_all(
+        "[data-testid='climate-annual'] [aria-label='x-axis tick label'] text", "els => els.map(e => e.textContent)"
+    )
+    assert climate_ticks, "no x-axis ticks found on the climate annual chart"
+    assert not any("," in t for t in climate_ticks), climate_ticks
+
+
 def test_the_stripes_grid_renders_visible_cells(page, static_app):
     """F1: `facetedStripesSpec` used to leave every one of its 912 cells at
     `width="0"` -- no explicit `width` (Plot defaults to 640), so 12 `fx`
@@ -317,6 +344,26 @@ def test_the_crime_page_correlation_strings_render_verbatim(page, static_app):
     foreigners = page.eval_on_selector("[data-testid='crime-income-corr-foreigners']", "e => e.textContent")
     assert italians == "r = -0.78 (n=12)", italians
     assert foreigners == "r = +0.46 (n=12)", foreigners
+
+
+def test_the_crime_page_method_note_is_present_verbatim(page, static_app):
+    """The final review (F1) found `method_note` missing from the offenders
+    tab entirely: no statement anywhere that the headline totals are counts
+    rather than rates, that citizenship is not residence status, or that a
+    cross-crime total counts a person once per crime type -- on the page
+    that publishes a 37.3% foreign-share figure and a 6.1x rate ratio. Pins
+    the exact English copy against `italy_dashboard.translations.EN`
+    directly (not a hand-retyped copy in this test) so a paraphrase,
+    truncation, or reordering would fail here even though the paragraph is
+    technically present.
+    """
+    import italy_dashboard.translations as translations
+
+    expected = translations.EN["method_note"]
+    page.goto(f"{static_app}/#/crime")
+    page.wait_for_selector("[data-testid='crime-method-note']", timeout=30_000)
+    text = page.eval_on_selector("[data-testid='crime-method-note']", "e => e.textContent")
+    assert text == expected, text
 
 
 def test_the_climate_crime_caveat_is_present_and_above_the_charts(page, static_app):

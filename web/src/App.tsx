@@ -7,29 +7,9 @@ import Home from "./pages/Home";
 import Labor from "./pages/Labor";
 import Population from "./pages/Population";
 import { ROUTES, useRoute } from "./router";
-import { currentMode, gridline, inkMuted, inkPrimary, inkSecondary, surface, type Mode } from "./theme";
+import { currentMode, gridline, inkPrimary, inkSecondary, surface, type Mode } from "./theme";
 
 type Choice = Mode | "system";
-
-/** Placeholder for a nav-registered page this plan hasn't built yet.
- * See the plan's progress ledger: Task 1 built the router, nav and home
- * page, Task 2 added economy, labor and population, Task 3 added crime,
- * Task 4 added climate-crime. Nothing currently reaches this component --
- * kept for the same reason `ComingSoon` always has: every ROUTES entry
- * must resolve to something with an `<h1>` so the nav link test
- * (`test_every_nav_link_reaches_a_page_that_renders`) can tell "not built
- * yet" apart from "genuinely broken link" -- an UNREGISTERED slug
- * (matching no ROUTES entry at all) still renders nothing, which is what
- * lets that same test catch a dangling link once one exists.
- */
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <div>
-      <h1 style={{ color: inkPrimary(), margin: "0 0 0.35rem" }}>{label}</h1>
-      <p style={{ color: inkMuted() }}>This page hasn&apos;t been built yet.</p>
-    </div>
-  );
-}
 
 const STORAGE_KEY = "italy-dashboard-color-mode";
 
@@ -106,15 +86,20 @@ export default function App() {
     setMode(currentMode());
   }
 
-  // Route switch: the entire nav must be additive from here on -- every
-  // later task in this plan only ADDS a `case` (or replaces a `ComingSoon`
-  // with a real import), never touches `useRoute`/`ROUTES` themselves (see
-  // router.tsx's docstring and the plan's pre-flight scan). An unregistered
-  // slug (in neither this switch nor ROUTES) renders nothing, on purpose --
-  // see `ComingSoon`'s docstring above for why that is load-bearing for the
-  // nav-link test, not an oversight.
+  // Route switch: every ROUTES entry now maps to a real page (all seven
+  // shipped as of this plan), so an unregistered slug -- a dangling nav
+  // link, a stale bookmark, a route deleted by a future edit -- renders
+  // NOTHING, on purpose: that is what lets
+  // `test_every_nav_link_reaches_a_page_that_renders` (`main h1` must be
+  // non-empty for every nav href) actually catch a deleted `case` rather
+  // than being satisfied by a placeholder. An earlier `ComingSoon`
+  // fallback used to render an `<h1>` for exactly this branch, during the
+  // period before every page existed -- that made the nav-link test pass
+  // even with a route's `case` deleted outright (verified: deleting
+  // `case "economy"` still left the test green, since `ComingSoon` quietly
+  // took over), which is why it is gone now rather than kept "just in
+  // case".
   const route = useRoute();
-  const routeDef = ROUTES.find((r) => r.slug === route);
   let page: ReactNode;
   switch (route) {
     case "home":
@@ -139,7 +124,7 @@ export default function App() {
       page = <Population mode={mode} />;
       break;
     default:
-      page = routeDef ? <ComingSoon label={routeDef.label} /> : null;
+      page = null;
   }
 
   return (

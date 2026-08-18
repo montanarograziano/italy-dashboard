@@ -59,7 +59,11 @@ export function bandTrendSpec(rows: Row[]): Plot.PlotOptions {
     // then wait on THAT element forever, never reaching the real data marks
     // a few siblings later -- confirmed empirically (getBoundingClientRect
     // on the first tick was 6x0), not assumed.
-    x: { label: "Year", tickSize: 0 },
+    // `tickFormat`: a year is a whole number Plot's default numeric
+    // formatter would otherwise group as `1,950` -- see `thresholdSpec`
+    // below (the same bug, same fix) and series.tsx's `lineSeriesSpec`,
+    // where the plan's final review (F6) first caught it.
+    x: { label: "Year", tickSize: 0, tickFormat: (y: number) => String(y) },
     y: { label: "Temperature (°C)", grid: true, tickSize: 0 },
     marks: [
       Plot.areaY(rows, { x: year, y1: "t_min", y2: "t_max", fill: hue, fillOpacity: 0.16 }),
@@ -224,7 +228,8 @@ export function thresholdSpec(rows: Row[]): Plot.PlotOptions {
     rows.map((r) => ({ year: year(r), value: r[key], kind: label })),
   );
   return {
-    x: { label: "Year" },
+    // `tickFormat` -- see `bandTrendSpec` above, the same bug and fix.
+    x: { label: "Year", tickFormat: (y: number) => String(y) },
     y: { label: "Days / year", grid: true },
     color: { legend: true, domain: keys.map(([, label]) => label), range: colors },
     marks: [
@@ -300,7 +305,14 @@ export function monthHeatmapSpec(rows: Row[]): Plot.PlotOptions {
       domain: MONTHS.map((_, i) => i + 1),
       tickFormat: (m: number) => MONTHS[m - 1] ?? String(m),
     },
-    y: { label: "Year" },
+    // `tickFormat` -- same bug as `bandTrendSpec`/`thresholdSpec` above,
+    // found on this axis too by checking rather than assuming `Plot.cell`'s
+    // forced band scale (see `stripesSpec`'s comment on that) was exempt:
+    // it renders its own `<text>` tick labels through the same numeric
+    // formatter regardless of the underlying scale type. Confirmed by
+    // rendering this chart before and after: `1,950 ... 2,026` becomes
+    // `1950 ... 2026`.
+    y: { label: "Year", tickFormat: (y: number) => String(y) },
     color: {
       type: "quantize",
       n: steps.length,

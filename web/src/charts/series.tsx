@@ -77,7 +77,14 @@ export function lineSeriesSpec(rows: Row[], opts: LineSeriesOptions): Plot.PlotO
     // reaching a real data mark a few siblings later -- confirmed here: the
     // element count was already correct (26/21 `path`s) while the wait still
     // timed out, the same failure mode that comment documents.
-    x: { label: opts.xLabel ?? "Year", tickSize: 0 },
+    // `tickFormat`: every caller plots a year on this axis (`xKey` always
+    // defaults to "period", never overridden -- see the plan's final
+    // review, F6), and Plot's default numeric tick formatter applies
+    // thousands grouping to any continuous scale, rendering years as
+    // `2,024` rather than `2024`. `String(y)` is the whole fix: a year is
+    // never fractional, so nothing is lost by skipping Plot's default
+    // formatter entirely.
+    x: { label: opts.xLabel ?? "Year", tickSize: 0, tickFormat: (y: number) => String(y) },
     y: { label: opts.yLabel, grid: true, tickSize: 0 },
     color: multi
       ? { legend: true, domain: opts.series.map((s) => s.label), range: opts.series.map((s) => s.color) }
@@ -89,45 +96,15 @@ export function lineSeriesSpec(rows: Row[], opts: LineSeriesOptions): Plot.PlotO
   };
 }
 
-export interface StackedAreaOptions {
-  series: SeriesDef[];
-  xKey?: string;
-  xLabel?: string;
-  yLabel?: string;
-}
-
-/** Several named series stacked into one area chart (e.g. a composition
- * over time), sharing `SeriesDef` with `lineSeriesSpec` so a caller can
- * switch between "compare levels" (lines) and "compare shares of a whole"
- * (stacked area) without redefining its series list.
- *
- * A missing value becomes 0 here, unlike `lineSeriesSpec`'s null-preserving
- * `toNumberOrNull`: `Plot.stackY` accumulates each band from the ones below
- * it, and a `null` band would break every band stacked on top of it for
- * that period, not just leave its own slice blank. 0 is the correct "this
- * series contributed nothing that period" for a stack; it would be the
- * wrong "flat line at zero" for a line chart, which is why the two
- * functions do not share one coercion helper.
- */
-export function stackedAreaSpec(rows: Row[], opts: StackedAreaOptions): Plot.PlotOptions {
-  const xKey = opts.xKey ?? "period";
-  const long = opts.series.flatMap((def) =>
-    rows.map((row) => ({
-      x: toNumber(row, xKey),
-      value: row[def.key] === null || row[def.key] === undefined ? 0 : Number(row[def.key]),
-      label: def.label,
-    })),
-  );
-  return {
-    // tickSize: 0 -- see lineSeriesSpec's comment above on why this matters
-    // for both the axis rendering and Playwright's `path` waits in the tests
-    // that exercise these specs.
-    x: { label: opts.xLabel ?? "Year", tickSize: 0 },
-    y: { label: opts.yLabel, grid: true, tickSize: 0 },
-    color: { legend: true, domain: opts.series.map((s) => s.label), range: opts.series.map((s) => s.color) },
-    marks: [
-      Plot.areaY(long, Plot.stackY({ x: "x", y: "value", fill: "label" })),
-      Plot.ruleY([0], { stroke: gridline() }),
-    ],
-  };
-}
+// A `stackedAreaSpec` companion to `lineSeriesSpec` used to live here (Task 2
+// of the static-app-remaining-pages plan built it on the promise that Tasks
+// 3-4 would reuse it for a "compare shares of a whole" chart). Neither did
+// -- population's foreign-share chart is a single series (a % of the total,
+// not several parts summing to one), which a stacked area has nothing to
+// stack against, and the Reflex reference (`population.py`) draws it as a
+// plain line for the same reason -- so it was 22 lines of Plot spec with
+// zero call sites and an untested behavioural decision (0-coercion for
+// missing values, deliberately different from this file's other spec).
+// Deleted per the plan's final review (F5) rather than kept "for later":
+// add it back the day a real stacked-composition chart needs it, with a
+// test that actually exercises the 0-coercion this time.
