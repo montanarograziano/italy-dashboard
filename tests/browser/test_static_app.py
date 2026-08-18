@@ -1,8 +1,12 @@
+import csv
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
 pytestmark = pytest.mark.browser
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 STORAGE_KEY = "italy-dashboard-color-mode"
 
@@ -205,3 +209,42 @@ def test_a_plot_baked_colour_repaints_on_mode_toggle(page, static_app):
     finally:
         # Leave no persisted choice behind for whichever test runs next.
         page.evaluate(f"window.localStorage.removeItem('{STORAGE_KEY}')")
+
+
+def test_a_partial_region_scope_shows_a_composition_caveat(page, static_app):
+    """F6: Toscana is 1 of 10 capitals, Puglia 1 of 6, Marche 1 of 5 -- each
+    used to be presented as the region with zero alerts, the same shape of
+    wrong number the Italia coverage note exists to prevent, at a scope where
+    the caveat was switched off entirely (`region == "Italia"` was the whole
+    gate). Puglia scope is entirely Barletta. Asserts the caveat text carries
+    the real counts (derived from the same seed CSV, never hardcoded here),
+    not just "some caveat exists".
+    """
+    seed = REPO_ROOT / "dbt" / "seeds" / "province_capitals.csv"
+    with seed.open(newline="") as f:
+        total = sum(1 for row in csv.DictReader(f) if row["region_name"] == "Puglia")
+    assert total > 1, (
+        "fixture assumption broken: Puglia should have more than 1 capital in the seed"
+    )
+
+    page.goto(static_app)
+    page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
+    page.select_option("[data-testid='climate-region-select']", "Puglia")
+    # The caveat depends on `climateCityOptions("Puglia")` resolving (async),
+    # which briefly makes the note disappear entirely (Italia's note is gated
+    # off the moment `region` changes, before Puglia's own coverage is known)
+    # before it reappears with the region's real counts -- poll for the
+    # settled state rather than a fixed sleep. If the fix regresses (no
+    # branch, or the wrong gate), this never becomes true and raises a normal
+    # TimeoutError -- a fail, not a hang.
+    page.wait_for_function(
+        "() => { const el = document.querySelector(\"[data-testid='climate-scope-note']\"); "
+        "return !!el && el.textContent.includes('Puglia'); }",
+        timeout=15_000,
+    )
+
+    note = page.eval_on_selector("[data-testid='climate-scope-note']", "el => el.textContent")
+    assert note is not None, (
+        "expected a composition caveat at partial region scope (Puglia), found none"
+    )
+    assert f"1 of {total} capitals" in note, note

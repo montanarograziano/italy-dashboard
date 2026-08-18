@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import provinceCapitalsCsv from "../../../dbt/seeds/province_capitals.csv?raw";
 import {
   bandTrendSpec,
   distributionSpec,
@@ -73,14 +74,43 @@ type Windows = [number, number, number, number];
 // (English copy): the backfill runs in province-code order, i.e. from the
 // north, so an unweighted mean of whatever capitals are covered so far and
 // labelled "Italia" understates how incomplete the picture still is. Stated
-// at Italia scope only (see `isNationalScope` below) -- a single region's
-// capitals ARE the region, so there is no composition caveat to make there.
+// at Italia scope only (see `isNationalScope` below).
 const CLIMATE_COVERAGE_NOTE =
   "Italia is an unweighted mean of the capitals covered so far, and the " +
   "temperature backfill runs in province-code order, so it fills from the " +
   "north: much of the South is still missing and the absolute level reads " +
   "colder than Italy's. The anomaly chart is far more robust to this, " +
   "because it measures each year against the same cities' own baseline.";
+
+// A REGION's total capital count, from the same seed climateCoverage()
+// (queries/climate.ts) reads for the national total -- imported directly
+// here (not added to queries/climate.ts, which this branch's review asked
+// not be touched) because no ported function returns a PER-region count,
+// only the national aggregate. "A single region's capitals are the region"
+// is only true when every one of them is covered: Toscana is 1 of 10 capitals,
+// Puglia 1 of 6, Marche 1 of 5 -- each of those, unqualified, is one city
+// wearing a region's name, the same shape of wrong number the Italia note
+// above exists to prevent. `climateCityOptions(region)` (already consumed
+// below for the City dropdown) already returns exactly the capitals COVERED
+// in a region, so the "of how many" half is the only piece derived here.
+function regionCapitalTotals(): Map<string, number> {
+  const lines = provinceCapitalsCsv.trim().split("\n").slice(1); // drop header
+  const totals = new Map<string, number>();
+  for (const line of lines) {
+    const regionName = line.split(",")[4]!; // region_name column
+    totals.set(regionName, (totals.get(regionName) ?? 0) + 1);
+  }
+  return totals;
+}
+
+const REGION_CAPITAL_TOTALS = regionCapitalTotals();
+
+function regionCompositionNote(region: string, covered: number, total: number): string {
+  return (
+    `${region} here means ${covered} of ${total} capitals covered so far, not the ` +
+    `whole region: the rest of ${region} has no temperature data in this snapshot yet.`
+  );
+}
 
 /** Stripes for the top-N fastest-warming cities, flattened and tagged with
  * `city` for `facetedStripesSpec`'s `fx` channel.
@@ -280,6 +310,19 @@ export default function Climate({ mode }: { mode: Mode }) {
   // once, so nothing is singled out there. See requirement 1 above.
   const highlightedCity = isCityScope ? city : "";
 
+  // A region scope (not Italia, not a city) whose covered capitals are fewer
+  // than the region actually has -- see regionCompositionNote's definition
+  // above for why this matters. `cityOptions` already IS the covered count
+  // (climateCityOptions(region), fetched for the City dropdown), minus its
+  // leading "All" sentinel; the total comes from the seed CSV, never
+  // hardcoded. A fully-covered region (the other nine of twelve) shows
+  // nothing extra here, same as Italia would if the whole country were in.
+  const regionCapitalTotal =
+    !isCityScope && region !== "Italia" ? (REGION_CAPITAL_TOTALS.get(region) ?? 0) : 0;
+  const regionCapitalCovered = !isCityScope && region !== "Italia" ? Math.max(0, cityOptions.length - 1) : 0;
+  const isPartialRegionScope =
+    !isCityScope && region !== "Italia" && regionCapitalTotal > 0 && regionCapitalCovered < regionCapitalTotal;
+
   const cityOutsideRankingNote = useMemo(() => {
     if (!isCityScope) return "";
     if (ranking.some((r) => String(r.name) === city)) return "";
@@ -332,7 +375,11 @@ export default function Climate({ mode }: { mode: Mode }) {
         <h1 style={{ color: inkPrimary(), margin: 0 }}>Climate</h1>
         <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
           Region{" "}
-          <select value={region} onChange={(e) => void handleRegionChange(e.target.value)}>
+          <select
+            data-testid="climate-region-select"
+            value={region}
+            onChange={(e) => void handleRegionChange(e.target.value)}
+          >
             {regionOptions.map((r) => (
               <option key={r} value={r}>
                 {r}
@@ -357,9 +404,10 @@ export default function Climate({ mode }: { mode: Mode }) {
         {coverage.regions_total} regions, {coverage.year_start}-{coverage.year_end}
       </p>
 
-      {isNationalScope ? (
+      {isNationalScope || isPartialRegionScope ? (
         <div
           role="alert"
+          data-testid="climate-scope-note"
           style={{
             border: `1px solid ${gridline()}`,
             borderRadius: "8px",
@@ -368,7 +416,9 @@ export default function Climate({ mode }: { mode: Mode }) {
             fontSize: "0.9em",
           }}
         >
-          {CLIMATE_COVERAGE_NOTE}
+          {isNationalScope
+            ? CLIMATE_COVERAGE_NOTE
+            : regionCompositionNote(region, regionCapitalCovered, regionCapitalTotal)}
         </div>
       ) : null}
 
