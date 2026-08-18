@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Climate from "./pages/Climate";
 import { currentMode, gridline, inkPrimary, surface, type Mode } from "./theme";
 
 type Choice = Mode | "system";
@@ -65,22 +66,32 @@ export default function App() {
   }
 
   return (
-    <main style={{ padding: "1.5rem" }}>
-      <h1 style={{ color: inkPrimary() }}>Italy Dashboard</h1>
-      <button
-        type="button"
-        onClick={cycle}
+    <main style={{ padding: "1.5rem", maxWidth: "1100px", margin: "0 auto" }}>
+      <div
         style={{
-          color: inkPrimary(),
-          border: `1px solid ${gridline()}`,
-          background: "transparent",
-          borderRadius: "4px",
-          padding: "0.4rem 0.8rem",
-          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem",
         }}
       >
-        Colour mode: {choice} (currently {currentMode()})
-      </button>
+        <h1 style={{ color: inkPrimary() }}>Italy Dashboard</h1>
+        <button
+          type="button"
+          onClick={cycle}
+          style={{
+            color: inkPrimary(),
+            border: `1px solid ${gridline()}`,
+            background: "transparent",
+            borderRadius: "4px",
+            padding: "0.4rem 0.8rem",
+            cursor: "pointer",
+          }}
+        >
+          Colour mode: {choice} (currently {currentMode()})
+        </button>
+      </div>
+      <Climate />
     </main>
   );
 }

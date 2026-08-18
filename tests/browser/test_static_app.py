@@ -29,3 +29,15 @@ def test_the_stripes_resolve_to_distinct_diverging_colours(page, static_app):
         "els => [...new Set(els.map(e => getComputedStyle(e).fill))]",
     )
     assert len(fills) >= 4, fills
+
+
+def test_the_climate_page_renders_data_not_an_empty_state(page, static_app):
+    """The default landing view must reach real data, not sit on a spinner.
+
+    Asserting the page merely 'loaded' would pass while every chart is empty,
+    which is what a broken parquet path looks like.
+    """
+    page.goto(static_app)
+    page.wait_for_selector("[data-testid='climate-annual'] path", timeout=30_000)
+    marks = page.eval_on_selector_all("[data-testid='climate-annual'] path", "els => els.length")
+    assert marks > 0, "no marks drawn in the annual series chart"
