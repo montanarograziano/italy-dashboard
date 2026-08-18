@@ -319,6 +319,30 @@ def test_the_crime_page_correlation_strings_render_verbatim(page, static_app):
     assert foreigners == "r = +0.46 (n=12)", foreigners
 
 
+def test_the_climate_crime_caveat_is_present_and_above_the_charts(page, static_app):
+    """The caveat is load-bearing: the two panels exist to show that the naive
+    correlation is misleading, and without the paragraph the page reads as
+    asserting a causal claim it explicitly disclaims.
+
+    Asserting mere presence would pass with the text buried at the bottom, so
+    this also checks it precedes the first chart in document order.
+    """
+    page.goto(f"{static_app}/#/climate-crime")
+    page.wait_for_selector("[data-testid='cc-caveat']", timeout=30_000)
+    text = page.eval_on_selector("[data-testid='cc-caveat']", "e => e.textContent")
+    for word in ("ECOLOGICAL", "ANNUAL", "UNDERPOWERED"):
+        assert word in text, (word, text[:200])
+    precedes = page.evaluate(
+        """() => {
+            const caveat = document.querySelector("[data-testid='cc-caveat']");
+            const chart = document.querySelector("[data-testid='cc-panel']");
+            return !!(caveat && chart) &&
+                (caveat.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+        }"""
+    )
+    assert precedes, "the caveat must appear before the charts, not after them"
+
+
 def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
     """Nav must not promise pages that do not exist.
 
