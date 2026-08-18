@@ -273,6 +273,19 @@ def test_each_simple_page_renders_marks_not_an_empty_chart(page, static_app, slu
     assert count > 0, (slug, testid)
 
 
+def test_the_crime_page_kpis_render_python_formatted_strings(page, static_app):
+    """KPI strings come from the query layer already formatted.
+
+    Python renders `584,514` with a comma; JavaScript's toLocaleString('it-IT')
+    renders `584.514`. A UI that reformats would show a plausible-looking but
+    different number, so this asserts the comma survives to the DOM.
+    """
+    page.goto(f"{static_app}/#/crime")
+    page.wait_for_selector("[data-testid='crime-kpi-total']", timeout=30_000)
+    text = page.eval_on_selector("[data-testid='crime-kpi-total']", "e => e.textContent")
+    assert "," in text and "." not in text, text
+
+
 def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
     """Nav must not promise pages that do not exist.
 
