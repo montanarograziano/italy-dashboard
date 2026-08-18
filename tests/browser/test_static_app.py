@@ -75,3 +75,56 @@ def test_the_climate_page_renders_data_not_an_empty_state(page, static_app):
     page.wait_for_selector("[data-testid='climate-annual'] path", timeout=30_000)
     marks = page.eval_on_selector_all("[data-testid='climate-annual'] path", "els => els.length")
     assert marks > 0, "no marks drawn in the annual series chart"
+
+
+def test_the_stripes_grid_renders_visible_cells(page, static_app):
+    """F1: `facetedStripesSpec` used to leave every one of its 912 cells at
+    `width="0"` -- no explicit `width` (Plot defaults to 640), so 12 `fx`
+    facets of 76 year-bands each divided down to ~0.64px per band before
+    `inset: 0.5` (a full pixel removed) clamped every one to zero. The card
+    was a blank box with 12 overlapping labels under it, on the default
+    landing view of the only page in this deploy.
+
+    Deliberately does NOT `wait_for_selector` with the default `visible`
+    state: a zero-width `<rect>` is still attached to the DOM, but Playwright
+    refuses to call it "visible", so waiting on visibility is exactly the
+    Plot/Playwright interaction Task 2's comment at climate.tsx:55-61 already
+    diagnosed for the axis tick dashes -- it would HANG for the full timeout
+    rather than fail. `state="attached"` only waits for the elements to
+    exist; the actual check is the geometry assertion below.
+    """
+    page.goto(static_app)
+    page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
+    widths = page.eval_on_selector_all(
+        "[data-testid='climate-grid'] rect",
+        "els => els.map(e => e.getBoundingClientRect().width)",
+    )
+    assert widths, "no cells rendered in the warming-stripes grid"
+    assert min(widths) >= 2, (
+        f"a warming-stripes grid cell rendered narrower than 2px (min={min(widths)}, "
+        f"n={len(widths)}); see facetedStripesSpec's width/inset sizing in climate.tsx"
+    )
+
+
+def test_the_stripes_grid_has_no_phantom_facet_at_italia_scope(page, static_app):
+    """F2: `Plot.frame({fx: highlight})` with `highlight = ""` does not "render
+    in zero facets" as climate.tsx used to claim -- Plot builds the `fx` scale
+    DOMAIN from the union of every mark's `fx` values, so the literal `""`
+    joined it as a real 13th entry: a phantom, unlabelled facet with a heavy
+    box around it at Italia and region scope (measured: 13 fx tick labels at
+    Italia, 12 at Milano). Asserts the exact facet count, not merely "some
+    facets exist" -- the phantom facet would satisfy the weaker check too.
+
+    The grid always renders `loadStripesGrid(12)`'s top-12 cities (Climate.tsx),
+    so 12 is a real invariant of the code being exercised here, not a guess.
+    """
+    page.goto(static_app)
+    page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
+    labels = page.eval_on_selector_all(
+        "[data-testid='climate-grid'] [aria-label='fx-axis tick label'] text",
+        "els => els.map(e => e.textContent)",
+    )
+    assert labels.count("") == 0, f"a blank fx facet label is present: {labels}"
+    assert len(labels) == 12, (
+        f"expected exactly 12 city facets at Italia scope, got {len(labels)}: {labels}"
+    )

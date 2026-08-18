@@ -13,15 +13,30 @@ import { useEffect, useRef } from "react";
  * new object identity every time and would re-render the chart on every
  * parent render, including ones that touch nothing the chart depends on.
  * Callers must memoise (`useMemo`) the spec they pass in.
+ *
+ * `scrollable`: Plot's own stylesheet (injected into every SVG it renders)
+ * sets `max-width: 100%`, which is what makes a chart shrink to fit its
+ * container -- the right default for every chart at its usual width (640,
+ * comfortably under the page's own max-width). A spec that intentionally
+ * asks for real pixel width per data point (facetedStripesSpec's grid, sized
+ * from the actual facet/year counts so a year-band is never sub-pixel) needs
+ * the OPPOSITE: shrinking a 3000+px chart down to ~1000px would undo that
+ * sizing and put every cell back under a pixel, invisibly, since the
+ * viewBox scales uniformly. Overriding `max-width` on the rendered node
+ * itself (an inline style always wins over Plot's class-scoped stylesheet
+ * rule) restores the chart's real, unshrunk size; the wrapping div's own
+ * `overflowX: "auto"` is what keeps that from blowing out the page layout,
+ * a horizontal scrollbar on just this card instead.
  */
-export function PlotFigure({ spec }: { spec: Plot.PlotOptions }) {
+export function PlotFigure({ spec, scrollable = false }: { spec: Plot.PlotOptions; scrollable?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
     const chart = Plot.plot(spec);
+    if (scrollable) chart.style.maxWidth = "none";
     node.replaceChildren(chart);
     return () => chart.remove();
-  }, [spec]);
-  return <div ref={ref} />;
+  }, [spec, scrollable]);
+  return <div ref={ref} style={scrollable ? { overflowX: "auto" } : undefined} />;
 }

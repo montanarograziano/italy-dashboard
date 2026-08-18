@@ -467,7 +467,11 @@ export default function Climate() {
         subtitle="Fastest-warming capitals, same colour scale in every panel. Not filtered by the selection above — the selected city's panel (if present) is ringed instead."
       >
         <div data-testid="climate-grid">
-          {grid.length === 0 ? <EmptyNote>No grid data.</EmptyNote> : <PlotFigure spec={gridChartSpec} />}
+          {grid.length === 0 ? (
+            <EmptyNote>No grid data.</EmptyNote>
+          ) : (
+            <PlotFigure spec={gridChartSpec} scrollable />
+          )}
         </div>
       </Card>
     </div>

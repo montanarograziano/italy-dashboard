@@ -91,6 +91,24 @@ export function stripesSpec(rows: Row[]): Plot.PlotOptions {
   };
 }
 
+// Target pixel width for the narrowest year band in the faceted grid below.
+// Plot's default `width` (640) was sized for a single, unfaceted chart; split
+// across twelve `fx` facets of 76 year-bands each, that default gives every
+// band ~0.64px before `inset` even runs, which is what produced F1 (every
+// cell at width="0"). Measured directly against a real render (12 facets,
+// 76 bands): the fx/x band scales' combined default padding (paddingInner
+// 0.1 on both, paddingOuter 0.1 on the inner x scale) leaves each band at
+// ~0.81 * MIN_BAND_PX once margins are subtracted, so 5 lands comfortably
+// clear of the ~2px floor (≈4px) with real headroom, not just past it. This
+// only holds because `PlotFigure`'s `scrollable` prop (plot.tsx) keeps Plot's
+// own `max-width: 100%` from shrinking the resulting wide chart back down to
+// its container's width, which would otherwise silently undo this sizing --
+// confirmed by measuring the rendered (not just the spec's) pixel width
+// before landing on 5.
+const MIN_BAND_PX = 5;
+const FACETED_MARGIN_LEFT = 40;
+const FACETED_MARGIN_RIGHT = 20;
+
 /** Stripes for several cities at once, one Plot mark faceted on `fx` -- the
  * reason Observable Plot was chosen over Recharts for this app: the Reflex
  * app assembles its small-multiples grid by hand from twelve separate
@@ -108,19 +126,42 @@ export function stripesSpec(rows: Row[]): Plot.PlotOptions {
  * selected-city value) draws a ring around just that city's panel via
  * `Plot.frame`: passing a literal string (not a field accessor) as a
  * decoration mark's `fx` option restricts that mark to the one facet whose
- * `fx` value equals it. `""` never matches a real city name, so the frame
- * simply renders in zero facets -- no separate on/off branch needed, the
- * same trick `h_bar_chart`'s empty-string sentinel uses.
+ * `fx` value equals it -- PROVIDED that mark is included at all. Unlike
+ * `rankingSpec`'s `highlight`, which feeds a `stroke` ACCESSOR FUNCTION
+ * evaluated per datum (never touching a scale), `Plot.frame({ fx: highlight
+ * })` feeds `highlight` straight into the `fx` SCALE's domain -- Plot builds
+ * that domain from the union of every mark's `fx` values, literal included.
+ * So `""` does not "match nothing and render in zero facets"; it becomes a
+ * real 13th domain entry, an unlabelled phantom facet with a heavy
+ * `inkPrimary` box drawn around it. A real branch is required instead of a
+ * sentinel value.
  */
 export function facetedStripesSpec(rows: Row[], highlight: string = ""): Plot.PlotOptions {
+  const bandsPerCity = new Map<string, number>();
+  for (const r of rows) {
+    const city = String(r.city);
+    bandsPerCity.set(city, (bandsPerCity.get(city) ?? 0) + 1);
+  }
+  const facetCount = Math.max(1, bandsPerCity.size);
+  const maxBandsInAnyFacet = Math.max(1, ...bandsPerCity.values());
+  const width =
+    FACETED_MARGIN_LEFT + FACETED_MARGIN_RIGHT + facetCount * maxBandsInAnyFacet * MIN_BAND_PX;
+
   return {
-    marginLeft: 40,
+    width,
+    marginLeft: FACETED_MARGIN_LEFT,
+    marginRight: FACETED_MARGIN_RIGHT,
     fx: { label: null },
     x: { axis: null },
     y: { axis: null },
     marks: [
-      Plot.cell(rows, { x: "period", fill: "fill", fx: "city", inset: 0.5 }),
-      Plot.frame({ fx: highlight, stroke: inkPrimary(), strokeWidth: 3 }),
+      // inset: 0 (not stripesSpec's 0.5) -- at this many bands per facet,
+      // shaving even a single pixel off each side is the other half of what
+      // produced F1's zero-width cells; the faceted grid does not need the
+      // single-chart variant's inset because adjacent cells are already
+      // visually separated by the gap the diverging fills create.
+      Plot.cell(rows, { x: "period", fill: "fill", fx: "city", inset: 0 }),
+      ...(highlight ? [Plot.frame({ fx: highlight, stroke: inkPrimary(), strokeWidth: 3 })] : []),
     ],
   };
 }
