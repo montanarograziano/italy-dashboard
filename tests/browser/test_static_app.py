@@ -302,6 +302,23 @@ def test_the_crime_page_income_scatter_renders_real_points(page, static_app):
     assert points >= 20, points
 
 
+def test_the_crime_page_correlation_strings_render_verbatim(page, static_app):
+    """`incomeCorrelations()` returns already-formatted `"r = ... (n=...)"`
+    strings, the same rule as the KPI tiles: rendered as-is, never recomputed
+    or reformatted in the UI. This pins the exact strings for the mart's
+    latest year (2024) against a direct query, so a page that recalculated
+    the correlation itself -- or reformatted the sign, precision, or `n` --
+    would fail here even though nothing about the request or response shape
+    looks wrong.
+    """
+    page.goto(f"{static_app}/#/crime")
+    page.wait_for_selector("[data-testid='crime-income-corr-italians']", timeout=30_000)
+    italians = page.eval_on_selector("[data-testid='crime-income-corr-italians']", "e => e.textContent")
+    foreigners = page.eval_on_selector("[data-testid='crime-income-corr-foreigners']", "e => e.textContent")
+    assert italians == "r = -0.78 (n=12)", italians
+    assert foreigners == "r = +0.46 (n=12)", foreigners
+
+
 def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
     """Nav must not promise pages that do not exist.
 
