@@ -46,7 +46,7 @@ PUBLICATION_LAG_DAYS = 7  # ERA5 lags reality by ~5 days; 7 is a safe margin
 # publish a plausible-looking warming rate computed from a handful of days.
 MAX_NULL_RATE = 0.01
 
-WEATHER_COLUMNS = ["province_code", "date", "t_min", "t_mean", "t_max"]
+WEATHER_COLUMNS = ["province_code", "date", "t_min", "t_mean", "t_max", "precip_sum"]
 
 SNAPSHOT_NAME = "weather_daily.parquet"
 
@@ -93,6 +93,13 @@ def decade_chunks(start: date, end: date) -> list[tuple[date, date]]:
 
 
 def payload_to_rows(province_code: str, payload: dict) -> list[dict]:
+    """Shaped payload -> per-day rows.
+
+    `precip_sum` is optional: raw cache written before precipitation was
+    added to DAILY_VARS has no such key at all, and must still normalize
+    (temperature-only) rather than error. When the key IS present, its
+    array is validated the same way as the required temperature series.
+    """
     times = payload.get("time") or []
     series = {col: payload.get(col) or [] for col in ("t_min", "t_mean", "t_max")}
     for col, values in series.items():
@@ -101,6 +108,14 @@ def payload_to_rows(province_code: str, payload: dict) -> list[dict]:
                 f"[{province_code}] {col} length mismatch: "
                 f"{len(values)} values for {len(times)} dates"
             )
+    precip = payload.get("precip_sum")
+    if precip is None:
+        precip = [None] * len(times)
+    elif len(precip) != len(times):
+        raise WeatherError(
+            f"[{province_code}] precip_sum length mismatch: "
+            f"{len(precip)} values for {len(times)} dates"
+        )
     return [
         {
             "province_code": province_code,
@@ -108,6 +123,7 @@ def payload_to_rows(province_code: str, payload: dict) -> list[dict]:
             "t_min": series["t_min"][i],
             "t_mean": series["t_mean"][i],
             "t_max": series["t_max"][i],
+            "precip_sum": precip[i],
         }
         for i in range(len(times))
     ]
@@ -129,6 +145,7 @@ def _empty_frame() -> pl.DataFrame:
             "t_min": pl.Float64,
             "t_mean": pl.Float64,
             "t_max": pl.Float64,
+            "precip_sum": pl.Float64,
         }
     )
 

@@ -421,6 +421,10 @@ def _row(
         "t_min": t_min,
         "t_mean": t_mean,
         "t_max": t_max,
+        # This CDS backfill only retrieves temperature (see RETRIEVAL_STATISTIC
+        # above); precip_sum is Open-Meteo-only for now, same as any legacy
+        # weather_daily.parquet row written before the column existed.
+        "precip_sum": None,
     }
 
 

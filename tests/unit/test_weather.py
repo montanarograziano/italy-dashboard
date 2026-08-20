@@ -72,8 +72,46 @@ def test_payload_to_rows_pairs_dates_with_values():
         "t_min": 2.1,
         "t_mean": 6.5,
         "t_max": 11.4,
+        "precip_sum": None,
     }
     assert len(rows) == 2
+
+
+def test_payload_to_rows_defaults_missing_precip_to_none_for_legacy_cache():
+    """Raw cache written before precip_sum existed has no such key at all;
+    it must still normalize (temperature-only), not error."""
+    payload = {
+        "time": ["1950-01-01"],
+        "t_max": [11.4],
+        "t_min": [2.1],
+        "t_mean": [6.5],
+    }
+    rows = weather.payload_to_rows("ITE43", payload)
+    assert rows[0]["precip_sum"] is None
+
+
+def test_payload_to_rows_parses_precip_when_present():
+    payload = {
+        "time": ["1950-01-01", "1950-01-02"],
+        "t_max": [11.4, 12.0],
+        "t_min": [2.1, 3.0],
+        "t_mean": [6.5, 7.2],
+        "precip_sum": [0.0, 4.5],
+    }
+    rows = weather.payload_to_rows("ITE43", payload)
+    assert [r["precip_sum"] for r in rows] == [0.0, 4.5]
+
+
+def test_payload_to_rows_rejects_a_ragged_precip_array():
+    payload = {
+        "time": ["1950-01-01", "1950-01-02"],
+        "t_max": [1.0, 1.0],
+        "t_min": [0.0, 0.0],
+        "t_mean": [0.5, 0.5],
+        "precip_sum": [1.0],
+    }
+    with pytest.raises(WeatherError, match="precip_sum length mismatch"):
+        weather.payload_to_rows("ITE43", payload)
 
 
 def test_payload_to_rows_rejects_ragged_arrays():
@@ -283,6 +321,7 @@ async def test_cmd_refresh_single_city_merges_into_existing_snapshot(tmp_path, m
             "t_min": 4.0,
             "t_mean": 5.0,
             "t_max": 6.0,
+            "precip_sum": None,
         }
     ]
 

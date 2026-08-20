@@ -446,6 +446,10 @@ def generate_weather_parquet(data_dir: Path, seed: int = 42) -> Path:
                         "t_min": round(mean - spread / 2, 1),
                         "t_mean": round(mean, 1),
                         "t_max": round(mean + spread / 2, 1),
+                        # No synthetic precip yet: real precip_sum coverage is
+                        # still Open-Meteo-only and mostly NULL historically
+                        # (see ingestion/weather.py), so NULL here matches it.
+                        "precip_sum": None,
                     }
                 )
                 day += timedelta(days=1)
@@ -458,6 +462,7 @@ def generate_weather_parquet(data_dir: Path, seed: int = 42) -> Path:
             "t_min": pl.Float64,
             "t_mean": pl.Float64,
             "t_max": pl.Float64,
+            "precip_sum": pl.Float64,
         },
     ).select(WEATHER_COLUMNS)
     out = data_dir / SNAPSHOT_NAME

@@ -50,6 +50,7 @@ ARCHIVE_OK = {
         "temperature_2m_max": [11.4, 12.0],
         "temperature_2m_min": [2.1, 3.0],
         "temperature_2m_mean": [6.5, 7.2],
+        "precipitation_sum": [0.0, 3.4],
     },
 }
 
@@ -114,6 +115,7 @@ async def test_daily_temperatures_pins_the_era5_land_model_and_parses_arrays():
     assert out["t_max"] == [11.4, 12.0]
     assert out["t_min"] == [2.1, 3.0]
     assert out["t_mean"] == [6.5, 7.2]
+    assert out["precip_sum"] == [0.0, 3.4]
 
 
 async def test_daily_temperatures_accepts_model_suffixed_variable_names():
@@ -124,6 +126,7 @@ async def test_daily_temperatures_accepts_model_suffixed_variable_names():
             "temperature_2m_max_era5_land": [11.4],
             "temperature_2m_min_era5_land": [2.1],
             "temperature_2m_mean_era5_land": [6.5],
+            "precipitation_sum_era5_land": [1.2],
         }
     }
 
@@ -136,6 +139,7 @@ async def test_daily_temperatures_accepts_model_suffixed_variable_names():
     assert out["t_max"] == [11.4]
     assert out["t_min"] == [2.1]
     assert out["t_mean"] == [6.5]
+    assert out["precip_sum"] == [1.2]
 
 
 async def test_daily_temperatures_preserves_nulls_as_none():
@@ -145,6 +149,7 @@ async def test_daily_temperatures_preserves_nulls_as_none():
             "temperature_2m_max": [11.4, None],
             "temperature_2m_min": [2.1, None],
             "temperature_2m_mean": [6.5, None],
+            "precipitation_sum": [0.0, None],
         }
     }
 
@@ -155,6 +160,29 @@ async def test_daily_temperatures_preserves_nulls_as_none():
         out = await client.daily_temperatures(41.9, 12.5, date(1950, 1, 1), date(1950, 1, 2))
 
     assert out["t_mean"] == [6.5, None]
+    assert out["precip_sum"] == [0.0, None]
+
+
+async def test_daily_temperatures_raises_when_precipitation_is_missing():
+    """precip_sum is required from a LIVE fetch: only cached pre-existing
+    JSON on disk is allowed to lack it (handled in ingestion.weather, not
+    here). A fresh API response missing the var we asked for is a real
+    response-shape problem."""
+    payload = {
+        "daily": {
+            "time": ["1950-01-01"],
+            "temperature_2m_max": [11.4],
+            "temperature_2m_min": [2.1],
+            "temperature_2m_mean": [6.5],
+        }
+    }
+
+    async def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=payload)
+
+    async with make_client(handler) as client:
+        with pytest.raises(OpenMeteoError, match="precipitation_sum"):
+            await client.daily_temperatures(41.9, 12.5, date(1950, 1, 1), date(1950, 1, 1))
 
 
 async def test_api_error_body_is_raised_with_its_reason():
@@ -365,5 +393,6 @@ def test_response_shape_constants_are_stable():
         "temperature_2m_max",
         "temperature_2m_min",
         "temperature_2m_mean",
+        "precipitation_sum",
     )
     assert json.loads(json.dumps(ARCHIVE_OK))  # payload fixture stays JSON-serialisable

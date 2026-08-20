@@ -28,13 +28,19 @@ ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 
 MODEL = "era5_land"
-DAILY_VARS = ("temperature_2m_max", "temperature_2m_min", "temperature_2m_mean")
+DAILY_VARS = (
+    "temperature_2m_max",
+    "temperature_2m_min",
+    "temperature_2m_mean",
+    "precipitation_sum",
+)
 
 # Maps the API's variable names onto our column names.
 VAR_TO_COLUMN = {
     "temperature_2m_max": "t_max",
     "temperature_2m_min": "t_min",
     "temperature_2m_mean": "t_mean",
+    "precipitation_sum": "precip_sum",
 }
 
 DEFAULT_TIMEOUT = httpx2.Timeout(180.0, connect=30.0, read=120.0)
@@ -181,11 +187,11 @@ class OpenMeteoClient:
     async def daily_temperatures(
         self, lat: float, lon: float, start: date, end: date
     ) -> dict[str, list]:
-        """Daily max/min/mean for one point over a date range.
+        """Daily max/min/mean/precipitation for one point over a date range.
 
-        Returns {"time": [...], "t_max": [...], "t_min": [...], "t_mean": [...]}.
-        Missing days keep their None: the caller's null-rate gate decides
-        whether a city's coordinate landed on an ERA5-Land ocean cell.
+        Returns {"time": [...], "t_max": [...], "t_min": [...], "t_mean": [...],
+        "precip_sum": [...]}. Missing days keep their None: the caller's null-rate
+        gate decides whether a city's coordinate landed on an ERA5-Land ocean cell.
         """
         payload = await self._get_json(
             ARCHIVE_URL,

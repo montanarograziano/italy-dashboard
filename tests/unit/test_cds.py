@@ -367,6 +367,7 @@ def test_extract_year_rows_selects_nearest_cell_converts_kelvin_and_matches_sche
         "t_min": 0.0,
         "t_mean": 10.0,
         "t_max": 20.0,
+        "precip_sum": None,
     }
     assert rows[1]["date"] == date(2020, 1, 2)
 
