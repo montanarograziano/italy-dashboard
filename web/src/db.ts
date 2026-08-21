@@ -19,6 +19,7 @@ const PARQUET = [
   "marts/mart_crime",
   "marts/mart_crime_climate",
   "marts/mart_crime_income",
+  "marts/mart_naspi",
   "marts/mart_offender_rates",
   "marts/mart_offenders",
   "marts/mart_population",

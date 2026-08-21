@@ -95,3 +95,27 @@ export async function unemploymentSeries(region: string) {
     [...sel.params, ...nat.params],
   );
 }
+
+// Matches italy_dashboard.queries.naspi_series: NASPI beneficiaries (INPS),
+// selected region vs NATIONAL, summed over both sex rows (mart_naspi's
+// category dimension has no total code).
+export async function naspiSeries(region: string) {
+  const sel = await regionFilter(region, "mart_naspi");
+  const nat = await regionFilter(NATIONAL, "mart_naspi");
+  return runSql(
+    `WITH sel AS (
+       SELECT period, SUM(value) AS selected
+       FROM mart_naspi WHERE value IS NOT NULL ${sel.clause}
+       GROUP BY period
+     ),
+     nat AS (
+       SELECT period, SUM(value) AS national
+       FROM mart_naspi WHERE value IS NOT NULL ${nat.clause}
+       GROUP BY period
+     )
+     SELECT sel.period, sel.selected, nat.national
+     FROM sel JOIN nat USING (period)
+     ORDER BY sel.period`,
+    [...sel.params, ...nat.params],
+  );
+}

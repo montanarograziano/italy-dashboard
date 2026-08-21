@@ -32,6 +32,7 @@ const IMPLEMENTED: Record<string, (...args: never[]) => Promise<unknown>> = {
   crime_climate_stats: crimeClimate.crimeClimateStats,
   population_timeseries: economy.populationTimeseries,
   unemployment_series: economy.unemploymentSeries,
+  naspi_series: economy.naspiSeries,
   foreign_share_timeseries: economy.foreignShareTimeseries,
   region_names: economy.regionNames,
   climate_cities: climate.climateCities,
