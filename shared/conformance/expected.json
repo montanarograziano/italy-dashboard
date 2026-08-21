@@ -10439,33 +10439,6 @@
       "2001",
       "2000"
     ],
-    "naspi_national": [
-      {
-        "national": 1791582.0,
-        "period": "2018",
-        "selected": 1791582.0
-      },
-      {
-        "national": 1790894.0,
-        "period": "2019",
-        "selected": 1790894.0
-      },
-      {
-        "national": 1689831.0,
-        "period": "2020",
-        "selected": 1689831.0
-      },
-      {
-        "national": 1642039.0,
-        "period": "2021",
-        "selected": 1642039.0
-      },
-      {
-        "national": 1941091.0,
-        "period": "2022",
-        "selected": 1941091.0
-      }
-    ],
     "offender_foreign_share_all": [
       {
         "period": "2007",
