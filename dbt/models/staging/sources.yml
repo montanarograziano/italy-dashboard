@@ -52,3 +52,14 @@ sources:
         meta:
           external_location: >-
             read_parquet('{{ env_var('ITALY_DATA_DIR', 'data') }}/weather_daily.parquet')
+      - name: labor_naspi_beneficiaries_pq
+        description: >
+          NASPI unemployment-benefit recipients by NUTS2 region and sex
+          (INPS dataflow DFB_ST_NASPI_BENEFICIARI_02, fetched through the
+          StatKit hub middleware, not SDMX-REST — see
+          ingestion/inps_client.py). No embedded labels in the raw CSV
+          (unlike ISTAT's labels=both); stg_naspi joins region names from
+          the province_capitals seed and decodes sex inline.
+        meta:
+          external_location: >-
+            read_parquet('{{ env_var('ITALY_DATA_DIR', 'data') }}/labor_naspi_beneficiaries.parquet')

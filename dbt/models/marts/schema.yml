@@ -39,6 +39,25 @@ models:
       - name: region_code
         tests: [not_null]
 
+  - name: mart_naspi
+    description: >
+      NASPI unemployment-benefit recipients by NUTS2 region, sex, and year
+      (INPS, via the hub middleware, not ISTAT SDMX-REST). Keeps the raw
+      territory/category/period/value column names (not region_code/year)
+      on purpose: this lets queries.naspi_series reuse _region_filter and
+      region_names unchanged, the same generic helpers labor_unemployment
+      already uses, instead of the renamed schema the other dbt marts use.
+      Consumed from data/marts/mart_naspi.parquet.
+    columns:
+      - name: territory
+        tests: [not_null]
+      - name: category
+        tests: [not_null]
+      - name: period
+        tests: [not_null]
+      - name: value
+        tests: [not_null]
+
   - name: mart_offender_rates
     description: >
       Alleged offenders per 1,000 residents of the same citizenship group, by

@@ -150,9 +150,7 @@ class InpsClient:
             raise RuntimeError("InpsClient must be used as an async context manager")
         return self._client
 
-    async def _request_json(
-        self, path: str, *, method: str = "GET", json_body: Any = None
-    ) -> Any:
+    async def _request_json(self, path: str, *, method: str = "GET", json_body: Any = None) -> Any:
         url = f"{self.base_url}/{path.lstrip('/')}"
         last_error: Exception | None = None
         for attempt in range(1, MAX_RETRIES + 1):

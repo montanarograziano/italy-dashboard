@@ -15,6 +15,7 @@ EXPECTED_DATASETS = {
     "population_resident",
     "population_foreign",
     "labor_unemployment",
+    "labor_naspi_beneficiaries",
     "economy_inflation",
     "income_regional",
 }

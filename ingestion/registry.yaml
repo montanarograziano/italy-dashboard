@@ -66,7 +66,6 @@ datasets:
       MEASURE: "7"
       ECOICOP_2: "00"
 
-
   crime_reported:
     domain: crime
     # NOTE: 73_58 turned out to be "felonies of persons CONVICTED by final
@@ -81,7 +80,7 @@ datasets:
     # DISTRICT_COURT_APPEAL.YEAR_CRIME.AGE_CRIME_COMMITTED.AGE_SERIOUS_CRIMECOMMIT.SEX
     # Open slots: REF_AREA (regions), TYPE_OFFENCE (categories), SEX (totaled client-side).
     key: "A..FELONYFJ..ALL.ALL.TOTAL.ALL.ALL.99.ALL..TOTAL."
-    timeout_s: 2400  # age dimension open -> bigger extraction
+    timeout_s: 2400 # age dimension open -> bigger extraction
     start_period: "1970"
     columns:
       territory: [REF_AREA, ITTER107]
@@ -165,7 +164,6 @@ datasets:
     filters:
       SEX: ["9", TOTAL, _T]
       AGE: [TOTAL, _T, TOT, Y_TOT]
-
 
   population_resident:
     domain: population

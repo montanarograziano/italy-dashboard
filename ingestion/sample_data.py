@@ -162,6 +162,36 @@ def _rows_inflation(rng: random.Random) -> list[dict]:
     return rows
 
 
+def _rows_naspi(rng: random.Random) -> list[dict]:
+    """NASPI beneficiaries by region and sex, mirroring the real INPS shape:
+    territory_name/category_name here ARE already the decoded region/sex
+    names (unlike the real raw snapshot, which has no embedded labels) —
+    stg_naspi's seed join and CASE decode are idempotent on already-decoded
+    input, so this is a faithful stand-in for `just transform` in dev."""
+    rows = []
+    for code, name in REGIONS:
+        south = code.startswith(("ITF", "ITG"))
+        base = rng.uniform(35_000, 60_000) if south else rng.uniform(8_000, 25_000)
+        for year in range(2018, 2023):  # matches the real dataflow's own range
+            crisis = 1.6 if year == 2020 else 1.0  # COVID-era NASPI spike
+            for code_sex, name_sex, share in (
+                ("1", "Maschi", 0.48),
+                ("2", "Femmine", 0.52),
+            ):
+                value = round(base * crisis * share * rng.uniform(0.9, 1.1))
+                rows.append(
+                    {
+                        "territory": code,
+                        "territory_name": name,
+                        "category": code_sex,
+                        "category_name": name_sex,
+                        "period": str(year),
+                        "value": value,
+                    }
+                )
+    return rows
+
+
 def generate_all(data_dir: Path, seed: int = 42) -> None:
     rng = random.Random(seed)
     datasets = {
@@ -169,6 +199,7 @@ def generate_all(data_dir: Path, seed: int = 42) -> None:
         "population_resident": _rows_population(rng, foreign=False),
         "population_foreign": _rows_population(rng, foreign=True),
         "labor_unemployment": _rows_unemployment(rng),
+        "labor_naspi_beneficiaries": _rows_naspi(rng),
         "economy_inflation": _rows_inflation(rng),
         "income_regional": _rows_income(rng),
     }

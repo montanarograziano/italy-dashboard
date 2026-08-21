@@ -498,6 +498,8 @@ class PopulationState(AppState):
 class LaborState(AppState):
     region: str = q.NATIONAL
     series: list[Row] = []
+    naspi: list[Row] = []
+    naspi_ready: bool = False  # mart_naspi.parquet may not exist yet (see q.naspi_series)
     has_loaded: bool = False  # see AppState's docstring: page-scoped, not inherited
 
     @rx.event
@@ -513,6 +515,8 @@ class LaborState(AppState):
 
     def _refresh(self):
         self.series = q.unemployment_series(self.region)
+        self.naspi = q.naspi_series(self.region)
+        self.naspi_ready = bool(self.naspi)
 
 
 class EconomyState(AppState):

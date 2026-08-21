@@ -34,5 +34,27 @@ def labor_page() -> rx.Component:
                 ],
             ),
         ),
+        rx.cond(
+            LaborState.naspi_ready,
+            card(
+                t("naspi_title"),
+                t("naspi_sub"),
+                line_chart(
+                    LaborState.naspi,
+                    [
+                        ("selected", t("selected_region"), theme.series(1)),
+                        ("national", t("national_avg"), theme.series(2)),
+                    ],
+                ),
+                data_table(
+                    LaborState.naspi,
+                    [
+                        ("period", t("year")),
+                        ("selected", t("selected_count")),
+                        ("national", t("national_count")),
+                    ],
+                ),
+            ),
+        ),
         has_loaded=LaborState.has_loaded,
     )

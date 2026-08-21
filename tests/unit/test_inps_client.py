@@ -132,9 +132,7 @@ async def test_get_dimensions_excludes_time_dimension_and_keeps_order():
     async def handler(request: httpx2.Request) -> httpx2.Response:
         if request.url.path.endswith("/catalog"):
             return httpx2.Response(200, json=CATALOG_NODE_1)
-        assert request.url.path.endswith(
-            "/nodes/1/datasets/INPS,DFB_NASPI_REG,1.0/structure"
-        )
+        assert request.url.path.endswith("/nodes/1/datasets/INPS,DFB_NASPI_REG,1.0/structure")
         return httpx2.Response(200, json=STRUCTURE)
 
     async with make_client(handler) as client:

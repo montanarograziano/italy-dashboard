@@ -255,6 +255,49 @@ def test_unemployment_series_has_selected_and_national(sample_db):
     assert all(r["selected"] == r["national"] for r in nat)
 
 
+@pytest.fixture
+def naspi_mart(sample_db):
+    """Small deterministic mart_naspi.parquet: territory/category/period/value,
+    the SAME shape as the raw snapshot (see mart_naspi's schema.yml note) --
+    no total-sex row, both codes must be summed by naspi_series."""
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = []
+    for year in ("2021", "2022"):
+        for tc, tn, base in [("ITC4", "Lombardia", 1000), ("ITF3", "Campania", 2000)]:
+            for cc, cn, share in [("1", "Maschi", 0.48), ("2", "Femmine", 0.52)]:
+                rows.append(
+                    {
+                        "territory": tc,
+                        "territory_name": tn,
+                        "category": cc,
+                        "category_name": cn,
+                        "period": year,
+                        "value": round(base * share),
+                    }
+                )
+    pl.DataFrame(rows).write_parquet(marts / "mart_naspi.parquet")
+    return sample_db
+
+
+def test_naspi_series_has_selected_and_national(naspi_mart):
+    rows = q.naspi_series("Lombardia")
+    assert rows
+    for r in rows:
+        assert set(r) == {"period", "selected", "national"}
+    # Selected region's total is exactly its male+female sum (1000, both years).
+    assert all(r["selected"] == 1000 for r in rows)
+    # National = sum across BOTH regions (2 NUTS2 codes match the ^IT[A-Z][0-9]$
+    # fallback, since this fixture has no explicit 'IT' row).
+    assert all(r["national"] == 3000 for r in rows)
+
+
+def test_naspi_series_degrades_to_empty_when_mart_missing(sample_db):
+    """Before the first `just transform` with real INPS data, mart_naspi.parquet
+    does not exist yet -- must return [], not raise."""
+    assert q.naspi_series(q.NATIONAL) == []
+
+
 def test_kpis_are_formatted_strings(sample_db):
     k = q.kpis()
     assert set(k) == {"crime", "population", "unemployment", "inflation"}

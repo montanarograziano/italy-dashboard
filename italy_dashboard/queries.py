@@ -576,6 +576,38 @@ def unemployment_series(region: str) -> list[Row]:
     )
 
 
+def naspi_series(region: str) -> list[Row]:
+    """NASPI beneficiaries (INPS), selected region vs NATIONAL, summed over
+    both sex rows (mart_naspi's category dimension has no total code).
+
+    Degrades to an empty list rather than erroring when mart_naspi hasn't
+    been built yet (`just transform` before the first real INPS fetch) --
+    mirrors mart_ready()'s file-presence check for the generic mart engine.
+    """
+    if not (MARTS_DIR / "mart_naspi.parquet").exists():
+        return []
+    cond, params = _region_filter(region, "mart_naspi")
+    nat_cond, nat_params = _region_filter(NATIONAL, "mart_naspi")
+    return _query(
+        f"""
+        WITH sel AS (
+            SELECT period, SUM(value) AS selected
+            FROM mart_naspi WHERE value IS NOT NULL {cond}
+            GROUP BY period
+        ),
+        nat AS (
+            SELECT period, SUM(value) AS national
+            FROM mart_naspi WHERE value IS NOT NULL {nat_cond}
+            GROUP BY period
+        )
+        SELECT sel.period, sel.selected, nat.national
+        FROM sel JOIN nat USING (period)
+        ORDER BY sel.period
+        """,
+        params + nat_params,
+    )
+
+
 # -------------------------------------------------------------- economy
 
 
