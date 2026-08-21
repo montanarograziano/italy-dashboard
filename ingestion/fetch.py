@@ -32,9 +32,8 @@ from pydantic import BaseModel, Field  # type: ignore[import-not-found]
 
 from ingestion.inps_client import InpsClient, InpsError
 from ingestion.sdmx_client import IstatClient, SdmxError
-from ingestion.ustat_client import USTATClient
 
-AnyClient = IstatClient | InpsClient | USTATClient
+AnyClient = IstatClient | InpsClient
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("ingestion.fetch")
@@ -79,7 +78,7 @@ class DatasetConfig(BaseModel):
     # so `key`/`start_period` below are silently ignored for it — narrow with
     # `filters` only, same as any ISTAT dataflow that needs client-side filters.
     # "ustat" routes through ingestion/ustat_client.py (CKAN REST API).
-    provider: Literal["istat", "inps", "ustat"] = "istat"
+    provider: Literal["istat", "inps"] = "istat"
     key: str = "ALL"
     start_period: str | None = None
     timeout_s: int = 900  # hard cap per dataset; huge ALL extractions can crawl
@@ -289,8 +288,6 @@ async def cmd_refresh(only: str | None = None) -> int:
             clients["istat"] = await stack.enter_async_context(IstatClient())
         if "inps" in providers_used:
             clients["inps"] = await stack.enter_async_context(InpsClient())
-        if "ustat" in providers_used:
-            clients["ustat"] = await stack.enter_async_context(USTATClient())
         for i, (name, cfg) in enumerate(targets.items(), start=1):
             logger.info("=== [%d/%d] %s ===", i, len(targets), name)
             if cfg.dataflow_id.startswith("TODO"):

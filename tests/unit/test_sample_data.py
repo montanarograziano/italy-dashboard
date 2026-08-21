@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import polars as pl
+import polars as pl  # type: ignore[import-not-found]
 
 from ingestion.fetch import NORMALIZED_COLUMNS
 from ingestion.sample_data import generate_all
@@ -16,6 +16,7 @@ EXPECTED_DATASETS = {
     "population_foreign",
     "labor_unemployment",
     "labor_naspi_beneficiaries",
+    "education_university_scholarships",
     "economy_inflation",
     "income_regional",
 }

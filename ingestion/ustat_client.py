@@ -49,21 +49,19 @@ async def list_available_datasets(client: httpx2.AsyncClient) -> dict[str, str]:
     a mapping of version label (e.g., "2023") to the package ID needed for
     resource lookups.
     """
-    url = urljoin(USTAT_API_BASE, "/package_search")
-    params = {
-        "q": DATASET_ID,
-        "rows": 100,
-    }
-    data = await _fetch_json(f"{url}?q={params['q']}&rows={params['rows']}", client)
+    # Fetch the full package list and filter locally (USTAT CKAN's search is unreliable)
+    url = urljoin(USTAT_API_BASE + "/", "package_list")
+    data = await _fetch_json(url, client)
 
     results = {}
-    for pkg in data.get("result", {}).get("results", []):
-        name = pkg.get("name", "")
-        # Parse version from name: "2023-diritto-allo-studio-universitario-dsu-regionale"
-        parts = name.split("-")
-        if parts and parts[0].isdigit():
-            version = parts[0]
-            results[version] = pkg["id"]
+    for pkg_id in data.get("result", []):
+        # Filter for DSU packages: "YYYY-diritto-allo-studio-universitario-dsu-regionale"
+        if "diritto-allo-studio-universitario-dsu-regionale" in pkg_id:
+            # Parse version from name: "2023-diritto-allo-studio-universitario-dsu-regionale"
+            parts = pkg_id.split("-")
+            if parts and parts[0].isdigit():
+                version = parts[0]
+                results[version] = pkg_id
     return results
 
 
@@ -79,9 +77,7 @@ async def get_latest_interventi_csv_url(
     """
     versions = await list_available_datasets(client)
     if not versions:
-        raise RuntimeError(
-            f"No DSU datasets found at {USTAT_API_BASE}/package_search"
-        )
+        raise RuntimeError(f"No DSU datasets found at {USTAT_API_BASE}/package_search")
 
     # Use the latest (highest version number available)
     try:
@@ -91,27 +87,22 @@ async def get_latest_interventi_csv_url(
     package_id = versions[latest_version]
 
     # Fetch package details to locate the "Numero di interventi" resource
-    url = urljoin(USTAT_API_BASE, "/package_show")
-    data = await _fetch_json(f"{url}?id={package_id}", client)
+    url = urljoin(USTAT_API_BASE + "/", f"package_show?id={package_id}")
+    data = await _fetch_json(url, client)
 
     pkg = data.get("result", {})
     for resource in pkg.get("resources", []):
-        if (
-            resource.get("name", "").startswith(f"{latest_version} Numero di interventi")
-            or INTERVENTI_RESOURCE_NAME in resource.get("name", "")
-        ):
+        if resource.get("name", "").startswith(
+            f"{latest_version} Numero di interventi"
+        ) or INTERVENTI_RESOURCE_NAME in resource.get("name", ""):
             csv_url = resource.get("url", "")
             if csv_url:
                 return csv_url, latest_version
 
-    raise RuntimeError(
-        f"No '{INTERVENTI_RESOURCE_NAME}' resource found in dataset {package_id}"
-    )
+    raise RuntimeError(f"No '{INTERVENTI_RESOURCE_NAME}' resource found in dataset {package_id}")
 
 
-async def download_interventi_csv(
-    url: str, client: httpx2.AsyncClient
-) -> io.BytesIO:
+async def download_interventi_csv(url: str, client: httpx2.AsyncClient) -> io.BytesIO:
     """Download CSV from USTAT server and return as BytesIO for parsing."""
     resp = await client.get(url, timeout=60)
     resp.raise_for_status()
@@ -135,14 +126,13 @@ async def fetch_interventi(
 
     try:
         csv_url, version = await get_latest_interventi_csv_url(client)
-        logger.info(
-            f"Fetching latest USTAT DSU interventi (version {version}): {csv_url}"
-        )
+        logger.info(f"Fetching latest USTAT DSU interventi (version {version}): {csv_url}")
 
         csv_data = await download_interventi_csv(csv_url, client)
         csv_data.seek(0)
 
-        reader = csv.DictReader(io.TextIOWrapper(csv_data, encoding="utf-8"))
+        # USTAT CSVs use semicolon as delimiter and ISO-8859-1 encoding
+        reader = csv.DictReader(io.TextIOWrapper(csv_data, encoding="iso-8859-1"), delimiter=";")
         for row in reader:
             if row:
                 yield dict(row)
@@ -204,7 +194,7 @@ class USTATClient:
             key: Unused (USTAT CKAN doesn't support server-side filtering)
             start_period: Unused
 
-        Returns: Raw CSV bytes from the latest "Numero di interventi" resource
+        Returns: UTF-8 encoded CSV bytes from the latest "Numero di interventi" resource
         """
         if self._client is None:
             raise RuntimeError("Client not initialized (use 'async with' context)")
@@ -213,7 +203,9 @@ class USTATClient:
         csv_url, version = await get_latest_interventi_csv_url(self._client)
         logger.info(f"Fetching USTAT DSU v{version} from {csv_url}")
         csv_bytes = await download_interventi_csv(csv_url, self._client)
-        return csv_bytes.getvalue()
+        # USTAT CSVs are ISO-8859-1; convert to UTF-8 for downstream compatibility
+        csv_text = csv_bytes.getvalue().decode("iso-8859-1")
+        return csv_text.encode("utf-8")
 
     async def search_dataflows(self, keyword: str) -> list[Any]:
         """Search for USTAT dataflows (minimal stub for discover command).

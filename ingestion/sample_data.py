@@ -11,7 +11,7 @@ import logging
 import random
 from pathlib import Path
 
-import polars as pl
+import polars as pl  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +192,39 @@ def _rows_naspi(rng: random.Random) -> list[dict]:
     return rows
 
 
+def _rows_education(rng: random.Random) -> list[dict]:
+    """University scholarship (DSU) interventions by region and type.
+    Matches USTAT's normalized schema: territory_name/category_name are
+    already decoded (unlike raw USTAT CKAN, which has no embedded labels)."""
+    intervention_types = [
+        ("ALLOGGI", "Housing assistance"),
+        ("MENSE", "Meal plan"),
+        ("TASSE", "Tuition waivers"),
+        ("BOOKS", "Study materials"),
+        ("OTHER", "Other support"),
+    ]
+    rows = []
+    for code, name in REGIONS:
+        base_scale = 1.4 if code.startswith(("ITF", "ITG")) else 0.8
+        for itype_code, itype_name in intervention_types:
+            base = round(rng.uniform(800, 2500) * base_scale)
+            for year in range(2019, 2024):
+                # Post-pandemic policy change increased funding in 2023+
+                post_covid = 1.25 if year >= 2023 else (0.85 if year == 2020 else 1.0)
+                value = round(base * post_covid * rng.uniform(0.85, 1.15))
+                rows.append(
+                    {
+                        "territory": code,
+                        "territory_name": name,
+                        "category": itype_code,
+                        "category_name": itype_name,
+                        "period": f"{year}-{year+1}",
+                        "value": value,
+                    }
+                )
+    return rows
+
+
 def generate_all(data_dir: Path, seed: int = 42) -> None:
     rng = random.Random(seed)
     datasets = {
@@ -200,6 +233,7 @@ def generate_all(data_dir: Path, seed: int = 42) -> None:
         "population_foreign": _rows_population(rng, foreign=True),
         "labor_unemployment": _rows_unemployment(rng),
         "labor_naspi_beneficiaries": _rows_naspi(rng),
+        "education_university_scholarships": _rows_education(rng),
         "economy_inflation": _rows_inflation(rng),
         "income_regional": _rows_income(rng),
     }
