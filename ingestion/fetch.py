@@ -1,29 +1,39 @@
-"""Fetch/refresh CLI: ISTAT SDMX -> raw CSV -> normalized Parquet snapshot.
+"""Fetch/refresh CLI: SDMX/hub source -> raw CSV -> normalized Parquet snapshot.
 
 Usage:
-    python -m ingestion.fetch discover "delitti"     # find dataflow IDs
-    python -m ingestion.fetch dims economy_inflation  # dimension order for `key`
-    python -m ingestion.fetch normalize               # re-normalize existing raw CSVs
-    python -m ingestion.fetch refresh                 # fetch all registry datasets
-    python -m ingestion.fetch refresh crime_reported  # fetch one dataset
-    python -m ingestion.fetch sample                  # generate synthetic dev data
+    python -m ingestion.fetch discover "delitti"          # find ISTAT dataflow IDs
+    python -m ingestion.fetch discover "naspi" inps        # find INPS dataflow IDs
+    python -m ingestion.fetch dims economy_inflation       # dimension order for `key`
+    python -m ingestion.fetch dims DFB_SOME_FLOW inps      # same, for an INPS flow id
+    python -m ingestion.fetch normalize                    # re-normalize existing raw CSVs
+    python -m ingestion.fetch refresh                      # fetch all registry datasets
+    python -m ingestion.fetch refresh crime_reported       # fetch one dataset
+    python -m ingestion.fetch sample                       # generate synthetic dev data
 
 The dashboard reads ONLY the normalized Parquet files in data/ (via DuckDB).
-It never calls the ISTAT API directly.
+It never calls a live provider API directly. Each registry dataset has a
+`provider` (default `istat`); `inps` routes through ingestion/inps_client.py
+instead of ingestion/sdmx_client.py, everything downstream (normalize,
+filters, snapshot) is identical.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import sys
 from pathlib import Path
+from typing import Literal
 
 import duckdb
 import yaml
 from pydantic import BaseModel, Field
 
+from ingestion.inps_client import InpsClient, InpsError
 from ingestion.sdmx_client import IstatClient, SdmxError
+
+AnyClient = IstatClient | InpsClient
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("ingestion.fetch")
@@ -63,6 +73,11 @@ class DatasetConfig(BaseModel):
     title: str
     dataflow_id: str
     search_hint: str
+    # "inps" routes through ingestion/inps_client.py (StatKit hub middleware)
+    # instead of ISTAT's SDMX-REST. The hub has no server-side filter at all,
+    # so `key`/`start_period` below are silently ignored for it — narrow with
+    # `filters` only, same as any ISTAT dataflow that needs client-side filters.
+    provider: Literal["istat", "inps"] = "istat"
     key: str = "ALL"
     start_period: str | None = None
     timeout_s: int = 900  # hard cap per dataset; huge ALL extractions can crawl
@@ -238,7 +253,7 @@ def normalize_raw_csv(name: str, cfg: DatasetConfig, raw_csv: Path) -> Path:
     return out_path
 
 
-async def fetch_dataset(client: IstatClient, name: str, cfg: DatasetConfig) -> None:
+async def fetch_dataset(client: AnyClient, name: str, cfg: DatasetConfig) -> None:
     logger.info("[%s] fetching dataflow %s ...", name, cfg.dataflow_id)
     raw = await client.get_data_csv(cfg.dataflow_id, key=cfg.key, start_period=cfg.start_period)
     RAW_DIR.mkdir(parents=True, exist_ok=True)
@@ -259,12 +274,19 @@ async def cmd_refresh(only: str | None = None) -> int:
             return 2
         targets = {only: targets[only]}
 
-    # Sequential on purpose: gentler on ISTAT, clearer logs, and the DuckDB
-    # snapshot is rebuilt after EACH dataset so the dashboard fills up
-    # incrementally instead of all-or-nothing.
+    # Sequential on purpose: gentler on the source APIs, clearer logs, and the
+    # DuckDB snapshot is rebuilt after EACH dataset so the dashboard fills up
+    # incrementally instead of all-or-nothing. One client per provider actually
+    # used, opened once and shared across all of that provider's datasets.
     MARTS_DIR.mkdir(parents=True, exist_ok=True)
     failures: list[str] = []
-    async with IstatClient() as client:
+    providers_used = {cfg.provider for cfg in targets.values()}
+    async with contextlib.AsyncExitStack() as stack:
+        clients: dict[str, AnyClient] = {}
+        if "istat" in providers_used:
+            clients["istat"] = await stack.enter_async_context(IstatClient())
+        if "inps" in providers_used:
+            clients["inps"] = await stack.enter_async_context(InpsClient())
         for i, (name, cfg) in enumerate(targets.items(), start=1):
             logger.info("=== [%d/%d] %s ===", i, len(targets), name)
             if cfg.dataflow_id.startswith("TODO"):
@@ -276,6 +298,7 @@ async def cmd_refresh(only: str | None = None) -> int:
                     cfg.search_hint,
                 )
                 continue
+            client = clients[cfg.provider]
             try:
                 async with asyncio.timeout(cfg.timeout_s):
                     await fetch_dataset(client, name, cfg)
@@ -306,11 +329,12 @@ async def cmd_refresh(only: str | None = None) -> int:
     return 0
 
 
-async def cmd_discover(keyword: str) -> int:
-    async with IstatClient() as client:
+async def cmd_discover(keyword: str, provider: str = "istat") -> int:
+    client_cm: AnyClient = InpsClient() if provider == "inps" else IstatClient()
+    async with client_cm as client:
         try:
             flows = await client.search_dataflows(keyword)
-        except SdmxError as exc:
+        except (SdmxError, InpsError) as exc:
             logger.error("Discovery failed: %s", exc)
             return 1
     if not flows:
@@ -376,15 +400,21 @@ def cmd_normalize(only: str | None = None) -> int:
     return 0
 
 
-async def cmd_dims(dataset_or_flow: str) -> int:
-    """Print a dataflow's dimension order, for narrowing `key` in registry.yaml."""
+async def cmd_dims(dataset_or_flow: str, provider: str | None = None) -> int:
+    """Print a dataflow's dimension order, for narrowing `key` in registry.yaml.
+
+    For an `inps` dataflow this order is informational only (the hub has no
+    server-side filter key); narrow with `filters` after download instead.
+    """
     registry = load_registry()
     cfg = registry.datasets.get(dataset_or_flow)
     flow_id = cfg.dataflow_id if cfg is not None else dataset_or_flow
-    async with IstatClient() as client:
+    resolved_provider = provider or (cfg.provider if cfg is not None else "istat")
+    client_cm: AnyClient = InpsClient() if resolved_provider == "inps" else IstatClient()
+    async with client_cm as client:
         try:
             dims = await client.get_dimensions(flow_id)
-        except SdmxError as exc:
+        except (SdmxError, InpsError) as exc:
             logger.error("Could not read dimensions: %s", exc)
             return 1
     print(f"Dimension order for {flow_id} (dotted `key` uses this order):")
@@ -419,18 +449,18 @@ def main(argv: list[str]) -> int:
     command, *rest = argv
     if command == "discover":
         if not rest:
-            print("usage: python -m ingestion.fetch discover <keyword>")
+            print("usage: python -m ingestion.fetch discover <keyword> [provider]")
             return 2
-        return asyncio.run(cmd_discover(rest[0]))
+        return asyncio.run(cmd_discover(rest[0], *rest[1:2]))
     if command == "refresh":
         return asyncio.run(cmd_refresh(rest[0] if rest else None))
     if command == "normalize":
         return cmd_normalize(rest[0] if rest else None)
     if command == "dims":
         if not rest:
-            print("usage: python -m ingestion.fetch dims <dataset-name-or-dataflow-id>")
+            print("usage: python -m ingestion.fetch dims <dataset-name-or-dataflow-id> [provider]")
             return 2
-        return asyncio.run(cmd_dims(rest[0]))
+        return asyncio.run(cmd_dims(rest[0], rest[1] if len(rest) > 1 else None))
     if command == "sample":
         return cmd_sample()
     print(__doc__)

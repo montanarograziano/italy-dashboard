@@ -189,3 +189,28 @@ datasets:
       ETA1: [TOTAL, _T, TOT]
       MARITAL_STATUS: [TOTAL, _T, "99"]
       STATCIV2: ["99", TOTAL, _T]
+
+  labor_naspi_beneficiaries:
+    domain: labor
+    title: "NASPI unemployment benefit recipients, by region and sex"
+    # INPS, not ISTAT: routes through ingestion/inps_client.py (StatKit hub
+    # middleware) instead of SDMX-REST — ISTAT has no equivalent series (it
+    # measures unemployment status, not benefit claims). Verified live against
+    # the real hub: dims are exactly TERRITORIO (NUTS2 region) + SESSO (1/2,
+    # no total code — both sexes are kept as rows, not summed), 21 regions,
+    # annual, 2018-2022 (this dataflow's own publication lag — not fresher
+    # upstream at verification time). SESSO/TERRITORIO have no embedded labels
+    # in the CSV (unlike ISTAT's labels=both); dbt decodes SESSO inline and
+    # joins TERRITORIO to the existing province_capitals seed's region_name
+    # (independently verified to match INPS's own PartialCodelists response).
+    provider: inps
+    dataflow_id: "DFB_ST_NASPI_BENEFICIARI_02"
+    search_hint: "naspi"
+    # key/start_period are unused for inps (hub has no server-side filter);
+    # left at defaults rather than removed, so `columns`/`filters` stay the
+    # only two things that matter here.
+    columns:
+      territory: TERRITORIO
+      category: SESSO
+      period: TIME_PERIOD
+      value: OBS_VALUE
