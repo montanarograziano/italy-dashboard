@@ -26,7 +26,18 @@ INK_PRIMARY_LIGHT = "#0b0b0b"
 INK_PRIMARY_DARK = "#f4f4f2"
 INK_SECONDARY_LIGHT = "#52514e"
 INK_SECONDARY_DARK = "#b8b7b2"
-INK_MUTED_LIGHT = "#898781"
+# INK_MUTED_LIGHT was #898781 (3.50:1 on SURFACE_LIGHT): under WCAG AA's
+# 4.5:1 floor for normal-weight text under 18px, the size/weight every
+# caption and sub-caption that uses this token actually renders at (KPI tile
+# notes, chart sub-captions -- see components.py's `card`/`stat_tile`).
+# Darkened along the SAME hue/saturation (HSL h=0.125, s=0.033, only L
+# lowered) rather than picked ad hoc, so it reads as the same muted warm
+# grey, just dark enough to clear the floor: 4.89:1, with headroom above the
+# 4.50:1 razor edge a smaller nudge would have landed on. INK_MUTED_DARK is
+# unrelated (selected independently against SURFACE_DARK, not a mechanical
+# inversion -- see the module docstring) and already clears AA at 4.97:1;
+# verified, not changed.
+INK_MUTED_LIGHT = "#716f6a"
 INK_MUTED_DARK = "#8a8983"
 GRIDLINE_LIGHT = "#e1e0d9"
 GRIDLINE_DARK = "#2e2e2c"

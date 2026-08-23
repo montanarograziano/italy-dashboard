@@ -266,6 +266,10 @@ EN: dict[str, str] = {
         "data. Run  just refresh  and  just refresh-weather  (or  just sample), "
         "then reload."
     ),
+    # 404 page
+    "not_found_title": "Page not found",
+    "not_found_body": "There is no page at this address. Use the navigation above, or go back home.",
+    "not_found_cta": "Back to home",
 }
 
 IT: dict[str, str] = {
@@ -515,6 +519,10 @@ IT: dict[str, str] = {
         "di temperatura. Esegui  just refresh  e  just refresh-weather  (oppure  "
         "just sample), poi ricarica."
     ),
+    # pagina 404
+    "not_found_title": "Pagina non trovata",
+    "not_found_body": "Non esiste una pagina a questo indirizzo. Usa la navigazione qui sopra, oppure torna alla home.",
+    "not_found_cta": "Torna alla home",
 }
 
 # Split-by choices: canonical keys stored in state, labels shown per language.

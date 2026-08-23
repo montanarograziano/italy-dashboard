@@ -22,6 +22,7 @@ pytestmark = pytest.mark.integration
         ("italy_dashboard.pages.economy", "economy_page"),
         ("italy_dashboard.pages.climate", "climate_page"),
         ("italy_dashboard.pages.climate_crime", "climate_crime_page"),
+        ("italy_dashboard.pages.not_found", "not_found_page"),
     ],
 )
 def test_page_component_builds(module_name: str, page_fn: str):
@@ -46,4 +47,5 @@ def test_app_registers_all_routes():
         "economy",
         "climate",
         "climate-crime",
+        "404",
     } <= routes

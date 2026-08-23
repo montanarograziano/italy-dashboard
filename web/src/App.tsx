@@ -6,6 +6,7 @@ import Economy from "./pages/Economy";
 import Education from "./pages/Education";
 import Home from "./pages/Home";
 import Labor from "./pages/Labor";
+import NotFound from "./pages/NotFound";
 import Population from "./pages/Population";
 import { ROUTES, useRoute } from "./router";
 import {
@@ -95,10 +96,9 @@ export default function App() {
     setMode(currentMode());
   }
 
-  // Route switch: every ROUTES entry now maps to a real page (all eight
-  // shipped as of this plan), so an unregistered slug -- a dangling nav
-  // link, a stale bookmark, a route deleted by a future edit -- renders
-  // NOTHING, on purpose: that is what lets
+  // Route switch: every ROUTES entry maps to a real page, so a missing
+  // `case` for a slug that IS in ROUTES -- a route deleted by a future
+  // edit -- must still render NOTHING, on purpose: that is what lets
   // `test_every_nav_link_reaches_a_page_that_renders` (`main h1` must be
   // non-empty for every nav href) actually catch a deleted `case` rather
   // than being satisfied by a placeholder. An earlier `ComingSoon`
@@ -106,8 +106,11 @@ export default function App() {
   // period before every page existed -- that made the nav-link test pass
   // even with a route's `case` deleted outright (verified: deleting
   // `case "economy"` still left the test green, since `ComingSoon` quietly
-  // took over), which is why it is gone now rather than kept "just in
-  // case".
+  // took over), which is why the fallback below is gated on the slug NOT
+  // being in ROUTES at all: a dangling nav link or stale bookmark (never in
+  // ROUTES) gets the branded `NotFound` page; a real route with a missing
+  // `case` (still in ROUTES) still renders nothing, preserving the
+  // regression test's ability to catch that.
   const route = useRoute();
   let page: ReactNode;
   switch (route) {
@@ -136,7 +139,10 @@ export default function App() {
       page = <Population mode={mode} />;
       break;
     default:
-      page = null;
+      // `route` is not a `case` above: branded not-found for a slug that was
+      // never in ROUTES at all, nothing for one that is (see the comment
+      // above the switch for why those two must stay different).
+      page = ROUTES.some((r) => r.slug === route) ? null : <NotFound slug={route} />;
   }
 
   return (

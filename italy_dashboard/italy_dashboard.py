@@ -9,6 +9,7 @@ from italy_dashboard.pages.economy import economy_page
 from italy_dashboard.pages.education import education_page
 from italy_dashboard.pages.home import home_page
 from italy_dashboard.pages.labor import labor_page
+from italy_dashboard.pages.not_found import not_found_page
 from italy_dashboard.pages.population import population_page
 from italy_dashboard.state import (
     ClimateCrimeState,
@@ -56,3 +57,9 @@ app.add_page(
     title="Climate × Crime · Italy Dashboard",  # noqa: RUF001
     on_load=ClimateCrimeState.load,
 )
+# Overrides Reflex's own bare `span("404: Page not found")` default (see
+# reflex/compiler/compiler.py: it auto-registers that fallback at route
+# "404" only if the app hasn't already -- not_found.py's docstring has the
+# full trail) with the app's normal header/nav shell, for any path that
+# doesn't match one of the routes above.
+app.add_page(not_found_page, route="404", title="Not found · Italy Dashboard")

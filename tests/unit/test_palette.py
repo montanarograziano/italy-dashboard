@@ -175,3 +175,51 @@ def test_diverging_bucket_is_monotonic():
 def test_diverging_bucket_rejects_a_non_positive_range():
     with pytest.raises(ValueError):
         palette.diverging_bucket(0.5, half_range=0)
+
+
+# ------------------------------------------------------- text contrast (AA)
+#
+# Regression coverage for the live QA finding: INK_MUTED_LIGHT (`#898781` on
+# SURFACE_LIGHT) measured 3.50:1 on the deployed sites -- every KPI-tile note
+# and chart sub-caption that uses it (components.py's `card`/`stat_tile`) is
+# normal-weight text well under 18px, so WCAG 2.1 AA's floor is 4.5:1, not
+# the 3:1 non-text floor `tests/browser/test_axis_contrast.py` already covers
+# for the separate AXIS token. A plain hex-literal calculation, not
+# `tests/browser/_colors.py`'s `contrast_ratio`: that helper deliberately
+# only accepts a browser's own `getComputedStyle` string (see its module
+# docstring) so a browser test measures what was actually painted, never
+# what the source claims -- this test asserts the opposite thing, that the
+# CHOSEN value clears the floor, on every machine, with no browser at all.
+def _relative_luminance(hex_colour: str) -> float:
+    hex_colour = hex_colour.lstrip("#")
+    r, g, b = (int(hex_colour[i : i + 2], 16) for i in (0, 2, 4))
+
+    def channel(value: int) -> float:
+        c = value / 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+def _wcag_contrast(hex_a: str, hex_b: str) -> float:
+    lum_a, lum_b = _relative_luminance(hex_a), _relative_luminance(hex_b)
+    lighter, darker = max(lum_a, lum_b), min(lum_a, lum_b)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+WCAG_AA_NORMAL_TEXT_MIN = 4.5
+
+
+@pytest.mark.parametrize(
+    ("muted", "surface", "label"),
+    [
+        (palette.INK_MUTED_LIGHT, palette.SURFACE_LIGHT, "light"),
+        (palette.INK_MUTED_DARK, palette.SURFACE_DARK, "dark"),
+    ],
+)
+def test_ink_muted_clears_wcag_aa_for_normal_text(muted: str, surface: str, label: str):
+    ratio = _wcag_contrast(muted, surface)
+    assert ratio >= WCAG_AA_NORMAL_TEXT_MIN, (
+        f"INK_MUTED_{label.upper()} ({muted}) on SURFACE_{label.upper()} ({surface}) is "
+        f"{ratio:.2f}:1, under the {WCAG_AA_NORMAL_TEXT_MIN}:1 WCAG AA floor for normal text"
+    )

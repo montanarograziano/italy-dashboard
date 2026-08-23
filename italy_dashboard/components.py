@@ -46,23 +46,47 @@ def _lang_toggle() -> rx.Component:
 
 
 def navbar() -> rx.Component:
-    return rx.hstack(
-        rx.heading("Italy Dashboard", size="5", color=theme.ink_primary()),
-        rx.spacer(),
-        *[
-            rx.link(
-                t(key),
-                href=href,
-                color=theme.ink_secondary(),
-                _hover={"color": theme.ink_primary()},
-                font_size="0.95em",
-            )
-            for key, href in NAV_LINKS
-        ],
-        rx.color_mode.button(size="1"),
-        _lang_toggle(),
-        spacing="5",
-        align="center",
+    """Header row (title + controls) stacked over a wrapping nav-links row.
+
+    Two rows, not one `hstack` with every item crammed in: at a narrow
+    viewport (375px) a single row has nowhere to put 8 links plus the title,
+    the colour-mode button and the language toggle, and `rx.spacer()`'s
+    `flex: 1` would itself claim the first wrapped line before any link got a
+    chance to. Splitting mirrors the static frontend's own two-row header
+    (`web/src/App.tsx`: a logo/controls flex row, then a separate `<nav>`),
+    which is already the reference the P0 mobile-overflow finding pointed at.
+    `wrap="wrap"` on both rows is a plain Radix `Flex` prop (CSS
+    `flex-wrap`) -- no drawer/hamburger component, just letting the links
+    that do not fit start a new line instead of overflowing the viewport.
+    """
+    return rx.box(
+        rx.hstack(
+            rx.heading("Italy Dashboard", size="5", color=theme.ink_primary()),
+            rx.spacer(),
+            rx.color_mode.button(size="1"),
+            _lang_toggle(),
+            spacing="4",
+            align="center",
+            wrap="wrap",
+            width="100%",
+        ),
+        rx.hstack(
+            *[
+                rx.link(
+                    t(key),
+                    href=href,
+                    color=theme.ink_secondary(),
+                    _hover={"color": theme.ink_primary()},
+                    font_size="0.95em",
+                )
+                for key, href in NAV_LINKS
+            ],
+            spacing="5",
+            align="center",
+            wrap="wrap",
+            width="100%",
+            margin_top="0.75em",
+        ),
         width="100%",
         padding="1em 1.5em",
         background=theme.surface(),

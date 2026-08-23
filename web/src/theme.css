@@ -154,11 +154,24 @@ p {
 /* Nav links and the colour-mode toggle (App.tsx): both set their own
  * `color` inline from theme.ts already, so `currentColor` here needs no
  * colour of its own -- same idiom as `.select`/`.spinner` above. Neither had
- * any hover/focus affordance before this rule. */
+ * any hover/focus affordance before this rule.
+ *
+ * Only `background-color` is transitioned, not `box-shadow`: an EARLIER
+ * version animated both, so a computed-style read taken right after a
+ * keyboard `Tab` (no wait for the transition to settle -- the shape of a
+ * fast automated check, or a screenshot fired the instant focus lands) could
+ * catch the ring still mid-fade-in at a near-zero alpha/spread, indistinguishable
+ * from no ring at all (verified: reading `getComputedStyle` immediately after
+ * `Tab` reproduced exactly that, `boxShadow` at 0px spread; waiting the
+ * transition's own 150ms out showed the SAME rule already painting a real
+ * `0 0 0 2px` ring). A `:focus-visible` ring is feedback about WHERE keyboard
+ * focus is right now, so it must be there on the very first painted frame,
+ * not 150ms into one -- unlike the hover background, which is a pointer
+ * micro-interaction where a soft fade is the point. */
 .nav-link,
 .mode-toggle {
   border-radius: 4px;
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
 .nav-link {

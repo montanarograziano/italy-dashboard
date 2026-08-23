@@ -1,4 +1,5 @@
 import csv
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -54,6 +55,44 @@ def test_the_shell_paints_the_palette_surface(page, static_app):
     page.goto(static_app)
     background = page.evaluate("() => getComputedStyle(document.body).backgroundColor")
     assert background == "rgb(252, 252, 251)", background  # palette surface.light
+
+
+def test_keyboard_focus_shows_a_visible_ring_on_the_first_frame(page, static_app):
+    """WCAG 2.1 SS2.4.7 (Focus Visible): a `:focus-visible` ring must be there
+    on the very first frame after `Tab` lands on an element, not partway
+    through a CSS transition.
+
+    `theme.css`'s `.nav-link`/`.mode-toggle` rule sets `outline: none` and
+    compensates with a `box-shadow` ring. An earlier version also
+    TRANSITIONED that box-shadow (matching the hover background's fade), so
+    reading computed style immediately after `Tab` -- exactly what this test
+    does, deliberately with no wait -- caught the ring still fading in from
+    a near-zero spread, indistinguishable from no ring at all; a 150-250ms
+    wait before reading made the very same rule look correct. Checked via
+    the box-shadow's SPREAD radius (the last length in `"... 0px 0px 0px
+    2px"`), not its colour string: `color-mix()` serializes differently
+    across engines (`rgba(...)` vs `color(srgb ... / a)`), but a real ring
+    always carries a positive spread, and a not-yet-transitioned one is 0.
+    """
+    page.goto(static_app)
+    page.wait_for_timeout(300)
+    focusable_seen = 0
+    for _ in range(6):
+        page.keyboard.press("Tab")
+        # No `wait_for_timeout` here on purpose -- see the docstring.
+        box_shadow, class_name = page.evaluate(
+            "() => [getComputedStyle(document.activeElement).boxShadow, "
+            "document.activeElement.className]"
+        )
+        if class_name not in ("nav-link", "mode-toggle"):
+            continue
+        focusable_seen += 1
+        spreads = re.findall(r"(-?[\d.]+)px", box_shadow)
+        assert spreads and float(spreads[-1]) > 0, (
+            f".{class_name} has no visible focus ring on the first frame after "
+            f"Tab: boxShadow={box_shadow!r}"
+        )
+    assert focusable_seen > 0, "never tabbed onto a .nav-link/.mode-toggle element"
 
 
 def test_the_stripes_resolve_to_distinct_diverging_colours(page, static_app):
@@ -468,6 +507,44 @@ def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
         page.goto(f"{static_app}/{slug}")
         page.wait_for_selector("main h1", timeout=30_000)
         assert page.eval_on_selector("main h1", "e => e.textContent.trim()"), slug
+
+
+def test_an_unregistered_route_shows_the_branded_not_found_panel(page, static_app):
+    """A slug that is not in ROUTES at all (a dangling link, a stale bookmark,
+    a typo) must render App.tsx's `NotFound` panel inside the normal shell --
+    not a silent blank content area, and not a route the app happens to
+    coerce to home.
+
+    Before `NotFound` existed, `router.tsx`'s deliberate "return an unknown
+    slug verbatim" behaviour (see its own docstring) meant the header, nav
+    and colour-mode control all rendered fine while `<main>` was completely
+    empty -- indistinguishable from a genuinely broken page to a visitor.
+    """
+    page.goto(f"{static_app}/#/this-route-does-not-exist")
+    page.wait_for_selector("main h1", timeout=30_000)
+    assert page.eval_on_selector("main h1", "e => e.textContent.trim()") == "Page not found"
+    # The shell around it must still be there: this is a panel inside the
+    # normal page, not a separate error screen.
+    assert page.locator("nav a").count() >= 7
+    assert page.get_by_text("Italy Dashboard").count() > 0
+
+
+def test_a_route_missing_its_switch_case_still_renders_nothing(page, static_app):
+    """The other half of the `NotFound` gate: a slug that IS in `ROUTES` (so a
+    real nav link points at it) must still render nothing in `<main>` if its
+    `switch` `case` were ever deleted -- `NotFound` must not swallow that
+    regression the way an earlier generic `ComingSoon` fallback used to (see
+    App.tsx's comment above the switch). This test cannot delete a `case` at
+    runtime, so it pins the CURRENT behaviour of a route with a real case
+    (home always renders a non-empty `<h1>`), which is exactly what
+    `test_every_nav_link_reaches_a_page_that_renders` already covers end to
+    end; this test exists as a fast, explicit statement of the invariant
+    `NotFound`'s ROUTES-membership gate depends on, not a new code path.
+    """
+    page.goto(f"{static_app}/#/home")
+    page.wait_for_selector("main h1", timeout=30_000)
+    heading = page.eval_on_selector("main h1", "e => e.textContent.trim()")
+    assert heading and heading != "Page not found", heading
 
 
 # Task 5 (deploy verification): the one route-independent invariant that

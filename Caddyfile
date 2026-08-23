@@ -25,7 +25,27 @@
 
 	handle {
 		root * /srv/frontend
-		try_files {path} /index.html
+		# `{path}` alone only matches a file whose name is the literal request
+		# path -- Reflex's static export writes each route as BOTH `<route>.html`
+		# and `<route>/index.html` (see `.web/build/client/`), never a bare
+		# extension-less file, so `try_files {path} /index.html` (the previous
+		# rule) never matched a route file directly and fell straight to the
+		# LAST resort every time: every direct/full-page load of any route other
+		# than `/` silently served home's prerendered HTML with a 200, while the
+		# URL bar still showed the real route. React Router then hydrated
+		# against that real URL, rendered that route's actual page client-side,
+		# and it could not match the home markup the server had actually sent --
+		# a guaranteed React error #418 (hydration mismatch) on every route load,
+		# reproduced locally by serving this exact exported build through this
+		# exact directive (see docs/12-deployment.md's "Routing" section).
+		# `{path}.html` and `{path}/` try the route's OWN prerendered file
+		# first, so the served markup actually matches the requested route and
+		# hydration has nothing to reconcile. `/404.html` (not `/index.html`) is
+		# the final fallback for a genuinely unmatched path: it is Reflex's own
+		# generic pre-hydration shell (react-router's `HydrateFallback`, not a
+		# specific page's prerendered markup), so a truly unknown URL does not
+		# repeat the same mismatch one level up by claiming to be home.
+		try_files {path} {path}.html {path}/ /404.html
 		file_server
 	}
 

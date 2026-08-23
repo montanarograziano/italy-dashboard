@@ -13,12 +13,28 @@ first, then Render.
 
 ## Netlify (primary public demo)
 
+**Live:** <https://italy-dashboard.netlify.app> (verified reachable, HTTP 200,
+as of this writing). Deploys from `origin/main` on Netlify's own schedule
+(a push to `main`, or a manual redeploy), so it can briefly lag behind a
+local checkout with commits not yet pushed — it is a fresh build from the
+repo, not a copy of whatever machine last edited these docs.
+
 `web/` is a second, independent frontend: plain React + Observable Plot,
 querying Parquet directly in the browser through DuckDB-WASM, no backend at
 all. It ships as a static site on [Netlify](https://netlify.com), configured
 by `netlify.toml` at the repo root, and serves the same eight pages the Reflex
 app does (home, crime, population, education, climate, climate × crime,
 labor, economy), built and deployed on its own schedule.
+
+**English-only, unlike the Reflex app.** The Reflex app's navbar has an EN/IT
+toggle (`italy_dashboard/translations.py` + `i18n.py`, persisted via
+`rx.LocalStorage`); this frontend has no equivalent — every UI string is the
+English literal baked into each `web/src/pages/*.tsx` file. Porting
+`translations.py`, plus a second toggle and its own persistence, is a real
+feature (every page's copy, not a config flag), so it is tracked here as a
+known gap rather than added as part of an unrelated fix. Data labels (region,
+crime, offence names) are English in both frontends regardless, straight from
+ISTAT as fetched — see [Dashboard: Language](06-dashboard.md#language).
 
 ### Routing: hash-based, and deliberately no rewrite rule
 
@@ -144,12 +160,20 @@ Playwright:
   cannot tell a genuine 404 apart from Vite's own fallback either, so it is
   not a substitute for this one check.
 
-Not yet verified: an actual deployed Netlify URL. See below.
+**Deployed and live** at <https://italy-dashboard.netlify.app> (see "Live"
+above). The checks above are this project's LOCAL build verification, run
+before any deploy against a plain static server standing in for Netlify's own
+(no-rewrite-rule) behaviour — they are not re-run against production in this
+doc item-by-item; the live site is Netlify's own build of whatever commit
+`origin/main` is at when it last deployed, which can legitimately be a few
+commits behind a local checkout (this repo does not auto-push).
 
-### What's left to deploy (manual, one-time)
+### Initial setup (already done for the URL above; reference for a fork)
 
-This repo does not create Netlify sites or push to a hosting provider. To
-finish the deploy:
+This repo does not create Netlify sites or push to a hosting provider itself
+— the steps below are what actually stood up the live URL above, kept here so
+forking this repo (or standing up a second Netlify site) doesn't require
+reverse-engineering them:
 
 1. Create a Netlify site from this repository (Netlify UI: **Add new site →
    Import an existing project**, or `netlify init` with the Netlify CLI),
@@ -160,16 +184,23 @@ finish the deploy:
    the repo, which is sufficient *provided the tracked branch actually has
    current data committed* (`just refresh`/`just sample` + `just transform`,
    committed, same as any other data update).
-3. Trigger the first deploy and confirm the build log actually runs
-   `scripts/stage_web_data.py` before `vite build` (its stdout prints how
-   many of the staged datasets it found).
-4. Once live, re-run the Verification checks above against the real URL —
-   particularly the DuckDB-WASM bundle choice and `crossOriginIsolated`,
-   which this doc predicts from source but a browser hitting Netlify's
-   actual response headers is the real proof — and record the first-load
-   time and the deployed URL here.
+3. Confirm the build log actually runs `scripts/stage_web_data.py` before
+   `vite build` (its stdout prints how many of the staged datasets it
+   found) — every subsequent push to `main` redeploys the same way
+   automatically, with no further manual steps.
+4. To publish a data update: commit the refreshed snapshot to `main` and
+   push; Netlify rebuilds and redeploys on its own. There is no
+   fetch-on-deploy step, same as Render below — a rebuild is how you
+   publish, not a running process that stays current on its own.
 
 ## Render (secondary: the full Reflex implementation)
+
+**Live:** <https://italy-dashboard.onrender.com> (verified reachable, HTTP
+200, as of this writing; expect a cold-start delay on the free tier's first
+request after idle — see Free-tier caveats below). Like Netlify, this rebuilds
+and redeploys from `origin/main` on its own trigger, not on every local
+commit, so a fix that only exists in an unpushed local checkout is not live
+here yet.
 
 The dashboard also runs on [Render](https://render.com)'s free tier as a
 single Docker container, as a working reference for the server-driven
@@ -375,6 +406,23 @@ Local proof this actually works, using `just docker-serve`:
      stripe colours) that only exist once the climate page's state has
      actually loaded over the websocket: a static shell with a dead backend
      would never produce them. All three passed against the container.
+5. **Every route hydrates clean, and the `Caddyfile`'s `try_files` resolves
+   each route to its OWN prerendered file.** `tests/browser/
+   test_render_deploy_shape.py` (needs `caddy` on `PATH`, e.g. `brew install
+   caddy`; skips itself with a clear reason otherwise) spins up this exact
+   shape — a real `reflex export --frontend-only`, a separate backend-only
+   process, and Caddy reading this repo's own checked-in `Caddyfile` — and
+   asserts zero React errors (hydration mismatches included) on a fresh,
+   direct load of every route, that a direct route load actually renders
+   THAT route's content rather than silently falling back to home's, and
+   that a genuinely unknown path reaches the branded 404 page
+   (`italy_dashboard/pages/not_found.py`). This is the regression test for a
+   real defect: `try_files {path} /index.html` alone never matches Reflex's
+   exported `<route>.html`/`<route>/index.html` files, so it fell straight to
+   serving home's markup for every other route's direct load, which React
+   Router then hydrated against the real (different) URL — a guaranteed
+   React error #418 on every route but `/`, reproduced locally against this
+   exact build before the `try_files` fix landed.
 
 ### Deploying
 

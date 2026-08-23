@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import shutil
 import signal
 import socket
 import subprocess
@@ -390,3 +391,150 @@ def built_static_app(_require_chromium: None) -> Iterator[str]:
         yield base_url
     finally:
         _terminate(proc)
+
+
+@pytest.fixture(scope="session")
+def _require_caddy() -> None:
+    """Skip, with a clear reason, if the `caddy` binary isn't on PATH.
+
+    Mirrors `_require_chromium` above: checked before `render_deploy_shape`
+    spends time on a real `reflex export` + backend boot, and gives a actionable
+    install hint (`brew install caddy` / https://caddyserver.com/docs/install)
+    rather than a bare `FileNotFoundError` from `subprocess.Popen`.
+    """
+    if shutil.which("caddy") is None:
+        pytest.skip("caddy is not installed; see https://caddyserver.com/docs/install")
+
+
+@pytest.fixture(scope="module")
+def render_deploy_shape(
+    _require_chromium: None, _require_caddy: None, tmp_path_factory: pytest.TempPathFactory
+) -> Iterator[str]:
+    """The real Render single-port shape: a static export, a separate
+    backend-only Reflex process, and Caddy in front, reading the repo's OWN
+    checked-in `Caddyfile` -- not a hand-copied duplicate of it.
+
+    Every other Reflex fixture here (`app_server`) runs `reflex run --env
+    prod`, which serves frontend and backend from ONE integrated process and
+    never touches `Caddyfile` at all. That gap is exactly how the real
+    `try_files {path} /index.html` bug shipped and stayed invisible: it only
+    manifests when a route's request is resolved by Caddy against the
+    EXPORTED static files (`reflex export --frontend-only`, what
+    `Dockerfile`/`render.yaml` actually ship), which `{path}` alone cannot
+    match -- Reflex writes each route as `<route>.html` and
+    `<route>/index.html`, never a bare extension-less file -- so the old rule
+    fell through to `/index.html` (home's prerendered markup) for every
+    OTHER route's direct load. React Router then hydrated against the real
+    URL, rendered that route's real page client-side, and could not
+    reconcile it with the home markup the server had actually sent: a
+    guaranteed React error #418 on every non-home route, reproduced by hand
+    while diagnosing this exact fixture's scenario and now guarded here.
+
+    The Caddyfile's `root * /srv/frontend` is the one line substituted at
+    test time (Docker's baked-in path), so the `try_files`/`handle` rules
+    under test are byte-for-byte what ships -- a regression there fails this
+    fixture's callers, not a copy nobody keeps in sync.
+
+    `scope="module"`, not `"session"` like the other heavy server fixtures in
+    this file: this one spins up a SECOND full Reflex backend process (on top
+    of whatever `app_server` already has running) plus a Caddy process, and
+    it is only used by `test_render_deploy_shape.py`, so there is no reason
+    to keep either alive once this module's tests finish.
+
+    `REFLEX_WEB_WORKDIR` is set to an isolated `tmp_path_factory` directory
+    for BOTH the export and the backend below -- not the repo's real `.web/`,
+    Reflex's default. `app_server` (used by three earlier-collected files:
+    `test_axis_contrast.py`, `test_band_opacity.py`, `test_loading_state.py`)
+    is a SESSION-scoped `reflex run --env prod` already serving out of that
+    real `.web/build` by the time this fixture's module runs. `reflex
+    export` recompiles the frontend from scratch and rewrites every
+    content-hashed asset filename in that same directory -- confirmed by
+    hand to genuinely corrupt `app_server`'s already-served state for the
+    REST OF THE SESSION: it hands out HTML/JS referencing the OLD hashes,
+    which the export had just deleted, so a later `app_server`-backed test
+    (`test_stripe_colors.py`, last in collection order) intermittently
+    fails to find content that never actually rendered, its JS chunk having
+    404'd. Reproduced 2/2 with a shared `.web/`, even after moving this
+    fixture from session to module scope (proving IT WAS THE SHARED WRITE,
+    not merely this fixture outliving its own module); 0/3 once the export
+    and backend both point at an isolated `REFLEX_WEB_WORKDIR` instead.
+    """
+    _ensure_sample_data()
+    isolated_web_dir = tmp_path_factory.mktemp("render_deploy_shape_web")
+    reflex_env = {
+        **os.environ,
+        "PYTHONUNBUFFERED": "1",
+        "REFLEX_WEB_WORKDIR": str(isolated_web_dir),
+    }
+    subprocess.run(
+        ["uv", "run", "reflex", "export", "--frontend-only", "--env", "prod", "--no-zip"],
+        cwd=REPO_ROOT,
+        env=reflex_env,
+        check=True,
+    )
+    backend_port = _free_port()
+    backend_output: list[str] = []
+    backend_proc = subprocess.Popen(
+        [
+            "uv",
+            "run",
+            "reflex",
+            "run",
+            "--backend-only",
+            "--env",
+            "prod",
+            "--backend-host",
+            "127.0.0.1",
+            "--backend-port",
+            str(backend_port),
+            "--loglevel",
+            "warning",
+        ],
+        cwd=REPO_ROOT,
+        env=reflex_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+    Thread(target=_drain_output, args=(backend_proc, backend_output), daemon=True).start()
+    try:
+        _wait_until_serving(
+            backend_proc,
+            f"http://127.0.0.1:{backend_port}/ping",
+            backend_output,
+            label="`reflex run --backend-only`",
+        )
+
+        caddy_port = _free_port()
+        caddyfile_text = (
+            (REPO_ROOT / "Caddyfile")
+            .read_text()
+            .replace("/srv/frontend", str(isolated_web_dir / "build" / "client"))
+        )
+        caddyfile_text = caddyfile_text.replace("localhost:8000", f"127.0.0.1:{backend_port}")
+        # Also isolated (not `.web/`, see the fixture docstring): a stray
+        # generated Caddyfile has no serving-conflict risk of its own, but
+        # keeping every artifact this fixture writes inside `isolated_web_dir`
+        # means one temp-dir cleanup covers all of it, not most of it.
+        caddy_config = isolated_web_dir / "Caddyfile.test"
+        caddy_config.write_text(caddyfile_text)
+        base_url = f"http://127.0.0.1:{caddy_port}"
+        caddy_output: list[str] = []
+        caddy_proc = subprocess.Popen(
+            ["caddy", "run", "--config", str(caddy_config), "--adapter", "caddyfile"],
+            cwd=REPO_ROOT,
+            env={**os.environ, "PORT": str(caddy_port)},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            start_new_session=True,
+        )
+        Thread(target=_drain_output, args=(caddy_proc, caddy_output), daemon=True).start()
+        try:
+            _wait_until_serving(caddy_proc, base_url, caddy_output, label="`caddy run`")
+            yield base_url
+        finally:
+            _terminate(caddy_proc)
+    finally:
+        _terminate(backend_proc)

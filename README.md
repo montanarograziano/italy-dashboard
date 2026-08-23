@@ -49,8 +49,9 @@ ISTAT · INPS · MUR/USTAT · Open-Meteo/Copernicus · no API keys required
 Everything is Python: the primary UI is a [Reflex](https://reflex.dev) app (compiled
 to a React frontend + FastAPI backend); a second, independent static frontend
 (`web/`, TypeScript + DuckDB-WASM) queries the same Parquet marts entirely in the
-browser, no backend at all. Both read the same local snapshot. The interface is
-bilingual — switch between English and Italian from the navbar (EN · IT).
+browser, no backend at all. Both read the same local snapshot. The Reflex app is
+bilingual — switch between English and Italian from the navbar (EN · IT); the
+static frontend is English-only today (see [below](#the-static-frontend-web)).
 
 ## 🏗️ How it works
 
@@ -113,7 +114,14 @@ the `justfile` (e.g. `uv run python -m ingestion.fetch sample`).
 ### The static frontend (`web/`)
 
 An independent, backend-free build of the same dashboard, querying Parquet directly
-in the browser via DuckDB-WASM:
+in the browser via DuckDB-WASM. It mirrors the Reflex app's eight pages and colour
+modes, but is **English-only**: there is no EN/IT toggle here, only the Reflex app's
+navbar has one. Data labels (region/crime/offence names) are English in both
+frontends regardless, since both come from ISTAT as fetched — see
+[Dashboard: Language](docs/06-dashboard.md#language). Adding UI-string i18n to this
+frontend would mean porting `italy_dashboard/translations.py` and building a second
+toggle, which is a real feature, not a one-line change, so it's tracked as a gap
+rather than done here.
 
 ```bash
 cd web
@@ -166,16 +174,16 @@ Two public deployments of two different frontends — see
 [Deployment](docs/12-deployment.md) for the full picture (routing, data-baking,
 free-tier caveats).
 
-- **Netlify — primary public demo.** The static frontend (`web/`), always-on, no
-  cold start, no backend to keep warm. Built from `netlify.toml` against the
-  committed `data/marts` snapshot.
-- **Render — secondary, full Reflex implementation.** A single Docker container
-  (Caddy + the Reflex backend behind one port) demonstrating the server-driven
-  Python app end to end. Free tier: expect cold starts and websocket drops on
+- **Netlify — primary public demo:** <https://italy-dashboard.netlify.app>. The
+  static frontend (`web/`), always-on, no cold start, no backend to keep warm.
+  Built from `netlify.toml` against the `data/marts` snapshot committed on
+  `main` at deploy time — so it can lag a few commits behind this checkout;
+  see [Deployment](docs/12-deployment.md) for what's currently live there.
+- **Render — secondary, full Reflex implementation:**
+  <https://italy-dashboard.onrender.com>. A single Docker container (Caddy +
+  the Reflex backend behind one port) demonstrating the server-driven Python
+  app end to end. Free tier: expect cold starts and websocket drops on
   spin-down — read [Deployment](docs/12-deployment.md) before relying on it.
-
-Live URLs: not yet published here — see [Deployment](docs/12-deployment.md) for
-what's left to finish the first deploy of each.
 
 ### Self-hosting
 
