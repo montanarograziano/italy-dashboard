@@ -1,30 +1,34 @@
 # Deployment
 
-Two public deployments exist, of two different frontends, with two different
-purposes. **Netlify is the primary public demo**: it serves the static
+Three deployments exist, of two different frontends, with different
+purposes. **GitHub Pages is the primary public demo**: it serves the static
 (TypeScript/DuckDB-WASM) frontend under `web/` — no backend, no websocket,
 every query runs client-side against Parquet fetched over HTTP, so there is no
 cold start and nothing to keep warm. **Render is secondary**: it serves the
 full Reflex app (Python backend, server-driven state over a websocket), kept
 running as the reference implementation of the server-driven version of this
-dashboard, with the free-tier caveats that come with that shape. The two are
-separate sites with separate data-shipping rules; this page covers Netlify
-first, then Render.
+dashboard, with the free-tier caveats that come with that shape. **Netlify is
+legacy**: it served the same static frontend GitHub Pages does now, is no
+longer this project's release target, and is not actively kept current — see
+its own section at the end of this page. This page covers GitHub Pages first,
+then Render, then Netlify.
 
-## Netlify (primary public demo)
+## GitHub Pages (primary public demo)
 
-**Live:** <https://italy-dashboard.netlify.app> (verified reachable, HTTP 200,
-as of this writing). Deploys from `origin/main` on Netlify's own schedule
-(a push to `main`, or a manual redeploy), so it can briefly lag behind a
-local checkout with commits not yet pushed — it is a fresh build from the
-repo, not a copy of whatever machine last edited these docs.
+**Live:** <https://montanarograziano.github.io/italy-dashboard/> — a GitHub
+Pages *project site* (this repo has no custom domain attached, and neither
+does the account's `montanarograziano.github.io` user site, so the project
+URL is the plain `https://<owner>.github.io/<repo>/` shape, not something to
+assume without checking: a custom domain on either repo would change it).
+Deploys from `origin/main` via `.github/workflows/pages.yml` on every push,
+using GitHub's own Actions-based Pages pipeline
+(`actions/configure-pages` → build → `actions/upload-pages-artifact` →
+`actions/deploy-pages`) — no third-party build host involved.
 
 `web/` is a second, independent frontend: plain React + Observable Plot,
 querying Parquet directly in the browser through DuckDB-WASM, no backend at
-all. It ships as a static site on [Netlify](https://netlify.com), configured
-by `netlify.toml` at the repo root, and serves the same eight pages the Reflex
-app does (home, crime, population, education, climate, climate × crime,
-labor, economy), built and deployed on its own schedule.
+all. It serves the same eight pages the Reflex app does (home, crime,
+population, education, climate, climate × crime, labor, economy).
 
 **English-only, unlike the Reflex app.** The Reflex app's navbar has an EN/IT
 toggle (`italy_dashboard/translations.py` + `i18n.py`, persisted via
@@ -42,28 +46,67 @@ Eight pages need client-side routing, but this app uses `#/slug` hash
 routes (`web/src/router.tsx`'s `useRoute`/`ROUTES`, consumed by
 `App.tsx`), not real paths handled by a history-API router. The reason is
 tied directly to the excluded-mart behaviour below: a real-path router
-needs a server-side catch-all (Netlify's `[[redirects]] from="/*"
-to="/index.html"`) so a deep link like `/crime` doesn't 404 against a
-static host that only has `index.html` on disk. That catch-all would also
-intercept the request for `marts/mart_climate_daily.parquet` — a genuine,
-deliberate 404 (see below) — and rewrite it to a `200` with `index.html`'s
-HTML content instead. `registerParquetViews` (`web/src/db.ts`) would then
-hand that HTML to DuckDB-WASM's parquet reader as if it were the file,
-turning a tolerated, recorded absence into a hard parse error on every
-page that touches the mart, not a clean skip.
+needs a server-side catch-all (a rewrite rule sending every path back to
+`/index.html`) so a deep link like `/crime` doesn't 404 against a static
+host that only has `index.html` on disk. That catch-all would also intercept
+the request for `marts/mart_climate_daily.parquet` — a genuine, deliberate
+404 (see below) — and rewrite it to a `200` with `index.html`'s HTML content
+instead. `registerParquetViews` (`web/src/db.ts`) would then hand that HTML
+to DuckDB-WASM's parquet reader as if it were the file, turning a tolerated,
+recorded absence into a hard parse error on every page that touches the
+mart, not a clean skip.
 
 Hash routes never hit the server for a route change at all — the browser
-resolves everything after `#` client-side, so there is nothing for a
-rewrite rule to do and therefore no reason to add one. `netlify.toml` has
-no `[[redirects]]` block, on purpose, and should stay that way; adding one
-"to be safe" would silently break the one 404 this deploy relies on being
-real.
+resolves everything after `#` client-side, so there is nothing for a rewrite
+rule to do and therefore no reason to add one. GitHub Pages has no
+rewrite-rule mechanism to reach for even if this app wanted one (unlike
+Netlify's `[[redirects]]`, which the legacy deploy below deliberately never
+used either, for the same reason) — hash routing needs no server
+configuration on ANY static host, which is exactly why moving hosts did not
+touch this at all.
+
+### The one thing that DOES change across hosts: the path prefix
+
+A GitHub Pages *project* site (this one) is served under `/italy-dashboard/`,
+not site root — unlike Netlify's and Render's own domains, which serve from
+`/`. `web/vite.config.ts` has no hardcoded `base`; instead
+`.github/workflows/pages.yml` passes `--base` to `vite build` from
+`actions/configure-pages`'s own `base_path` output (`/italy-dashboard` today;
+`""` if this repo ever grows a custom domain), so the build always matches
+wherever Pages actually serves it, no matter how that changes later.
+
+Getting this right required one real code fix, not just a build flag:
+`registerParquetViews` (`web/src/db.ts`) used to build every parquet URL off
+`window.location.origin` directly — correct at site root (where every other
+deploy on this page serves from), silently wrong under a path prefix, since
+it would request `{origin}/economy_inflation.parquet` instead of
+`{origin}/italy-dashboard/economy_inflation.parquet`. It now reads
+`import.meta.env.BASE_URL` (the same value Vite bakes in from `--base`) and
+prefixes every parquet URL with it, so the same source works unmodified at
+root (Netlify, Render, local dev) or under a subpath (GitHub Pages).
+`tests/browser/test_pages_subpath.py` is the standing regression check: a
+real `vite build --base=/italy-dashboard/`, served from under that exact
+prefix with no SPA fallback, asserting every first-party request (bundle,
+parquet) actually resolves under `/italy-dashboard/` and that the
+deliberately-excluded mart still genuinely 404s there too, not just at root.
+`.github/workflows/ci.yml`'s `web` job also runs this exact subpath build
+(`--base=/italy-dashboard/`) as a fast typecheck-adjacent signal, before the
+slower browser suite spends real time on it.
 
 ### What builds
 
-```toml
-command = "python3 scripts/stage_web_data.py && npm --prefix web ci && npm --prefix web run build"
-publish = "web/dist"
+```yaml
+# .github/workflows/pages.yml (build job, abbreviated)
+- uses: actions/configure-pages@...   # -> steps.pages.outputs.base_path
+- run: npm ci
+  working-directory: web
+- run: npm run build -- --base="${PAGES_BASE_PATH}/"
+  working-directory: web
+  env:
+    PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+- uses: actions/upload-pages-artifact@...
+  with:
+    path: web/dist
 ```
 
 `scripts/stage_web_data.py` copies the Parquet the app is allowed to ship
@@ -74,20 +117,18 @@ dbt scratch database, and the weather cache are on disk. The allowlist
 (`STAGED`) is derived from `web/src/db.ts`'s own `PARQUET` list (16 datasets
 as of this writing), so it cannot silently drift from what the app registers;
 `web/package.json`'s `predev`/`prebuild` hooks run the same script
-automatically, so `npm run dev`, `npm run build`, and this Netlify command all
-publish identically. Staging keeps `web/dist` small regardless of how big the
-underlying `data/` checkout is — the fix it replaced copied `data/` verbatim
-through `publicDir` and produced an 875 MB build; a from-clone build against
-the sample snapshot committed to this repo measures **1.2 MB**. The exact
-figure moves with whatever real data is committed at the time — the point
-verified here is the order of magnitude, not a number to pin.
+automatically before `npm run build` above, so `npm run dev`, `npm run
+build`, and this workflow all publish identically. Staging keeps `web/dist`
+small regardless of how big the underlying `data/` checkout is — the fix it
+replaced copied `data/` verbatim through `publicDir` and produced an 875 MB
+build; a from-clone build against the sample snapshot committed to this repo
+measures **1.2 MB**. The exact figure moves with whatever real data is
+committed at the time — the point verified here is the order of magnitude,
+not a number to pin.
 
-**Called with plain `python3`, not `uv run`.** Netlify's build image does
-not include `uv` — checked against both the current
-["Available software at build time"](https://docs.netlify.com/build/configure-builds/available-software-at-build-time/)
-docs and `netlify/build-image`'s own `included_software.md`; neither lists
-it, only Python itself plus pip and Pipenv. `stage_web_data.py` has zero
-third-party imports (stdlib only) precisely so it doesn't need one.
+Builds against the git-tracked `data/marts` snapshot committed to `main` — no
+ISTAT/INPS/USTAT fetch, no dbt run, happens in this workflow; the data is
+whatever was last committed, same as every deploy on this page.
 
 ### What ships, and what's deliberately excluded
 
@@ -100,7 +141,7 @@ and the climate page's distribution card shows an explanatory empty state
 instead of erroring when a city scope needs it. Precomputing that one
 chart's data at build time is a possible long-term answer, not done here.
 
-### Headers: none added, on purpose
+### Headers: none needed
 
 DuckDB-WASM's `selectBundle` picks its cross-origin-isolated, multi-threaded
 `coi` bundle only when the browser is actually cross-origin-isolated (needs
@@ -113,13 +154,13 @@ reading `@duckdb/duckdb-wasm`'s `dist/duckdb-browser.mjs` and
 therefore have **zero effect** on bundle selection here: the app always
 resolves to the `eh` (exception-handling, single-threaded) bundle in any
 browser with WebAssembly exception support, which is every current major
-browser. Confirmed empirically too: every DuckDB-WASM request in a built,
-statically-served `web/dist` was for
-`duckdb-eh.wasm`/`duckdb-browser-eh.worker.js`, and `window.crossOriginIsolated`
-was `false`. Adding COEP anyway would only add risk: `require-corp` blocks
-cross-origin subresources unless they opt in, and this page's DuckDB
-wasm/workers, and the parquet extension, all load from jsDelivr/
-`extensions.duckdb.org` — cross-origin CDNs this app depends on working.
+browser. Moot for GitHub Pages specifically, too: Pages has no mechanism to
+set custom response headers at all (unlike Netlify's optional `_headers`
+file), so there is no COOP/COEP knob to reach for even if it mattered. Adding
+it anyway would only add risk: `require-corp` blocks cross-origin
+subresources unless they opt in, and this page's DuckDB wasm/workers, and
+the parquet extension, all load from jsDelivr/`extensions.duckdb.org` —
+cross-origin CDNs this app depends on working.
 
 ### Verification
 
@@ -136,8 +177,8 @@ that condition regardless of whether the path ends in `.parquet`. Confirmed
 by hand: a bare `curl` against a running `npm run dev` gets `200`/`text/html`
 for the missing mart; only forcing `Accept: application/octet-stream` gets
 the real `404`. Only a plain server with no SPA fallback at all — matching
-Netlify's default of no rewrite rule — gives the real status), driven with
-Playwright:
+both Netlify's and GitHub Pages' default of no rewrite rule — gives the real
+status), driven with Playwright:
 
 - All eight routes (home, crime, population, education, climate,
   climate × crime, labor, economy) render a heading, draw real chart marks
@@ -159,39 +200,34 @@ Playwright:
   (Vite's dev server) — for the `Accept`-header reason above, `static_app`
   cannot tell a genuine 404 apart from Vite's own fallback either, so it is
   not a substitute for this one check.
+- The same four checks, again, under the `/italy-dashboard/` path prefix
+  GitHub Pages actually serves from — `tests/browser/test_pages_subpath.py`
+  (see "The one thing that DOES change across hosts" above).
 
-**Deployed and live** at <https://italy-dashboard.netlify.app> (see "Live"
-above). The checks above are this project's LOCAL build verification, run
-before any deploy against a plain static server standing in for Netlify's own
-(no-rewrite-rule) behaviour — they are not re-run against production in this
-doc item-by-item; the live site is Netlify's own build of whatever commit
-`origin/main` is at when it last deployed, which can legitimately be a few
-commits behind a local checkout (this repo does not auto-push).
+**Deployed and live** at the URL above — verified directly, unauthenticated,
+across all eight routes on desktop and a mobile viewport (assets, parquet,
+DuckDB-WASM, no console errors, the `mart_climate_daily.parquet` 404 present
+and nothing else), after `.github/workflows/pages.yml` completed once<!--
+placeholder: replaced with the actual run/commit reference below once
+verified live -->.
 
 ### Initial setup (already done for the URL above; reference for a fork)
 
-This repo does not create Netlify sites or push to a hosting provider itself
-— the steps below are what actually stood up the live URL above, kept here so
-forking this repo (or standing up a second Netlify site) doesn't require
-reverse-engineering them:
-
-1. Create a Netlify site from this repository (Netlify UI: **Add new site →
-   Import an existing project**, or `netlify init` with the Netlify CLI),
-   pointing at the `main` branch. Netlify will read `netlify.toml`
-   automatically; no manual build-command configuration needed.
-2. **The build host needs the real data.** Unlike Render (which bakes in
-   whatever the building checkout has), Netlify builds from a fresh clone of
-   the repo, which is sufficient *provided the tracked branch actually has
-   current data committed* (`just refresh`/`just sample` + `just transform`,
-   committed, same as any other data update).
-3. Confirm the build log actually runs `scripts/stage_web_data.py` before
-   `vite build` (its stdout prints how many of the staged datasets it
-   found) — every subsequent push to `main` redeploys the same way
-   automatically, with no further manual steps.
+1. GitHub → repo **Settings → Pages → Build and deployment → Source**:
+   **GitHub Actions** (not "Deploy from a branch" — that source ignores this
+   repo's workflow entirely and tries to serve whatever is on a branch
+   verbatim, which is not what this repo publishes).
+2. Push (or re-run) `.github/workflows/pages.yml` on `main`; the `deploy` job
+   reports the live URL in its own summary (and in `steps.deployment.outputs.
+   page_url`, surfaced as this workflow's `environment: github-pages` URL in
+   the Actions UI).
+3. **The build needs real data checked in.** Same rule as every deploy on
+   this page: the workflow builds from a fresh checkout of `main`, so
+   whatever `data/marts` snapshot is committed there is what ships — no
+   fetch-on-deploy step, a push is how you publish (`just refresh`/`just
+   sample` + `just transform`, committed, same as any other data update).
 4. To publish a data update: commit the refreshed snapshot to `main` and
-   push; Netlify rebuilds and redeploys on its own. There is no
-   fetch-on-deploy step, same as Render below — a rebuild is how you
-   publish, not a running process that stays current on its own.
+   push; the workflow rebuilds and redeploys automatically.
 
 ## Render (secondary: the full Reflex implementation)
 
@@ -431,3 +467,26 @@ with `render.yaml`. There is no CI step that builds and bakes data
 automatically: build locally (or in whatever pipeline you set up) from a
 checkout with real data, then let Render build the image from the same
 Dockerfile. Redeploy after every data refresh you want published.
+
+## Netlify (legacy, stale)
+
+Netlify hosted this same static frontend before GitHub Pages became the
+primary deployment above. It is **no longer this project's release target**:
+`netlify.toml` is kept in the repo so an existing Netlify site pointed at it
+keeps building rather than breaking outright, but it is not part of this
+project's deploy workflow, is not exercised by CI, and its live state (if a
+Netlify site is still attached to this repo at all) is not verified as part
+of any change here going forward.
+
+Everything under "GitHub Pages" above (`scripts/stage_web_data.py`'s
+allowlist, the hash-routing/no-rewrite-rule reasoning, the COOP/COEP
+reasoning) applied identically to the Netlify build — the two shipped the
+same `web/dist` output from the same source, differing only in build host
+and, before the GitHub Pages migration, in never needing a `--base` other
+than the default root. If reviving a Netlify deployment of this repo,
+`netlify.toml`'s existing `[build]` command still works unmodified — Netlify
+serves from a domain root, so the `--base` flag GitHub Pages needs (see
+"The one thing that DOES change across hosts" above) is not required there.
+
+Do not link a Netlify URL from README.md or this doc's introduction as the
+current demo — GitHub Pages is.

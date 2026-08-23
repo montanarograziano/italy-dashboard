@@ -89,6 +89,13 @@ jobs:
       # no Python/dbt setup needed in this job.
       - run: npm run build
         working-directory: web
+      # GitHub Pages (.github/workflows/pages.yml) builds this same app under
+      # a `/italy-dashboard/` path prefix, not site root -- a distinct build
+      # configuration (Vite's `base`) that the root build above cannot catch
+      # a regression in. A separate `--outDir` keeps this from clobbering the
+      # root build's `web/dist` that the browser job below still needs.
+      - run: npm run build -- --base=/italy-dashboard/ --outDir dist-pages-subpath
+        working-directory: web
 
   browser:
     name: Conformance + browser coverage

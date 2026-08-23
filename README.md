@@ -19,14 +19,16 @@ ISTAT · INPS · MUR/USTAT · Open-Meteo/Copernicus · no API keys, no accounts,
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
 ![No pandas](https://img.shields.io/badge/pandas-not%20invited-lightgrey)
 
-[![Live demo: Netlify](https://img.shields.io/badge/live_demo-italy--dashboard.netlify.app-00C7B7)](https://italy-dashboard.netlify.app)
+[![Live demo: GitHub Pages](https://img.shields.io/badge/live_demo-github.io%2Fitaly--dashboard-181717?logo=github&logoColor=white)](https://montanarograziano.github.io/italy-dashboard/)
 [![Live demo: Render](https://img.shields.io/badge/reflex_demo-italy--dashboard.onrender.com-46E3B7)](https://italy-dashboard.onrender.com)
 
-<a href="https://italy-dashboard.netlify.app">
+<a href="https://montanarograziano.github.io/italy-dashboard/">
 <img src="docs/readme/crime.png" width="820" alt="Crime page of the live public dashboard: region, crime type, citizenship, sex and age filters above a real, ISTAT-sourced trend of alleged offenders reported to the police through 2024, plus year-over-year and foreign-share KPI tiles">
 </a>
 
-*Live screenshot, not a mockup: [italy-dashboard.netlify.app](https://italy-dashboard.netlify.app), taken from the primary public demo.*
+*Live screenshot, not a mockup: the primary public demo, now on
+[GitHub Pages](https://montanarograziano.github.io/italy-dashboard/) (see
+[Deployment](docs/12-deployment.md) for the legacy Netlify build this replaced).*
 
 **🇬🇧 [Read in English ↓](#english) &nbsp;·&nbsp; 🇮🇹 [Leggi in italiano ↓](#italiano)**
 
@@ -81,7 +83,7 @@ for how.
 <img src="docs/readme/home.png" width="480" alt="Home page of the live dashboard showing four KPI tiles: felony convictions, resident population, unemployment rate, and inflation, each with its reference period">
 <img src="docs/readme/mobile.png" width="200" alt="The same dashboard on a 390-pixel mobile viewport, navigation and KPI cards stacked vertically, no separate mobile build">
 
-*Same app, no separate mobile build: [italy-dashboard.netlify.app](https://italy-dashboard.netlify.app) on desktop and on a phone-width viewport.*
+*Same app, no separate mobile build: [the GitHub Pages demo](https://montanarograziano.github.io/italy-dashboard/) on desktop and on a phone-width viewport.*
 
 > [!NOTE]
 > **Climate and Climate × Crime are explicitly marked beta.** The temperature
@@ -105,8 +107,8 @@ the preference persists in the browser. Data values themselves (region and
 crime-category names) stay in English in both frontends regardless, since they
 come straight from ISTAT's SDMX responses as fetched, not from the toggle, see
 [Dashboard: Language](docs/06-dashboard.md#language). The static app (the
-primary Netlify demo above) does not have the toggle at all yet: a full Italian
-UI pass is tracked, not silently assumed.
+primary GitHub Pages demo above) does not have the toggle at all yet: a full
+Italian UI pass is tracked, not silently assumed.
 
 <img src="docs/readme/bilingual-en.png" width="430" alt="Reflex deployment home page in English: navbar with an EN and IT toggle, EN highlighted, KPI tiles in English">
 <img src="docs/readme/bilingual-it.png" width="430" alt="The same page one click later: navbar toggle now shows IT highlighted, every navigation label and KPI tile translated into Italian">
@@ -207,8 +209,8 @@ Said plainly, not buried:
   credit where the data is *displayed*; this documentation carries it, the running
   UI does not yet. Tracked in [Roadmap](docs/11-roadmap.md).
 - **The static app has no Italian UI yet;** see [How it works](#how-it-works) above.
-- **Live deployments are snapshots, not live feeds.** Both the Netlify and Render
-  URLs above serve whatever was last built and deployed; there is no
+- **Live deployments are snapshots, not live feeds.** Both the GitHub Pages and
+  Render URLs above serve whatever was last built and deployed; there is no
   scheduled auto-redeploy, so a page added in a recent commit can lag behind on a
   given deploy until the next manual rebuild. What is *in the repository* at any
   commit is the source of truth; see [Deployment](docs/12-deployment.md).
@@ -315,7 +317,7 @@ salvata nel browser. I valori dei dati (nomi di regioni e categorie di reato)
 restano in inglese in entrambi i frontend, perché arrivano direttamente dalle
 risposte SDMX di ISTAT così come raccolte, non dal selettore, vedi [Dashboard:
 Language](docs/06-dashboard.md#language) (in inglese). L'app statica (la demo
-principale su Netlify) non ha ancora nessun selettore di lingua: una
+principale su GitHub Pages) non ha ancora nessun selettore di lingua: una
 localizzazione italiana completa dell'interfaccia è nella roadmap, non data per
 scontata.
 
@@ -415,8 +417,8 @@ Detti chiaramente, non nascosti:
   nella [Roadmap](docs/11-roadmap.md).
 - **L'app statica non ha ancora un'interfaccia in italiano;** vedi
   [Come funziona](#come-funziona) sopra.
-- **I deployment live sono snapshot, non flussi live.** Sia Netlify sia Render
-  servono l'ultima build pubblicata; non c'è un redeploy automatico
+- **I deployment live sono snapshot, non flussi live.** Sia GitHub Pages sia
+  Render servono l'ultima build pubblicata; non c'è un redeploy automatico
   programmato, quindi una pagina aggiunta in un commit recente può non essere
   ancora nel deployment finché non viene ripubblicato a mano. La verità di
   riferimento è sempre il repository al commit corrente; vedi

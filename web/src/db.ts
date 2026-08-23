@@ -69,7 +69,21 @@ export async function registerParquetViews(
  const failed: string[] = [];
  for (const path of paths) {
   const view = path.split("/").pop()!;
-  const url = new URL(`/${path}.parquet`, window.location.origin).href;
+  // `import.meta.env.BASE_URL`, not a bare `/${path}.parquet` off
+  // `window.location.origin`: Vite bakes the `base` this build was compiled
+  // with into BASE_URL ("/" at the site root, "/italy-dashboard/" for a
+  // GitHub Pages project site -- see .github/workflows/pages.yml, which
+  // passes `--base` from `actions/configure-pages`'s own output rather than
+  // a hardcoded string, so a custom domain or repo rename cannot desync the
+  // two). BASE_URL always carries its own leading AND trailing slash, so
+  // concatenating it straight onto `path` (which never has a leading slash)
+  // reaches the right file at either root or a subpath with no extra
+  // joining logic. Getting this wrong at the site root would have been
+  // invisible (BASE_URL is "/" there too, same result as the old
+  // hardcoded leading slash) -- it only breaks under a subpath, which is
+  // exactly the deploy shape this build previously had no coverage for
+  // (see tests/browser/test_pages_subpath.py).
+  const url = new URL(`${import.meta.env.BASE_URL}${path}.parquet`, window.location.origin).href;
   try {
    // biome-ignore lint: DuckDB-WASM requires raw SQL with interpolated
    // identifiers (table/view names cannot be parameterized); view names come from

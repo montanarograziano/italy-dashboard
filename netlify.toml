@@ -1,3 +1,11 @@
+# LEGACY / STALE: this is no longer the project's release target. GitHub
+# Pages (.github/workflows/pages.yml) is now the primary deployment of the
+# same static frontend; see docs/12-deployment.md's "Netlify (legacy)"
+# section. Kept as-is (not deleted) purely so an existing Netlify site
+# pointed at this repo keeps building rather than breaking outright -- it is
+# not actively verified against new commits and should not be linked from
+# README/docs as the current demo.
+#
 # Deploys the static (TypeScript/DuckDB-WASM) frontend under web/. This is a
 # SEPARATE site from the Reflex app Render hosts (see docs/12-deployment.md):
 # no backend, no websocket, just static files plus data queried client-side.

@@ -393,6 +393,78 @@ def built_static_app(_require_chromium: None) -> Iterator[str]:
         _terminate(proc)
 
 
+@pytest.fixture(scope="module")
+def built_static_app_under_subpath(
+    _require_chromium: None, tmp_path_factory: pytest.TempPathFactory
+) -> Iterator[str]:
+    """Same real-build-plus-plain-server shape as `built_static_app`, but
+    built with Vite's `base` set to `/italy-dashboard/` and served from
+    under that same path prefix -- exactly the shape GitHub Pages serves a
+    project site in (`.github/workflows/pages.yml`), and NOT the shape any
+    other fixture in this file exercises. `built_static_app`/`static_app`
+    both serve `web/dist` (or Vite dev) at the origin ROOT, which is also
+    where `web/vite.config.ts`'s default (unset) `base` resolves to -- so
+    neither could ever have caught the parquet-URL bug this fixture exists
+    to guard against: `registerParquetViews` (`web/src/db.ts`) used to build
+    every parquet URL off `window.location.origin` directly, silently
+    dropping any path prefix Vite's `base` had actually been given.
+
+    A SEPARATE `--outDir` (not `web/dist`) for the same reason CI's `web` job
+    uses one (`.github/workflows/ci.yml`): this fixture is `scope="module"`
+    and this module can run in the same session as `test_static_app.py`'s
+    `built_static_app` (`scope="session"`) -- building over the shared
+    `web/dist` a moment after that fixture already handed out a base URL
+    pointing at it would silently rewrite what that URL serves for the rest
+    of the session.
+
+    The subpath itself is produced by SYMLINKING the built output into a
+    fresh temp directory as `<tmp>/italy-dashboard`, then rooting a plain
+    `http.server` at `<tmp>` -- so `{base_url}/italy-dashboard/...` resolves
+    through the symlink to exactly the files `upload-pages-artifact` would
+    have uploaded, with no copy step to keep in sync. Deliberately the same
+    plain-server-with-no-fallback shape as `built_static_app` (see that
+    fixture's docstring for why: Vite's dev server and `vite preview` both
+    apply an `Accept`-header-keyed SPA fallback that would mask the
+    deliberately-404ing `marts/mart_climate_daily.parquet` this fixture's
+    caller also has to keep verifying under the new path prefix).
+
+    No env-var escape hatch (unlike the fixtures above): this shape only
+    exists to be built and served by this fixture, there is no "already
+    running" instance of it a caller would ever want to point at instead.
+    """
+    outdir = tmp_path_factory.mktemp("pages_subpath_dist")
+    subprocess.run(
+        ["npm", "run", "build", "--", "--base=/italy-dashboard/", "--outDir", str(outdir)],
+        cwd=REPO_ROOT / "web",
+        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+        check=True,
+    )
+    serve_root = tmp_path_factory.mktemp("pages_subpath_root")
+    (serve_root / "italy-dashboard").symlink_to(outdir, target_is_directory=True)
+    port = _free_port()
+    origin = f"http://127.0.0.1:{port}"
+    base_url = f"{origin}/italy-dashboard"
+    output: list[str] = []
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "http.server", "-d", str(serve_root), "-b", "127.0.0.1", str(port)],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+    drain_thread = Thread(target=_drain_output, args=(proc, output), daemon=True)
+    drain_thread.start()
+    try:
+        _wait_until_serving(
+            proc, base_url + "/", output, label="`python -m http.server` (built dist, subpath)"
+        )
+        yield base_url
+    finally:
+        _terminate(proc)
+
+
 @pytest.fixture(scope="session")
 def _require_caddy() -> None:
     """Skip, with a clear reason, if the `caddy` binary isn't on PATH.

@@ -68,8 +68,8 @@ of provider.
 
 **Two independent frontends read the same marts.** `italy_dashboard/` is the
 primary Reflex app (server-driven, Python end to end). `web/` is a second,
-backend-free frontend (TypeScript + DuckDB-WASM) built for the Netlify static
-deploy; it queries the exact same `data/marts/*.parquet` files, and both
+backend-free frontend (TypeScript + DuckDB-WASM) built for the static GitHub
+Pages deploy; it queries the exact same `data/marts/*.parquet` files, and both
 frontends' SQL is kept in `shared/queries/` so a query can't silently diverge
 between them (enforced by the conformance suite, `just test-conformance`).
 See [Deployment](12-deployment.md) for which deployment serves which frontend.
@@ -82,7 +82,7 @@ italy-dashboard/
 ├── data/                 # snapshots: raw/ CSVs, *.parquet, marts/ (gitignored)
 ├── dbt/                  # dbt project: staging + marts + tests, seeds, profiles
 ├── italy_dashboard/      # Reflex app: pages, state, queries, i18n, theme
-├── web/                  # static frontend: TypeScript + DuckDB-WASM (Netlify)
+├── web/                  # static frontend: TypeScript + DuckDB-WASM (GitHub Pages)
 ├── shared/queries/       # SQL shared verbatim by both frontends' query layers
 ├── notebooks/explore.py  # marimo data playground
 ├── tests/                # unit + integration + browser (offline except browser/)

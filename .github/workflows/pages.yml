@@ -1,0 +1,98 @@
+# Deploys the static (TypeScript/DuckDB-WASM) frontend under web/ to GitHub
+# Pages -- this repo's PRIMARY public deployment (see docs/12-deployment.md).
+# Render stays the secondary deployment and Netlify (netlify.toml) is now
+# legacy/stale; neither is touched by this workflow.
+#
+# `actions/configure-pages` supplies `base_path` (e.g. "/italy-dashboard", or
+# "" for a user site / a site with a custom domain attached) rather than a
+# hardcoded string: Vite's `base` has to match wherever Pages actually serves
+# this site from, and hardcoding it would silently break the day a custom
+# domain is attached (base_path becomes "") or the repo is renamed.
+# `web/src/db.ts` reads that same baked-in value back at runtime via
+# `import.meta.env.BASE_URL` for every asset and parquet URL -- see the
+# comment at that file's parquet-URL line -- so this one output is the only
+# place the path prefix is ever named.
+#
+# Same conventions as .github/workflows/ci.yml: third-party actions pinned to
+# a commit SHA (not a mutable tag), `persist-credentials: false` on checkout,
+# and a `web` build against the git-tracked data/marts snapshot with no
+# Python/dbt setup needed for the build itself. Kept as a separate workflow
+# file from ci.yml (rather than a job in it) because it needs different
+# `permissions` (`pages: write`, `id-token: write`) and a different
+# `concurrency` policy (never cancel an in-flight deploy) than the read-only,
+# cancel-on-superseding-push CI checks.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never cancel an in-flight Pages deploy: an aborted `deploy-pages` step can
+# leave the live site mid-swap. A newer push still runs after this one
+# finishes; it just doesn't preempt it (unlike ci.yml's group, which does).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "20"
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  build:
+    name: Build static site
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - run: npm ci
+        working-directory: web
+      # scripts/stage_web_data.py runs automatically via web/package.json's
+      # `prebuild` hook (stdlib-only, needs nothing but the `python3` set up
+      # above -- see that script's own docstring). Builds against the
+      # git-tracked data/marts snapshot, same as ci.yml's `web` job: no
+      # dbt/ingestion step belongs in this job either.
+      # `${PAGES_BASE_PATH}` via `env:`, not spliced straight into the `run:`
+      # line as `${{ steps.pages.outputs.base_path }}` -- the value is
+      # trustworthy (`configure-pages` derives it from repo metadata, not
+      # untrusted input), but passing every Actions expression through an
+      # env var before a shell ever sees it is what keeps that true
+      # structurally instead of by inspection, and costs nothing here.
+      - run: npm run build -- --base="${PAGES_BASE_PATH}/"
+        working-directory: web
+        env:
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: web/dist
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
