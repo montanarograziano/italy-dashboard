@@ -205,11 +205,13 @@ status), driven with Playwright:
   (see "The one thing that DOES change across hosts" above).
 
 **Deployed and live** at the URL above — verified directly, unauthenticated,
-across all eight routes on desktop and a mobile viewport (assets, parquet,
-DuckDB-WASM, no console errors, the `mart_climate_daily.parquet` 404 present
-and nothing else), after `.github/workflows/pages.yml` completed once<!--
-placeholder: replaced with the actual run/commit reference below once
-verified live -->.
+across all eight routes on both a 1280×800 desktop and a 390×844 mobile
+viewport: every route renders its real heading and real chart marks, zero
+console errors, and the only non-2xx responses across the whole walk are
+`marts/mart_climate_daily.parquet` and its glob-fallback probe (both under
+the `/italy-dashboard/` prefix, as expected). Verified against commit
+`75a4356`'s deploy, workflow run
+[32663327088](https://github.com/montanarograziano/italy-dashboard/actions/runs/32663327088).
 
 ### Initial setup (already done for the URL above; reference for a fork)
 
