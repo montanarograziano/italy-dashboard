@@ -77,7 +77,7 @@ def _rows_crime(rng: random.Random) -> list[dict]:
 
 
 def _rows_population(rng: random.Random, foreign: bool) -> list[dict]:
-    rows = []
+    rows: list[dict[str, object]] = []
     national: dict[str, float] = {}
     for code, name in REGIONS:
         base = rng.uniform(1.2e6, 9.5e6)
@@ -103,7 +103,7 @@ def _rows_population(rng: random.Random, foreign: bool) -> list[dict]:
             "category": "TOT",
             "category_name": "Totale",
             "period": year,
-            "value": int(total),
+            "value": total,
         }
         for year, total in national.items()
     )
@@ -197,11 +197,11 @@ def _rows_education(rng: random.Random) -> list[dict]:
     Matches USTAT's normalized schema: territory_name/category_name are
     already decoded (unlike raw USTAT CKAN, which has no embedded labels)."""
     intervention_types = [
-        ("ALLOGGI", "Housing assistance"),
-        ("MENSE", "Meal plan"),
-        ("TASSE", "Tuition waivers"),
-        ("BOOKS", "Study materials"),
-        ("OTHER", "Other support"),
+        ("1", "Scholarship applications"),
+        ("2", "Eligible students"),
+        ("3", "Scholarships granted"),
+        ("13", "Housing applications"),
+        ("14", "Housing places assigned"),
     ]
     rows = []
     for code, name in REGIONS:
@@ -218,7 +218,7 @@ def _rows_education(rng: random.Random) -> list[dict]:
                         "territory_name": name,
                         "category": itype_code,
                         "category_name": itype_name,
-                        "period": f"{year}-{year+1}",
+                        "period": f"{year}-{year + 1}",
                         "value": value,
                     }
                 )

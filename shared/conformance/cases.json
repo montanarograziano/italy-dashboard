@@ -18,6 +18,7 @@
   {"id": "population_national", "function": "population_timeseries", "args": ["Italia (totale)"]},
   {"id": "unemployment_national", "function": "unemployment_series", "args": ["Italia (totale)"]},
   {"id": "naspi_national", "function": "naspi_series", "args": ["Italia (totale)"]},
+  {"id": "dsu_ranking", "function": "dsu_ranking", "args": []},
   {"id": "mart_options_crime", "function": "mart_options", "args": [["mart_crime", ["region", "offence", "sex", "age"]]]},
   {"id": "mart_trend_crime_all", "function": "mart_trend", "args": [["mart_crime", ["region", "offence", "sex", "age"]], {"region": "All", "offence": "All", "sex": "All", "age": "All"}]},
   {"id": "mart_breakdown_offence", "function": "mart_breakdown", "args": [["mart_crime", ["region", "offence", "sex", "age"]], "offence", {"region": "All", "offence": "All", "sex": "All", "age": "All"}]},

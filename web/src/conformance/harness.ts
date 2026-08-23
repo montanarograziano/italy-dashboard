@@ -1,16 +1,23 @@
 import cases from "../../../shared/conformance/cases.json";
 import expected from "../../../shared/conformance/expected.json";
-import { getConnection, openConnection, runSql, unavailableTables } from "../db";
+import {
+  getConnection,
+  openConnection,
+  runSql,
+  unavailableTables,
+} from "../db";
 import * as climate from "../queries/climate";
 import * as climateScope from "../queries/climateScope";
 import * as crime from "../queries/crime";
 import * as crimeClimate from "../queries/crimeClimate";
 import * as economy from "../queries/economy";
+import * as education from "../queries/education";
 import * as martEngine from "../queries/martEngine";
 import * as ready from "../queries/ready";
 import * as staticQueries from "../queries/static";
 
-const DECIMALS: number = (expected as { float_decimals: number }).float_decimals;
+const DECIMALS: number = (expected as { float_decimals: number })
+  .float_decimals;
 
 // Only the functions ported so far. Cases without an entry are reported as
 // "unported" rather than silently skipped: a shrinking harness must be visible.
@@ -33,6 +40,7 @@ const IMPLEMENTED: Record<string, (...args: never[]) => Promise<unknown>> = {
   population_timeseries: economy.populationTimeseries,
   unemployment_series: economy.unemploymentSeries,
   naspi_series: economy.naspiSeries,
+  dsu_ranking: education.dsuRanking,
   foreign_share_timeseries: economy.foreignShareTimeseries,
   region_names: economy.regionNames,
   climate_cities: climate.climateCities,
@@ -129,7 +137,9 @@ window.probeMissingParquet = async () => {
     "economy_inflation",
     "marts/mart_absent_from_this_build",
   ]);
-  const present = await con.query("SELECT COUNT(*) AS n FROM economy_inflation");
+  const present = await con.query(
+    "SELECT COUNT(*) AS n FROM economy_inflation",
+  );
   const presentTableRows = Number(present.toArray()[0]!.toJSON().n);
   let missingTableError = "";
   try {
@@ -220,14 +230,20 @@ window.probeRunSqlCache = async () => {
 
 window.runConformance = async () => {
   const out: Record<string, unknown> = {};
-  for (const c of cases as { id: string; function: string; args: unknown[] }[]) {
+  for (const c of cases as {
+    id: string;
+    function: string;
+    args: unknown[];
+  }[]) {
     const fn = IMPLEMENTED[c.function];
     if (!fn) {
       out[c.id] = { __unported__: c.function };
       continue;
     }
     try {
-      out[c.id] = normalise(await (fn as (...a: unknown[]) => Promise<unknown>)(...c.args));
+      out[c.id] = normalise(
+        await (fn as (...a: unknown[]) => Promise<unknown>)(...c.args),
+      );
     } catch (err) {
       // getConnection() (db.ts) records, in `unavailableTables`, which
       // registered views could not be created -- in a static build that's
@@ -238,7 +254,9 @@ window.runConformance = async () => {
       // conformance regression: tag it distinctly so the test can tell the
       // two apart, same as `__unported__` is distinct from a real failure.
       const message = String(err);
-      const missing = [...unavailableTables].filter((table) => message.includes(table));
+      const missing = [...unavailableTables].filter((table) =>
+        message.includes(table),
+      );
       out[c.id] = missing.length
         ? { __excluded_from_static_build__: missing, message }
         : { __error__: message };

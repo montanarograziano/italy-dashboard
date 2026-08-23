@@ -6,6 +6,7 @@ from italy_dashboard.pages.climate import climate_page
 from italy_dashboard.pages.climate_crime import climate_crime_page
 from italy_dashboard.pages.crime import crime_page
 from italy_dashboard.pages.economy import economy_page
+from italy_dashboard.pages.education import education_page
 from italy_dashboard.pages.home import home_page
 from italy_dashboard.pages.labor import labor_page
 from italy_dashboard.pages.population import population_page
@@ -14,6 +15,7 @@ from italy_dashboard.state import (
     ClimateState,
     CrimeState,
     EconomyState,
+    EducationState,
     HomeState,
     LaborState,
     OffendersState,
@@ -36,6 +38,12 @@ app.add_page(
     on_load=PopulationState.load,
 )
 app.add_page(labor_page, route="/labor", title="Labor · Italy Dashboard", on_load=LaborState.load)
+app.add_page(
+    education_page,
+    route="/education",
+    title="Education · Italy Dashboard",
+    on_load=EducationState.load,
+)
 app.add_page(
     economy_page, route="/economy", title="Economy · Italy Dashboard", on_load=EconomyState.load
 )

@@ -519,6 +519,19 @@ class LaborState(AppState):
         self.naspi_ready = bool(self.naspi)
 
 
+class EducationState(AppState):
+    dsu_ranking: list[Row] = []
+    dsu_ready: bool = False
+    has_loaded: bool = False  # see AppState's docstring: page-scoped, not inherited
+
+    @rx.event
+    def load(self):
+        self.load_shared()
+        self.dsu_ranking = q.dsu_ranking()
+        self.dsu_ready = bool(self.dsu_ranking)
+        self.has_loaded = True
+
+
 class EconomyState(AppState):
     inflation: list[Row] = []
     has_loaded: bool = False  # see AppState's docstring: page-scoped, not inherited

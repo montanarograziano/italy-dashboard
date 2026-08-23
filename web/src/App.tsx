@@ -3,11 +3,19 @@ import Climate from "./pages/Climate";
 import ClimateCrime from "./pages/ClimateCrime";
 import Crime from "./pages/Crime";
 import Economy from "./pages/Economy";
+import Education from "./pages/Education";
 import Home from "./pages/Home";
 import Labor from "./pages/Labor";
 import Population from "./pages/Population";
 import { ROUTES, useRoute } from "./router";
-import { currentMode, gridline, inkPrimary, inkSecondary, surface, type Mode } from "./theme";
+import {
+  currentMode,
+  gridline,
+  inkPrimary,
+  inkSecondary,
+  surface,
+  type Mode,
+} from "./theme";
 
 type Choice = Mode | "system";
 
@@ -74,7 +82,8 @@ export default function App() {
   }, []);
 
   function cycle(): void {
-    const next: Choice = choice === "system" ? "light" : choice === "light" ? "dark" : "system";
+    const next: Choice =
+      choice === "system" ? "light" : choice === "light" ? "dark" : "system";
     if (next === "system") {
       window.localStorage.removeItem(STORAGE_KEY);
     } else {
@@ -86,7 +95,7 @@ export default function App() {
     setMode(currentMode());
   }
 
-  // Route switch: every ROUTES entry now maps to a real page (all seven
+  // Route switch: every ROUTES entry now maps to a real page (all eight
   // shipped as of this plan), so an unregistered slug -- a dangling nav
   // link, a stale bookmark, a route deleted by a future edit -- renders
   // NOTHING, on purpose: that is what lets
@@ -117,6 +126,9 @@ export default function App() {
     case "economy":
       page = <Economy mode={mode} />;
       break;
+    case "education":
+      page = <Education mode={mode} />;
+      break;
     case "labor":
       page = <Labor mode={mode} />;
       break;
@@ -138,7 +150,9 @@ export default function App() {
           flexWrap: "wrap",
         }}
       >
-        <span style={{ color: inkPrimary(), fontSize: "1.25em", fontWeight: 700 }}>
+        <span
+          style={{ color: inkPrimary(), fontSize: "1.25em", fontWeight: 700 }}
+        >
           Italy Dashboard
         </span>
         <button

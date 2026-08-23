@@ -13,6 +13,7 @@ import csv
 import io
 import logging
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urljoin
 
@@ -33,6 +34,20 @@ DATASET_VERSIONS = {
     "2022": "2021/22",
     "2021": "2020/21",
 }
+
+
+@dataclass(frozen=True)
+class Dataflow:
+    flow_id: str
+    version: str
+    name: str
+
+
+def _decode_csv(raw: bytes) -> str:
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return raw.decode("iso-8859-1")
 
 
 async def _fetch_json(url: str, client: httpx2.AsyncClient) -> dict[str, Any]:
@@ -131,8 +146,9 @@ async def fetch_interventi(
         csv_data = await download_interventi_csv(csv_url, client)
         csv_data.seek(0)
 
-        # USTAT CSVs use semicolon as delimiter and ISO-8859-1 encoding
-        reader = csv.DictReader(io.TextIOWrapper(csv_data, encoding="iso-8859-1"), delimiter=";")
+        # USTAT CSVs use semicolons; published files have appeared as both
+        # UTF-8 and ISO-8859-1, so decode bytes explicitly before csv parsing.
+        reader = csv.DictReader(io.StringIO(_decode_csv(csv_data.getvalue())), delimiter=";")
         for row in reader:
             if row:
                 yield dict(row)
@@ -203,9 +219,7 @@ class USTATClient:
         csv_url, version = await get_latest_interventi_csv_url(self._client)
         logger.info(f"Fetching USTAT DSU v{version} from {csv_url}")
         csv_bytes = await download_interventi_csv(csv_url, self._client)
-        # USTAT CSVs are ISO-8859-1; convert to UTF-8 for downstream compatibility
-        csv_text = csv_bytes.getvalue().decode("iso-8859-1")
-        return csv_text.encode("utf-8")
+        return _decode_csv(csv_bytes.getvalue()).encode("utf-8")
 
     async def search_dataflows(self, keyword: str) -> list[Any]:
         """Search for USTAT dataflows (minimal stub for discover command).
@@ -216,8 +230,7 @@ class USTATClient:
         if self._client is None:
             raise RuntimeError("Client not initialized (use 'async with' context)")
         if keyword.lower() in ["dsu", "diritto", "studio", "borse", "scholarship"]:
-            # Return a minimal stub matching the Dataflow interface
-            return [{"flow_id": DATASET_ID, "version": "1.0", "name": "DSU Scholarships"}]
+            return [Dataflow(DATASET_ID, "1.0", "DSU Scholarships")]
         return []
 
 

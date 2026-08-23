@@ -64,3 +64,12 @@ sources:
         meta:
           external_location: >-
             read_parquet('{{ env_var('ITALY_DATA_DIR', 'data') }}/labor_naspi_beneficiaries.parquet')
+      - name: education_university_scholarships_pq
+        description: >
+          USTAT/MUR DSU university scholarship interventions by region,
+          intervention type, and academic year. The normalized snapshot keeps
+          the main count column from the CKAN CSV; mart_dsu exposes the
+          granted-scholarship category for the dashboard.
+        meta:
+          external_location: >-
+            read_parquet('{{ env_var('ITALY_DATA_DIR', 'data') }}/education_university_scholarships.parquet')

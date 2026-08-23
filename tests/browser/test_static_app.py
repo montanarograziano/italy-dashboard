@@ -132,7 +132,8 @@ def test_year_axes_render_without_a_thousands_separator(page, static_app):
     page.goto(f"{static_app}/#/economy")
     page.wait_for_selector("[data-testid='inflation'] path", timeout=30_000)
     economy_ticks = page.eval_on_selector_all(
-        "[data-testid='inflation'] [aria-label='x-axis tick label'] text", "els => els.map(e => e.textContent)"
+        "[data-testid='inflation'] [aria-label='x-axis tick label'] text",
+        "els => els.map(e => e.textContent)",
     )
     assert economy_ticks, "no x-axis ticks found on the inflation chart"
     assert not any("," in t for t in economy_ticks), economy_ticks
@@ -140,7 +141,8 @@ def test_year_axes_render_without_a_thousands_separator(page, static_app):
     page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-annual'] path", timeout=30_000)
     climate_ticks = page.eval_on_selector_all(
-        "[data-testid='climate-annual'] [aria-label='x-axis tick label'] text", "els => els.map(e => e.textContent)"
+        "[data-testid='climate-annual'] [aria-label='x-axis tick label'] text",
+        "els => els.map(e => e.textContent)",
     )
     assert climate_ticks, "no x-axis ticks found on the climate annual chart"
     assert not any("," in t for t in climate_ticks), climate_ticks
@@ -246,19 +248,28 @@ def test_a_plot_baked_colour_repaints_on_mode_toggle(page, static_app):
 
 
 def test_a_partial_region_scope_shows_a_composition_caveat(page, static_app):
-    """F6: Toscana is 1 of 10 capitals, Puglia 1 of 6, Marche 1 of 5 -- each
-    used to be presented as the region with zero alerts, the same shape of
-    wrong number the Italia coverage note exists to prevent, at a scope where
-    the caveat was switched off entirely (`region == "Italia"` was the whole
-    gate). Puglia scope is entirely Barletta. Asserts the caveat text carries
-    the real counts (derived from the same seed CSV, never hardcoded here),
-    not just "some caveat exists".
+    """F6: Toscana, Puglia, Marche -- each used to be presented as the region
+    with zero alerts once only one of its capitals had temperature data, the
+    same shape of wrong number the Italia coverage note exists to prevent, at
+    a scope where the caveat was switched off entirely (`region == "Italia"`
+    was the whole gate). Asserts the caveat text carries the real counts, both
+    derived here (never hardcoded): `total` from the seed CSV (every frontend
+    already does this), `covered` from `climate_city_options`, the same
+    DuckDB-backed function the app itself calls for the city dropdown -- so
+    this keeps passing as the temperature backfill covers more of Puglia,
+    rather than pinning today's snapshot as if it were permanent.
     """
+    from italy_dashboard import queries as q
+
     seed = REPO_ROOT / "dbt" / "seeds" / "province_capitals.csv"
     with seed.open(newline="") as f:
         total = sum(1 for row in csv.DictReader(f) if row["region_name"] == "Puglia")
     assert total > 1, (
         "fixture assumption broken: Puglia should have more than 1 capital in the seed"
+    )
+    covered = len(q.climate_city_options("Puglia")) - 1  # -1 for the "All" entry
+    assert 0 < covered < total, (
+        "fixture assumption broken: Puglia should be partially, not fully, covered"
     )
 
     page.goto(f"{static_app}/{CLIMATE_HREF}")
@@ -281,7 +292,7 @@ def test_a_partial_region_scope_shows_a_composition_caveat(page, static_app):
     assert note is not None, (
         "expected a composition caveat at partial region scope (Puglia), found none"
     )
-    assert f"1 of {total} capitals" in note, note
+    assert f"{covered} of {total} capitals" in note, note
 
 
 def test_the_climate_coverage_note_renders_as_a_prominent_callout_not_plain_text(page, static_app):
@@ -297,7 +308,9 @@ def test_the_climate_coverage_note_renders_as_a_prominent_callout_not_plain_text
     the page surface (a plain `<div>` never sets `background`, so it computes
     to the surface colour showing through, or `transparent`).
     """
-    page.goto(f"{static_app}/{CLIMATE_HREF}")  # region defaults to "Italia" -> the national coverage note
+    page.goto(
+        f"{static_app}/{CLIMATE_HREF}"
+    )  # region defaults to "Italia" -> the national coverage note
     page.wait_for_selector("[data-testid='climate-scope-note']", timeout=30_000)
 
     has_icon = page.eval_on_selector(
@@ -331,6 +344,13 @@ def test_each_simple_page_renders_marks_not_an_empty_chart(page, static_app, slu
     assert count > 0, (slug, testid)
 
 
+def test_the_education_page_renders_dsu_bars(page, static_app):
+    page.goto(f"{static_app}/#/education")
+    page.wait_for_selector("[data-testid='dsu-ranking'] rect", timeout=30_000)
+    count = page.eval_on_selector_all("[data-testid='dsu-ranking'] rect", "els => els.length")
+    assert count > 0, count
+
+
 def test_the_crime_page_kpis_render_python_formatted_strings(page, static_app):
     """KPI strings come from the query layer already formatted.
 
@@ -356,7 +376,9 @@ def test_the_crime_page_income_scatter_renders_real_points(page, static_app):
     """
     page.goto(f"{static_app}/#/crime")
     page.wait_for_selector("[data-testid='crime-income-scatter'] circle", timeout=30_000)
-    points = page.eval_on_selector_all("[data-testid='crime-income-scatter'] circle", "els => els.length")
+    points = page.eval_on_selector_all(
+        "[data-testid='crime-income-scatter'] circle", "els => els.length"
+    )
     assert points >= 20, points
 
 
@@ -364,17 +386,28 @@ def test_the_crime_page_correlation_strings_render_verbatim(page, static_app):
     """`incomeCorrelations()` returns already-formatted `"r = ... (n=...)"`
     strings, the same rule as the KPI tiles: rendered as-is, never recomputed
     or reformatted in the UI. This pins the exact strings for the mart's
-    latest year (2024) against a direct query, so a page that recalculated
-    the correlation itself -- or reformatted the sign, precision, or `n` --
-    would fail here even though nothing about the request or response shape
-    looks wrong.
+    latest year against a direct query (`italy_dashboard.queries`, not a
+    retyped literal), so a page that recalculated the correlation itself --
+    or reformatted the sign, precision, or `n` -- would fail here even though
+    nothing about the request or response shape looks wrong, while a routine
+    data refresh that shifts the actual r/n does not desync this test from
+    reality.
     """
+    from italy_dashboard import queries as q
+
+    latest_year = q.income_years()[0]
+    expected = q.income_correlations(latest_year)
+
     page.goto(f"{static_app}/#/crime")
     page.wait_for_selector("[data-testid='crime-income-corr-italians']", timeout=30_000)
-    italians = page.eval_on_selector("[data-testid='crime-income-corr-italians']", "e => e.textContent")
-    foreigners = page.eval_on_selector("[data-testid='crime-income-corr-foreigners']", "e => e.textContent")
-    assert italians == "r = -0.78 (n=12)", italians
-    assert foreigners == "r = +0.46 (n=12)", foreigners
+    italians = page.eval_on_selector(
+        "[data-testid='crime-income-corr-italians']", "e => e.textContent"
+    )
+    foreigners = page.eval_on_selector(
+        "[data-testid='crime-income-corr-foreigners']", "e => e.textContent"
+    )
+    assert italians == expected["ITL"], italians
+    assert foreigners == expected["FRG"], foreigners
 
 
 def test_the_crime_page_method_note_is_present_verbatim(page, static_app):
@@ -445,6 +478,7 @@ def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
 _ROUTE_READY_SELECTORS = {
     "home": "main h1",  # no chart by design (four KPI tiles only); the heading is the whole signal
     "economy": "[data-testid='inflation'] path",
+    "education": "[data-testid='dsu-ranking'] rect",
     "labor": "[data-testid='unemployment'] path",
     "population": "[data-testid='resident'] path",
     "crime": "[data-testid='crime-offenders-trend'] path",
@@ -454,7 +488,7 @@ _ROUTE_READY_SELECTORS = {
 
 
 def test_only_the_deliberately_excluded_mart_404s_across_every_route(page, built_static_app):
-    """Walking all seven routes must produce exactly one kind of non-2xx
+    """Walking all routes must produce exactly one kind of non-2xx
     response: `marts/mart_climate_daily.parquet` (10 MB for one chart,
     excluded from the static build by `scripts/stage_web_data.py`) and
     DuckDB-WASM's own glob-fallback probe against that same path.

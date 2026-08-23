@@ -298,6 +298,55 @@ def test_naspi_series_degrades_to_empty_when_mart_missing(sample_db):
     assert q.naspi_series(q.NATIONAL) == []
 
 
+@pytest.fixture
+def dsu_mart(sample_db):
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+    rows = [
+        {
+            "territory": "ITC4",
+            "territory_name": "Lombardia",
+            "category": "3",
+            "period": "2024",
+            "value": 10.0,
+        },
+        {
+            "territory": "ITF3",
+            "territory_name": "Campania",
+            "category": "3",
+            "period": "2024",
+            "value": 20.0,
+        },
+        {
+            "territory": "ITF3",
+            "territory_name": "Campania",
+            "category": "1",
+            "period": "2024",
+            "value": 99.0,
+        },
+        {
+            "territory": "ITC4",
+            "territory_name": "Lombardia",
+            "category": "3",
+            "period": "2023",
+            "value": 100.0,
+        },
+    ]
+    pl.DataFrame(rows).write_parquet(marts / "mart_dsu.parquet")
+    return sample_db
+
+
+def test_dsu_ranking_uses_latest_granted_scholarships(dsu_mart):
+    assert q.dsu_ranking() == [
+        {"name": "Campania", "value": 20},
+        {"name": "Lombardia", "value": 10},
+    ]
+
+
+def test_dsu_ranking_degrades_to_empty_when_mart_missing(sample_db):
+    assert q.dsu_ranking() == []
+
+
 def test_kpis_are_formatted_strings(sample_db):
     k = q.kpis()
     assert set(k) == {"crime", "population", "unemployment", "inflation"}

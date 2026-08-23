@@ -608,6 +608,33 @@ def naspi_series(region: str) -> list[Row]:
     )
 
 
+# ------------------------------------------------------------- education
+
+
+def dsu_ranking(limit: int = 20) -> list[Row]:
+    """Latest DSU scholarship grants by region (USTAT category 3)."""
+    if not (MARTS_DIR / "mart_dsu.parquet").exists():
+        return []
+    return _query(
+        """
+        WITH latest AS (
+            SELECT max(period) AS period
+            FROM mart_dsu
+            WHERE category = '3' AND value IS NOT NULL
+        )
+        SELECT territory_name AS name, ROUND(SUM(value), 0) AS value
+        FROM mart_dsu, latest
+        WHERE category = '3'
+          AND value IS NOT NULL
+          AND mart_dsu.period = latest.period
+        GROUP BY territory_name
+        ORDER BY value DESC
+        LIMIT ?
+        """,
+        [limit],
+    )
+
+
 # -------------------------------------------------------------- economy
 
 

@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 /** One entry in the site nav: the hash slug and its display label.
  *
  * `italy_dashboard/components.py`'s `NAV_LINKS` is the reference for which
- * pages exist and in what order -- home, crime, population, climate,
- * climate-crime, labor, economy. Slugs drop the leading slash Reflex's
+ * pages exist and in what order -- home, crime, population, education,
+ * climate, climate-crime, labor, economy. Slugs drop the leading slash Reflex's
  * `href`s carry (`/climate-crime` -> `climate-crime`): this app builds its
  * own hash href as `#/${slug}` (see App.tsx), so the slug alone is the
  * single source of truth for both the href and the route match.
@@ -18,6 +18,7 @@ export const ROUTES: readonly RouteDef[] = [
   { slug: "home", label: "Home" },
   { slug: "crime", label: "Crime" },
   { slug: "population", label: "Population" },
+  { slug: "education", label: "Education" },
   { slug: "climate", label: "Climate" },
   { slug: "climate-crime", label: "Climate × Crime" }, // noqa: RUF001 -- matches nav_climate_crime
   { slug: "labor", label: "Labor" },

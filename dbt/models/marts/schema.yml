@@ -59,6 +59,22 @@ models:
       - name: value
         tests: [not_null]
 
+  - name: mart_dsu
+    description: >
+      USTAT/MUR DSU university-scholarship interventions by region,
+      intervention type, and academic-year start. Keeps territory/category/
+      period/value so the dashboard can reuse the lightweight region-series
+      helpers. Consumed from data/marts/mart_dsu.parquet.
+    columns:
+      - name: territory
+        tests: [not_null]
+      - name: category
+        tests: [not_null]
+      - name: period
+        tests: [not_null]
+      - name: value
+        tests: [not_null]
+
   - name: mart_offender_rates
     description: >
       Alleged offenders per 1,000 residents of the same citizenship group, by

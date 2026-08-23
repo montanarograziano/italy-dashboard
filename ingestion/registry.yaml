@@ -213,3 +213,20 @@ datasets:
       period: TIME_PERIOD
       value: OBS_VALUE
 
+  education_university_scholarships:
+    domain: education
+    title: "University scholarships granted (DSU Right-to-Study)"
+    # USTAT (MUR), not ISTAT: routes through ingestion/ustat_client.py (CKAN).
+    # The CSV has one row per region/authority/institution/intervention type;
+    # normalize keeps the main undergraduate intervention count so dbt can sum
+    # granted scholarships (category 3) by region and academic year.
+    provider: ustat
+    dataflow_id: "diritto-allo-studio-universitario-dsu-regionale"
+    search_hint: "borse di studio"
+    columns:
+      territory: CODICE_REGIONE
+      territory_name: NOME_REGIONE
+      category: CODICE_INTERVENTO
+      category_name: DESCRIZIONE_INTERVENTO
+      period: ANNO_ACCADEMICO
+      value: INTERVENTI_LAUREA
