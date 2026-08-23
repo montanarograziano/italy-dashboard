@@ -123,7 +123,7 @@ class CDSError(WeatherError):
 
 def _require_cdsapi() -> Any:
     try:
-        import cdsapi
+        import cdsapi  # pyrefly: ignore[missing-import]  # optional extra, see above
     except ImportError as exc:
         raise CDSError(
             "cdsapi is not installed. Install the optional extra with "
@@ -136,7 +136,7 @@ def _require_cdsapi() -> Any:
 
 def _require_xarray() -> Any:
     try:
-        import xarray as xr
+        import xarray as xr  # pyrefly: ignore[missing-import]  # optional extra, see above
     except ImportError as exc:
         raise CDSError(
             "xarray is not installed. Install the optional extra with "

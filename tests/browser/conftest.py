@@ -216,7 +216,7 @@ def _require_chromium() -> None:
     even launch at all" check should be anyway.
     """
     try:
-        import playwright  # noqa: F401
+        import playwright  # noqa: F401  # pyrefly: ignore[missing-import]  # optional extra
     except ImportError:
         pytest.skip("playwright is not installed; run `uv sync --extra browser`")
     result = subprocess.run(
