@@ -34,21 +34,26 @@ the run, and every write is atomic: interrupting with Ctrl+C never corrupts file
 Single dataset: `just refresh crime_offenders`. Full command reference in
 [Development](09-development.md); per-dataset details in [Datasets](04-datasets.md).
 
+## The other frontend
+
+This is the Reflex app. A second, independent static frontend lives in `web/`
+(TypeScript + DuckDB-WASM, no backend): `cd web && npm install && npm run dev`
+→ `http://localhost:5173`. See [Architecture](02-architecture.md) for how the
+two share the same Parquet marts and SQL.
+
 ## Language
 
 Click **EN · IT** in the navbar to switch the interface language; the choice
 persists in the browser. Data labels (crime types, region names) come from ISTAT
 as fetched, currently in English — see [Dashboard](06-dashboard.md#language).
 
-## Deployment (internal)
+## Self-hosting
 
 ```bash
-just docker-run    # builds the image, then serves on :3000/:8000
+just docker-build   # builds the image (bakes in whatever's in data/ right now)
+just docker-serve   # → http://localhost:10000, single port (Caddy + backend)
 ```
 
-Mount `data/` from the host (`-v $(pwd)/data:/app/data`, already in the recipe) so
-snapshots survive restarts; refresh from the host on a schedule if desired.
-
-!!! warning
-    The dashboard has no authentication. Keep it on an internal network or behind
-    a reverse proxy with auth.
+There is no authentication because there is nothing to protect — every dataset
+served is public. See [Deployment](12-deployment.md) for the two public
+deployments this project actually runs (Netlify, Render) and their caveats.

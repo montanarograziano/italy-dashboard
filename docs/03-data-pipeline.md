@@ -1,7 +1,12 @@
 # Data pipeline
 
-Everything is driven by `ingestion/registry.yaml` and executed through the fetch
-CLI (`python -m ingestion.fetch`, wrapped by `just`).
+Most datasets are driven by `ingestion/registry.yaml` and executed through the
+fetch CLI (`python -m ingestion.fetch`, wrapped by `just`) — this covers ISTAT
+(SDMX discovery), plus INPS and MUR/USTAT once their `dataflow_id` is known
+(their clients skip SDMX discovery but still register through the same
+registry entry and `just refresh <name>`). Climate is a separate CLI again
+(`just refresh-weather`/`just refresh-weather-cds`) since Open-Meteo/Copernicus
+aren't registry-shaped datasets — see [Datasets](04-datasets.md).
 
 ## Commands
 

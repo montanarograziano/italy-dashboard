@@ -1,7 +1,10 @@
 [project]
 name = "italy-dashboard"
 version = "0.1.0"
-description = "Internal dashboard for Italian statistics (ISTAT): crime, population, labor, economy"
+description = "Dashboard for official Italian statistics: crime, population, labor, economy, education, and climate"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Graziano Montanaro" }]
 requires-python = ">=3.11"
 dependencies = [
     "reflex==0.9.8",
@@ -59,14 +62,7 @@ packages = ["ingestion", "italy_dashboard"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-# Plan and spec docs hold code FRAGMENTS, not modules: formatting them wraps
-# isolated snippets in tuple parens, so an implementer pasting a fence gets a
-# tuple literal instead of the call argument the step meant.
 exclude = [
-    # Plan and spec docs hold code FRAGMENTS, not modules: formatting them wraps
-    # isolated snippets in tuple parens, so an implementer pasting a fence gets a
-    # tuple literal instead of the call argument the step meant.
-    "docs/superpowers/**",
     # Git-ignored agent scratch: reports and ledgers, never shipped code.
     ".superpowers/**",
 ]

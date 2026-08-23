@@ -1,10 +1,13 @@
 # Datasets
 
-Everything except temperature comes from ISTAT's SDMX API
-(`esploradati.istat.it/SDMXWS/rest`), free and keyless. Coverage below reflects
-what the API actually returns, often shallower than the phenomenon itself (see
-[Methodology](07-methodology.md#history-depth)). Temperature comes from a
-different, non-ISTAT source: see below.
+Four providers feed this dashboard. Most datasets come from ISTAT's SDMX API
+(`esploradati.istat.it/SDMXWS/rest`), free and keyless; NASPI comes from INPS's
+StatKit hub middleware; university scholarships come from MUR/USTAT's CKAN
+open-data portal; climate comes from Open-Meteo (day-to-day) or Copernicus CDS
+(bulk backfill). Coverage below reflects what each source actually returns,
+often shallower than the phenomenon itself (see
+[Methodology](07-methodology.md#history-depth)). See [Licensing](#licensing) at
+the bottom for what each provider's terms actually allow.
 
 ## crime_offenders — the primary dataset
 
@@ -44,18 +47,47 @@ series** (base 2010 = code 9, base 2015 = code 39); both are kept and the query
 layer chains year-over-year changes within each base, newest base winning per
 year. Coverage **~2012–2025** after chaining.
 
-## income_regional — pending
+## income_regional
 
-Placeholder for household disposable income per capita by region, needed by the
-income↔crime view. Find the dataflow with `just discover "reddito disponibile"`,
-set `dataflow_id` in the registry, then `just refresh income_regional`.
+**Dataflow** `93_1095_DF_DCCN_ISTITUZ_TNA1_1` — households' gross disposable
+income by region (regional accounts, `B6G_B_W0` × sector `S14`, millions of
+euro). The flow stacks several publication editions of the same years; dbt
+keeps only the latest edition per region × year. Coverage **1995–**. Feeds the
+income↔crime scatter in `mart_crime_income` (see
+[Methodology](07-methodology.md#income-crime-what-it-can-and-cannot-say)).
+
+## labor_naspi_beneficiaries — INPS
+
+**Provider** INPS, via `ingestion/inps_client.py` (the StatKit hub middleware,
+not SDMX — ISTAT has no equivalent series, since it measures unemployment
+status rather than benefit claims). Dataflow `DFB_ST_NASPI_BENEFICIARI_02`:
+NASPI unemployment-benefit recipients by NUTS2 region and sex, annual,
+coverage **2018–2022** (this dataflow's own publication lag). Feeds the NASPI
+card on the Labor page, alongside ISTAT's unemployment rate.
+
+## education_university_scholarships — MUR/USTAT
+
+**Provider** MUR/USTAT (Ufficio Statistica, Ministero dell'Università e della
+Ricerca), via `ingestion/ustat_client.py` against the CKAN API at
+[dati-ustat.mur.gov.it](https://dati-ustat.mur.gov.it) — not ISTAT, not SDMX.
+Dataset `diritto-allo-studio-universitario-dsu-regionale`: university
+scholarships (Diritto allo Studio Universitario) granted per region per
+academic year. Feeds the Education page and `mart_dsu`. See
+[Licensing](#licensing) — this is the one dataset here with a clearly stated
+license (IODL 2.0).
 
 ## weather_daily: temperature (non-ISTAT)
 
 **Source** [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api),
-ERA5-Land reanalysis, 0.1° (≈11 km), **1950 to present**. Free, no API key,
-**non-commercial licence**: if this dashboard ever becomes commercial, switch
-to Copernicus CDS ERA5-Land or Open-Meteo's paid tier.
+ERA5-Land reanalysis, 0.1° (≈11 km), **1950 to present**. Free, no API key.
+Two different things apply here, not one: the underlying ERA5-Land **data** is
+[CC BY 4.0](https://open-meteo.com/en/licence) (reusable with attribution, any
+purpose, including commercial); Open-Meteo's **free API tier** is a separate,
+narrower promise — capped at 600 calls/minute, 5,000/hour, 10,000/day, and
+restricted to **non-commercial use only**. If this dashboard is ever offered
+commercially, the free tier stops being permitted regardless of the data's own
+license — switch to a paid Open-Meteo plan or the Copernicus CDS path below,
+which is free for any use once you hold a CDS account and accept its license.
 
 One point per province capital city (106 capitals, `dbt/seeds/province_capitals.csv`),
 daily `temperature_2m_max/min/mean`. `models=era5_land` is pinned explicitly:
@@ -160,6 +192,34 @@ ISTAT publishes *Temperatura e precipitazione dei comuni capoluogo di provincia*
 but the machine-readable series for all capitals covers 2006 onwards only; the
 1971-2022 series exists for about 27 regional capitals and is published as PDF
 and Excel, not through the SDMX API. Neither reaches 1950 at province grain.
+
+## Licensing
+
+Code in this repository is [MIT-licensed](../LICENSE). The *data* is not — each
+provider keeps its own terms, verified against their current published pages
+rather than assumed:
+
+| Provider | Data license | Free-API usage |
+|---|---|---|
+| [ISTAT](https://www.istat.it/it/note-legali) | CC BY 4.0 ("Licenza CC-by Creative Commons 4.0", per ISTAT's own legal notice) | SDMX REST API, free and keyless |
+| [MUR/USTAT](https://dati-ustat.mur.gov.it) | Italian Open Data License (IODL) 2.0, attributed to "MUR - Servizio Statistico" (per the CKAN dataset's own `license_id`) | CKAN API, free and keyless |
+| INPS | Not documented for the StatKit hub endpoint this project reads — flagged, not guessed, by `scripts/generate_provenance_manifest.py`; verify with INPS before external redistribution | Free and keyless |
+| [Open-Meteo](https://open-meteo.com/en/licence) | CC BY 4.0 on the underlying data | Free tier: non-commercial only, rate-capped (see above) |
+| [Copernicus C3S ERA5-Land](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land) | CC BY 4.0 | Free for any use; requires a CDS account and one-time license acceptance |
+
+**Data license and free-API usage limits are two different axes**, and the
+Open-Meteo row above is the case where they diverge furthest: the data itself
+is about as permissive as licenses get (CC BY 4.0), but the zero-cost way of
+fetching it is not (non-commercial, rate-capped). A dataset can be openly
+licensed and still gate you at the API layer.
+
+CC BY 4.0 and IODL 2.0 both require visible attribution wherever the data is
+*displayed*. This documentation carries that attribution; the running
+dashboard UI does not yet render an in-app source/attribution footer — a known
+gap tracked in the project [roadmap](11-roadmap.md), not a silent omission.
+
+Run `just provenance` for a machine-readable manifest (source, license, row
+count, SHA-256) of every file the committed `data/` snapshot ships.
 
 ## Adding a dataset
 

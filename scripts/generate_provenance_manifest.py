@@ -68,25 +68,27 @@ WEATHER_SOURCE = {
     "dataflow_id": None,
     "title": "Daily 2m temperature, ERA5-Land reanalysis (Open-Meteo Historical Weather API)",
     "license": (
-        "Open-Meteo Historical Weather API (ERA5-Land derived): free, no API key, "
-        "NON-COMMERCIAL USE ONLY -- see docs/04-datasets.md#weather_daily-temperature-non-istat. "
-        "If this snapshot was instead populated via the Copernicus/CDS bulk backfill "
-        "(ingestion/cds.py), the Copernicus/CDS ERA5-Land licence applies (accepted "
-        "per-user via a CDS account, see docs/04-datasets.md)."
+        "Data licence: CC BY 4.0 (verified at open-meteo.com/en/licence and, for the "
+        "underlying reanalysis, cds.climate.copernicus.eu). That is DIFFERENT from the "
+        "free API tier this pipeline uses by default, which is a separate, narrower "
+        "promise: non-commercial use only, rate-capped (600/min, 5,000/hour, 10,000/day) "
+        "-- see docs/04-datasets.md#weather_daily-temperature-non-istat and "
+        "docs/04-datasets.md#licensing. If this snapshot was instead populated via the "
+        "Copernicus/CDS bulk backfill (ingestion/cds.py), the same CC BY 4.0 data licence "
+        "applies with no non-commercial restriction, once a CDS account has accepted it."
     ),
 }
 
-# Per-provider license notes. None of these are asserted as a specific SPDX
-# license: the registry and docs record WHERE each provider's data comes from
-# but never its redistribution terms, so a firm claim here would be fabricated.
-# Flagged explicitly rather than left blank -- see the org's own "state
-# uncertainty, never fabricate" rule -- so a public-release review has an
-# actionable TODO instead of a silent gap.
+# Per-provider license notes, verified against each provider's own published
+# terms (see docs/04-datasets.md#licensing for sources) rather than assumed --
+# a firm claim here would otherwise be fabricated, per the org's own "state
+# uncertainty, never fabricate" rule. Where verification wasn't possible
+# (INPS), that gap is flagged explicitly as a TODO instead of guessed.
 PROVIDER_LICENSES = {
     "istat": (
         "ISTAT SDMX REST API (esploradati.istat.it): free, keyless (docs/04-datasets.md). "
-        "License terms: TODO -- verify ISTAT's official open-data license "
-        "(commonly CC BY 3.0 IT for Italian public-sector statistics) before external use."
+        'Data licence: CC BY 4.0 -- verified at istat.it/it/note-legali ("Licenza CC-by '
+        "Creative Commons 4.0\"), ISTAT's own legal notice, as of this writing."
     ),
     "inps": (
         "INPS data via the StatKit hub middleware (ingestion/inps_client.py), not "
@@ -95,8 +97,9 @@ PROVIDER_LICENSES = {
     ),
     "ustat": (
         "USTAT/MUR open-data portal (CKAN), see ingestion/ustat_client.py. "
-        "License terms: TODO -- not documented in this repo; verify with USTAT/MUR "
-        "before external use."
+        "Data licence: Italian Open Data License (IODL) 2.0 -- verified via the CKAN "
+        "package's own license_id field (dati-ustat.mur.gov.it), attributed to "
+        '"MUR - Servizio Statistico", as of this writing.'
     ),
 }
 

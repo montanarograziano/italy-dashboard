@@ -1,9 +1,12 @@
 # Italy Dashboard
 
-An internal, bilingual (EN/IT) dashboard for exploring official Italian statistics
-published by [ISTAT](https://www.istat.it), with a primary focus on **crime** —
-alleged offenders and convictions, sliceable by region, type of crime, sex, age,
-and citizenship — alongside population, labor market, and consumer prices.
+A bilingual (EN/IT) public dashboard for exploring official Italian statistics —
+[ISTAT](https://www.istat.it), [INPS](https://www.inps.it), [MUR/USTAT](https://dati-ustat.mur.gov.it),
+and [Open-Meteo/Copernicus](https://open-meteo.com) — with a primary focus on
+**crime** (alleged offenders and convictions, sliceable by region, type of crime,
+sex, age, and citizenship), alongside population, labor, economy, education, and
+(beta) climate. Code is [MIT-licensed](https://github.com/montanarograziano/italy-dashboard/blob/main/LICENSE);
+data keeps each provider's own terms — see [Datasets](04-datasets.md#licensing).
 
 ![Crime explorer](screenshot-crime.png)
 
@@ -30,17 +33,18 @@ avoids it.
 
 | Layer | Technology |
 |---|---|
-| Ingestion | Python + httpx2 against ISTAT's SDMX REST API |
+| Ingestion | Python + httpx2 against ISTAT SDMX, INPS StatKit, MUR/USTAT CKAN, Open-Meteo/CDS |
 | Storage | Parquet snapshots, queried in-memory via DuckDB |
 | Transformation | dbt (dbt-duckdb), marts materialized as Parquet |
-| Dashboard | Reflex (pure-Python React), Recharts, EN/IT i18n |
+| Dashboards | Reflex (pure-Python React) **and** a static TypeScript + DuckDB-WASM app (`web/`) |
 | Exploration | marimo notebook: catalog, SQL playground, ad-hoc charts |
-| Tooling | uv, just, ruff, pyrefly, pytest (57 tests) |
+| Tooling | uv, just, ruff, pyrefly, pytest |
 
 ## Where to go next
 
 - [Getting started](01-getting-started.md) — run the dashboard in three commands
 - [Architecture](02-architecture.md) — how the pieces fit
 - [Data pipeline](03-data-pipeline.md) — fetch, normalize, transform
+- [Datasets](04-datasets.md) — every source, its provider, and its license
 - [Methodology & caveats](07-methodology.md) — read this before quoting any number
-- [Deployment](12-deployment.md): Render, single-port Docker, free-tier caveats
+- [Deployment](12-deployment.md) — Netlify (primary demo), Render (secondary), free-tier caveats

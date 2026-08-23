@@ -173,10 +173,15 @@ January. Years short of `MIN_DAYS_FOR_A_FULL_YEAR` are excluded from the
 inside those bounds, so a partial year in the middle of a record would still
 contribute. ERA5-Land has none.
 
-**Non-commercial licence.** Open-Meteo's free tier, which this pipeline uses,
-is non-commercial use only. If the dashboard is ever offered commercially, the
-source must move to Copernicus CDS ERA5-Land or Open-Meteo's paid tier first;
-see [Datasets](04-datasets.md#weather_daily-temperature-non-istat).
+**Data license vs. free-API usage limits are two different things.** The
+underlying ERA5-Land data is CC BY 4.0 either way; Open-Meteo's *free tier*,
+which this pipeline uses, is a separate, narrower promise: non-commercial use
+only, and rate-capped. If the dashboard is ever offered commercially, the free
+tier stops being permitted regardless of the data's own license — move to
+Copernicus CDS ERA5-Land (free for any use, requires a CDS account) or
+Open-Meteo's paid tier first; see
+[Datasets](04-datasets.md#weather_daily-temperature-non-istat) and
+[Licensing](04-datasets.md#licensing).
 
 **No full backfill has completed yet.** Development environments still carry
 synthetic sample temperatures (`ingestion/sample_data.py`), and no number in

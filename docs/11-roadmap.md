@@ -27,6 +27,11 @@ region names localize with the UI.
 **Refresh delta reports** — snapshot row counts per dataset per refresh and log
 diffs, making upstream ISTAT revisions visible instead of silent.
 
+**In-app attribution footer** — CC BY 4.0 (ISTAT, Open-Meteo/ERA5) and IODL 2.0
+(MUR/USTAT) both require a visible credit wherever the data is displayed, not
+just documented; see [Datasets](04-datasets.md#licensing). Currently only the
+docs carry it, not the running dashboard.
+
 **Precipitation:** the Open-Meteo fetcher already exists; adding
 `precipitation_sum` to `DAILY_VARS` and one mart column is most of the work.
 

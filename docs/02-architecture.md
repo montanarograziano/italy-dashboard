@@ -4,16 +4,18 @@
 
 ```mermaid
 flowchart LR
-    A["ISTAT SDMX REST API<br/>esploradati.istat.it"] -->|"just refresh"| B["data/raw/*.csv<br/>(verbatim SDMX-CSV)"]
+    A["ISTAT SDMX · INPS StatKit ·<br/>MUR/USTAT CKAN"] -->|"just refresh"| B["data/raw/*<br/>(verbatim per-provider format)"]
     B -->|"normalize (DuckDB SQL)"| C["data/*.parquet<br/>(normalized snapshots)"]
     B -->|"dbt staging"| D["staging views"]
     C -->|"dbt sources"| D
     D -->|"dbt build"| E["data/marts/*.parquet<br/>(dimensional marts)"]
     C --> F["Reflex app<br/>localhost:3000"]
     E --> F
+    E --> H["Static app (web/)<br/>DuckDB-WASM"]
+    C --> H
     E --> G["marimo notebook"]
     C --> G
-    W["Open-Meteo archive API<br/>ERA5-Land, 1950+"] -->|"just refresh-weather"| X["data/raw/weather/*.json"]
+    W["Open-Meteo / Copernicus CDS<br/>ERA5-Land, 1950+"] -->|"just refresh-weather(-cds)"| X["data/raw/weather|cds/*"]
     X --> C
 ```
 
@@ -32,8 +34,9 @@ wholesale on the reasoning that any snapshot could be rebuilt with one command.
 That stopped being true when temperature arrived: the weather backfill is days
 of rate-limited fetching, so a lost snapshot is a lost week, and the deployment
 builds from a clean clone where nothing regenerable is present anyway. So the
-14 parquet files the running app actually queries (about 12 MB) are tracked,
-and everything else still is not: `data/raw/`, `data/dbt.duckdb`, and the dbt
+16 parquet files the running app actually queries are tracked (size scales
+with whatever real or sample data is currently committed), and everything else
+still is not: `data/raw/`, `data/dbt.duckdb`, and the dbt
 inputs that only the transformation step reads, including
 `data/weather_daily.parquet`. The container never runs dbt, it reads pre-built
 marts, so shipping its inputs would be dead weight. Refreshing data is now a
@@ -55,23 +58,34 @@ income_regional`") instead of errors.
 **The app is stateless with respect to data.** Refreshing data requires no app
 restart — the next page load reads the new snapshot.
 
-**`ingestion/` is no longer ISTAT-only.** Temperature comes from Open-Meteo,
-because no ISTAT source has province-level climate before 2006. The two
-fetchers share one output contract, write a parquet snapshot into `data/`, so
-everything downstream is unchanged. `ingestion/openmeteo.py` is the HTTP
-client, `ingestion/weather.py` the orchestration, mirroring the
-`sdmx_client.py` / `fetch.py` split.
+**`ingestion/` is no longer ISTAT-only.** NASPI comes from INPS (`inps_client.py`,
+the StatKit hub middleware, not SDMX), university scholarships from MUR/USTAT
+(`ustat_client.py`, CKAN), and temperature from Open-Meteo/Copernicus CDS
+(`openmeteo.py`/`cds.py`), because none of these have an ISTAT equivalent at
+the needed grain or at all. Every fetcher writes into the same normalized
+output contract in `data/`, so everything downstream is unchanged regardless
+of provider.
+
+**Two independent frontends read the same marts.** `italy_dashboard/` is the
+primary Reflex app (server-driven, Python end to end). `web/` is a second,
+backend-free frontend (TypeScript + DuckDB-WASM) built for the Netlify static
+deploy; it queries the exact same `data/marts/*.parquet` files, and both
+frontends' SQL is kept in `shared/queries/` so a query can't silently diverge
+between them (enforced by the conformance suite, `just test-conformance`).
+See [Deployment](12-deployment.md) for which deployment serves which frontend.
 
 ## Repository layout
 
 ```
 italy-dashboard/
-├── ingestion/            # fetch CLI, SDMX client, dataset registry, sample data
+├── ingestion/            # fetch CLI + per-provider clients, dataset registry, sample data
 ├── data/                 # snapshots: raw/ CSVs, *.parquet, marts/ (gitignored)
-├── dbt/                  # dbt project: staging + marts + tests, profiles
+├── dbt/                  # dbt project: staging + marts + tests, seeds, profiles
 ├── italy_dashboard/      # Reflex app: pages, state, queries, i18n, theme
+├── web/                  # static frontend: TypeScript + DuckDB-WASM (Netlify)
+├── shared/queries/       # SQL shared verbatim by both frontends' query layers
 ├── notebooks/explore.py  # marimo data playground
-├── tests/                # unit + integration (115 tests, all offline)
+├── tests/                # unit + integration + browser (offline except browser/)
 ├── docs/                 # this documentation (zensical)
 ├── justfile              # every workflow, one command each
 └── pyproject.toml        # uv-managed; all tool configs
@@ -79,7 +93,9 @@ italy-dashboard/
 
 ## Module boundaries
 
-`ingestion/` knows about ISTAT and HTTP but nothing about Reflex. `italy_dashboard/`
-knows about DuckDB and Reflex but never touches the network. `dbt/` sits between
-them, reading raw files and writing marts. If ISTAT changes its API again, only
-`ingestion/` moves; if the UI framework changes, only `italy_dashboard/` moves.
+`ingestion/` knows about each provider's HTTP API but nothing about Reflex.
+`italy_dashboard/` knows about DuckDB and Reflex but never touches the network.
+`dbt/` sits between them, reading raw files and writing marts. If a provider
+changes its API again, only its client in `ingestion/` moves; if the UI
+framework changes, only `italy_dashboard/` (or `web/`, for the static frontend)
+moves.

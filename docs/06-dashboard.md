@@ -21,9 +21,22 @@ unemployment rate, latest annual inflation.
   (region, offence, sex, age).
 
 **Population** — residents (in millions) and foreign-residents share, by region.
+
 **Labor** — regional unemployment vs the national rate (the IT row, not an
-unweighted average of regions). **Economy** — annual inflation chained across
-index rebasings.
+unweighted average of regions), plus NASPI unemployment-benefit recipients
+(INPS) for the same region, shown only once that mart has data
+(`LaborState.naspi_ready`).
+
+**Economy** — annual inflation chained across index rebasings.
+
+**Education** — university scholarships granted (Diritto allo Studio
+Universitario, MUR/USTAT), ranked by region.
+
+**Climate** *(beta)* and **Climate × Crime** *(beta)* — daily temperature by
+province capital (Open-Meteo/Copernicus ERA5-Land, 1950–present) and its
+ecological correlation with violent-offender rates; both pages surface their
+current backfill coverage rather than presenting a partial snapshot as
+complete — see [Datasets](04-datasets.md#weather_daily-temperature-non-istat).
 
 ## Language
 

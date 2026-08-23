@@ -1,7 +1,7 @@
 # Development
 
 Tooling: **uv** (packaging + venv), **just** (tasks), **ruff** (lint + format),
-**pyrefly** (types), **pytest** (57 tests, all offline). Reflex is pinned
+**pyrefly** (types), **pytest** (450+ tests, all offline). Reflex is pinned
 (`reflex==0.9.8`) because it releases breaking changes quickly.
 
 ## Command reference
@@ -23,7 +23,7 @@ Tooling: **uv** (packaging + venv), **just** (tasks), **ruff** (lint + format),
 | `just provenance` | Verify + describe the committed `data/` snapshot (row counts, hashes, source/license) — see below |
 | `just compile` | Fast Reflex frontend compile check |
 | `just docs` | Serve this documentation locally |
-| `just docker-build` / `docker-run` | Container image (run builds first) |
+| `just docker-build` / `docker-serve` | Container image / build and run it locally |
 | `just clean` | Remove caches and build artifacts |
 
 ## CI
@@ -56,15 +56,18 @@ Run `just sample` or `just refresh` to get an authoritative status.
 
 ```
 tests/
-├── unit/          # SDMX client (httpx2.MockTransport), registry, normalize,
+├── unit/          # per-provider clients (httpx2.MockTransport), registry, normalize,
 │                  # sample data, query layer incl. slice-picker regressions
-└── integration/   # full pipeline (mocked API → parquet → queries),
-                   # real dbt builds in temp dirs (incl. double-build idempotency),
-                   # Reflex page construction
+├── integration/   # full pipeline (mocked APIs → parquet → dbt → queries),
+│                  # real dbt builds in temp dirs (incl. double-build idempotency),
+│                  # Reflex page construction
+└── browser/       # Playwright: chart rendering, static-app conformance
+                   # (needs the `browser` extra; deselected by default)
 ```
 
-Everything runs without network; the ISTAT API is mocked at the transport level.
-Live tests exist (`just test-live`) but are deselected by default.
+Everything except `tests/browser/` runs without network or a browser; every
+provider is mocked at the transport level. Live tests exist (`just test-live`)
+but are deselected by default, same as `tests/browser/` (`just test-browser`).
 
 ## Conventions worth knowing
 
