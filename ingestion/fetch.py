@@ -21,8 +21,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -326,6 +328,7 @@ async def cmd_refresh(only: str | None = None) -> int:
     from ingestion.weather import ensure_weather_placeholder
 
     ensure_weather_placeholder(DATA_DIR)
+    _write_provenance_marker("live")
     if failures:
         logger.error("Refresh finished with failures: %s", ", ".join(failures))
         return 1
@@ -354,6 +357,32 @@ async def cmd_discover(keyword: str, provider: str = "istat") -> int:
     for f in flows:
         print(f"{f.flow_id:<{width}}  v{f.version:<6} {f.name}")
     return 0
+
+
+PROVENANCE_MARKER = DATA_DIR / ".provenance.json"
+
+
+def _write_provenance_marker(mode: Literal["sample", "live"]) -> None:
+    """Record how the data/ snapshot now on disk was produced.
+
+    `scripts/generate_provenance_manifest.py` reads this to report a
+    synthetic-vs-real status instead of guessing from file contents. `sample`
+    = synthetic dev data (`ingestion.fetch sample`); `live` = fetched from a
+    real upstream provider (`ingestion.fetch refresh`). Written unconditionally
+    on `refresh`, even a partial one (see `cmd_refresh`'s per-dataset failures):
+    whatever DID land is genuinely live data, and the manifest's own row-count
+    check is what catches a dataset that failed to update.
+
+    Deliberately not written by `cmd_normalize` or `ingestion.weather`/`cds`
+    run standalone: those are secondary paths reprocessing what `sample` or
+    `refresh` already fetched, so they don't change which of the two modes
+    produced the snapshot. A snapshot from before this marker existed simply
+    has none — the manifest reports that honestly as "unknown" rather than
+    assuming either mode.
+    """
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {"mode": mode, "generated_at": datetime.now(UTC).isoformat(timespec="seconds")}
+    PROVENANCE_MARKER.write_text(json.dumps(payload, indent=2) + "\n")
 
 
 def ensure_placeholder_snapshots(registry: Registry) -> None:
@@ -453,6 +482,7 @@ def cmd_sample() -> int:
     from ingestion.weather import ensure_weather_placeholder
 
     ensure_weather_placeholder(DATA_DIR)
+    _write_provenance_marker("sample")
     logger.info("Sample data generated. NOTE: this is SYNTHETIC data for dev only.")
     return 0
 

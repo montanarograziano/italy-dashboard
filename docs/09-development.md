@@ -16,13 +16,41 @@ Tooling: **uv** (packaging + venv), **just** (tasks), **ruff** (lint + format),
 | `just transform` | dbt build only |
 | `just discover "kw"` / `just dims <ds>` | Find dataflow IDs / dimension order |
 | `just notebook` | marimo playground |
-| `just check` | **Lint + typecheck + tests — what CI should run** |
+| `just check` | **Lint + typecheck + tests — what CI runs** |
 | `just lint` / `just fix` / `just typecheck` | Individual quality gates |
 | `just test` / `test-unit` / `test-integration` / `test-live` | Test slices (`live` hits the real API, opt-in) |
+| `just test-browser` / `test-conformance` | Browser-rendering + Python↔TypeScript conformance suite (needs the `browser` extra) |
+| `just provenance` | Verify + describe the committed `data/` snapshot (row counts, hashes, source/license) — see below |
 | `just compile` | Fast Reflex frontend compile check |
 | `just docs` | Serve this documentation locally |
 | `just docker-build` / `docker-run` | Container image (run builds first) |
 | `just clean` | Remove caches and build artifacts |
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request
+(including from forks — no secrets are used, everything runs offline against
+the committed snapshot). Three jobs: `python` (`just check` +
+`just provenance`), `web` (`npm run typecheck` + `npm run build`), and
+`browser` (`just test-browser`, gated on the first two passing since it's the
+most expensive job). It never runs a live fetch — `just refresh`/
+`just refresh-weather*` stay manual/cron, per docs/04-datasets.md.
+
+## Published-data provenance
+
+`just provenance` (`scripts/generate_provenance_manifest.py`) checks every
+`git`-tracked file under `data/` — the exact snapshot a fresh clone ships —
+and fails if one is missing or empty. It prints a JSON manifest with each
+file's row count, SHA-256, covered period, and source/provider/license
+(derived from `ingestion/registry.yaml` and the dbt `ref()`/`source()` graph,
+see the script's `MART_LINEAGE`). It does **not** re-run dbt's own
+not_null/unique-grain tests (`just transform` already does that).
+
+It also reports whether the snapshot is synthetic or real, read from
+`data/.provenance.json` — written by `ingestion.fetch sample`/`refresh`, so a
+snapshot from before that marker existed (including the one currently
+committed to this repo) honestly reports `"unknown"` rather than guessing.
+Run `just sample` or `just refresh` to get an authoritative status.
 
 ## Test layout
 

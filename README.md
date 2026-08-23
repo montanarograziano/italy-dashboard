@@ -175,12 +175,13 @@ checking), **pytest** (tests). Everything runs through `just`:
 
 | Command | What it does |
 |---|---|
-| `just check` | Lint + typecheck + tests — **what CI should run** |
+| `just check` | Lint + typecheck + tests — **what CI runs** (`.github/workflows/ci.yml`) |
 | `just lint` / `just fix` | Check style · auto-fix and format |
 | `just typecheck` | Pyrefly type check |
 | `just test` | Full offline suite (unit + integration, mocked API) |
 | `just test-unit` / `just test-integration` | Just one layer |
 | `just test-live` | Tests against the **real** ISTAT API (excluded by default) |
+| `just provenance` | Verify the committed data snapshot (row counts, hashes, source/license) |
 | `just compile` | Fast Reflex frontend compile check |
 | `just clean` | Remove caches and build artifacts |
 

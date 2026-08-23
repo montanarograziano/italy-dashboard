@@ -19,10 +19,19 @@ sample:
     uv run python -m ingestion.fetch sample
     just transform
 
-# Fetch/refresh real ISTAT data, then rebuild dbt marts
+# Fetch/refresh real ISTAT data, then rebuild dbt marts. A failure on one
+# dataset doesn't stop the others (see ingestion/fetch.py:cmd_refresh -- one
+# bad dataset must not sink the rest) and transform still runs afterwards so
+# the snapshot rebuilds from whatever DID land -- but the recipe itself must
+# still fail loudly if refresh OR transform failed, so CI/cron callers see a
+# nonzero exit instead of a silently incomplete snapshot.
 refresh *dataset:
-    -uv run python -m ingestion.fetch refresh {{dataset}}
-    -just transform
+    #!/usr/bin/env bash
+    set -uo pipefail
+    status=0
+    uv run python -m ingestion.fetch refresh {{dataset}} || status=$?
+    just transform || status=$?
+    exit "$status"
 
 alias fetch := refresh
 
@@ -126,7 +135,13 @@ test-live:
 test-browser:
     uv run pytest tests/browser -m browser
 
-# Lint + typecheck + tests: what CI should run
+# Verify the committed data/ snapshot: every mart present, nonempty, hashed,
+# and attributed to a source/provider/license -- see the script's own
+# docstring for what this deliberately does NOT duplicate (dbt's grain tests)
+provenance:
+    uv run python scripts/generate_provenance_manifest.py
+
+# Lint + typecheck + tests: what CI's `python` job runs (.github/workflows/ci.yml)
 check: lint typecheck test
 
 # Fast compile check of the Reflex frontend (catches framework breakage)

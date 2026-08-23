@@ -1,0 +1,130 @@
+# CI for public PRs (including forks): default GITHUB_TOKEN permissions are
+# read-only and no secrets are used, since the whole suite runs offline
+# against the committed data/ snapshot (see scripts/generate_provenance_manifest.py) --
+# nothing here fetches from ISTAT/INPS/USTAT/Open-Meteo live, and the weather
+# backfill (`just refresh-weather*`, docs/04-datasets.md) is never automated.
+#
+# Third-party actions are pinned to a commit SHA, not a tag (tags are mutable
+# in the actions marketplace) -- the version comment is just for humans.
+# `persist-credentials: false` on every checkout: no job here pushes, tags,
+# or otherwise needs an authenticated git remote afterward, so the default
+# token has no reason to sit on disk for a later step (or a compromised
+# transitive action) to pick up.
+#
+# `just` is installed from a pinned release tarball with its published
+# SHA256 checked, rather than the common `curl | bash` one-liner: a version
+# pin plus a checksum means a future run installs exactly this binary, not
+# whatever install.sh happens to fetch that day.
+#
+# Three jobs, deliberately not a matrix: one Python version, one Node
+# version, one OS. `python` and `web` are the fast, cheap signal; `browser`
+# (Playwright + a real Chromium) only runs once those pass, since it is the
+# most expensive job here and a lint/type failure should not also pay for it.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+  JUST_VERSION: "1.58.0"
+  JUST_SHA256: "4a5cc2f53e6f0f8c59092a6cc38291eb729d46a7dd95d3ae582008881b84931d"
+
+jobs:
+  python:
+    name: Python lint, types, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: Install just (pinned release, checksum verified)
+        run: |
+          set -euo pipefail
+          archive="just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          curl --proto '=https' --tlsv1.2 -sSfLO \
+            "https://github.com/casey/just/releases/download/${JUST_VERSION}/${archive}"
+          echo "${JUST_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$archive" -C "$HOME/.local/bin" just
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # No `--extra cds`/`--extra browser`: just like a contributor's plain
+      # `uv sync`, so tests/unit/test_cds.py's own importorskip guards are
+      # exercised the same way here as anywhere else (see that file's docstring).
+      - run: uv sync --all-groups
+      - name: Lint + typecheck + tests
+        run: just check
+      - name: Published-data provenance manifest
+        run: just provenance
+
+  web:
+    name: Web typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+      # Builds against the git-tracked data/marts snapshot (committed for
+      # exactly this reason, see .gitignore's "tracked exception" comment) --
+      # no Python/dbt setup needed in this job.
+      - run: npm run build
+        working-directory: web
+
+  browser:
+    name: Conformance + browser coverage
+    needs: [python, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: Install just (pinned release, checksum verified)
+        run: |
+          set -euo pipefail
+          archive="just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          curl --proto '=https' --tlsv1.2 -sSfLO \
+            "https://github.com/casey/just/releases/download/${JUST_VERSION}/${archive}"
+          echo "${JUST_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$archive" -C "$HOME/.local/bin" just
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: uv sync --all-groups --extra browser
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      - run: uv run playwright install --with-deps chromium
+      - run: npm ci
+        working-directory: web
+      # tests/browser/*, including test_conformance.py (the divergence gate
+      # between italy_dashboard/queries.py and web/src/queries/*.ts) -- one
+      # command covers both so the heavy setup above (Chromium, two npm/uv
+      # syncs) is paid once, not twice.
+      - run: just test-browser
