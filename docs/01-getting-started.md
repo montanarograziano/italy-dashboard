@@ -55,5 +55,5 @@ just docker-serve   # → http://localhost:10000, single port (Caddy + backend)
 ```
 
 There is no authentication because there is nothing to protect — every dataset
-served is public. See [Deployment](12-deployment.md) for the public
-deployments this project actually runs (GitHub Pages, Render) and their caveats.
+served is public. See [Deployment](12-deployment.md) for the one public
+deployment this project actually runs (GitHub Pages) and its caveats.
