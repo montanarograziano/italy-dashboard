@@ -39,8 +39,10 @@ stake.
 
 - **Not in scope:** the accuracy of upstream data (ISTAT/INPS/USTAT/
   Open-Meteo publish what they publish; see
-  [`docs/07-methodology.md`](docs/07-methodology.md) for known caveats) and
-  the free-tier availability of the Render/Netlify deployments.
+  [`docs/07-methodology.md`](docs/07-methodology.md) for known caveats). The
+  only hosted deployment is a static GitHub Pages site with no backend to
+  attack; the Reflex app is local-only (see
+  [Deployment](docs/12-deployment.md)).
 - **Dependencies:** `just check` runs lint, types, and tests in CI on every
   PR; there is no separate scheduled dependency-audit job yet — a PR bumping
   a vulnerable pin is also a welcome report.

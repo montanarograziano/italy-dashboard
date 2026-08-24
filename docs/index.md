@@ -47,4 +47,4 @@ avoids it.
 - [Data pipeline](03-data-pipeline.md) — fetch, normalize, transform
 - [Datasets](04-datasets.md) — every source, its provider, and its license
 - [Methodology & caveats](07-methodology.md) — read this before quoting any number
-- [Deployment](12-deployment.md) — GitHub Pages (primary demo), Render (secondary), Netlify (legacy), free-tier caveats
+- [Deployment](12-deployment.md) — GitHub Pages (the only hosted deployment) and running the Reflex app locally

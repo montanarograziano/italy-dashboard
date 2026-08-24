@@ -20,15 +20,15 @@ ISTAT · INPS · MUR/USTAT · Open-Meteo/Copernicus · no API keys, no accounts,
 ![No pandas](https://img.shields.io/badge/pandas-not%20invited-lightgrey)
 
 [![Live demo: GitHub Pages](https://img.shields.io/badge/live_demo-github.io%2Fitaly--dashboard-181717?logo=github&logoColor=white)](https://montanarograziano.github.io/italy-dashboard/)
-[![Live demo: Render](https://img.shields.io/badge/reflex_demo-italy--dashboard.onrender.com-46E3B7)](https://italy-dashboard.onrender.com)
 
 <a href="https://montanarograziano.github.io/italy-dashboard/">
 <img src="docs/readme/crime.png" width="820" alt="Crime page of the live public dashboard: region, crime type, citizenship, sex and age filters above a real, ISTAT-sourced trend of alleged offenders reported to the police through 2024, plus year-over-year and foreign-share KPI tiles">
 </a>
 
-*Live screenshot, not a mockup: the primary public demo, now on
-[GitHub Pages](https://montanarograziano.github.io/italy-dashboard/) (see
-[Deployment](docs/12-deployment.md) for the legacy Netlify build this replaced).*
+*Live screenshot, not a mockup: the only public demo, on
+[GitHub Pages](https://montanarograziano.github.io/italy-dashboard/). See
+[Deployment](docs/12-deployment.md) for why this is the only hosted
+deployment.*
 
 **🇬🇧 [Read in English ↓](#english) &nbsp;·&nbsp; 🇮🇹 [Leggi in italiano ↓](#italiano)**
 
@@ -110,11 +110,11 @@ come straight from ISTAT's SDMX responses as fetched, not from the toggle, see
 primary GitHub Pages demo above) does not have the toggle at all yet: a full
 Italian UI pass is tracked, not silently assumed.
 
-<img src="docs/readme/bilingual-en.png" width="430" alt="Reflex deployment home page in English: navbar with an EN and IT toggle, EN highlighted, KPI tiles in English">
+<img src="docs/readme/bilingual-en.png" width="430" alt="Reflex app home page in English: navbar with an EN and IT toggle, EN highlighted, KPI tiles in English">
 <img src="docs/readme/bilingual-it.png" width="430" alt="The same page one click later: navbar toggle now shows IT highlighted, every navigation label and KPI tile translated into Italian">
 
-*The secondary [Render deployment](https://italy-dashboard.onrender.com) switching
-languages live, same session, same data.*
+*The Reflex app, run locally (see [Deployment](docs/12-deployment.md)),
+switching languages live, same session, same data.*
 
 ### How it works
 
@@ -209,15 +209,15 @@ Said plainly, not buried:
   credit where the data is *displayed*; this documentation carries it, the running
   UI does not yet. Tracked in [Roadmap](docs/11-roadmap.md).
 - **The static app has no Italian UI yet;** see [How it works](#how-it-works) above.
-- **Live deployments are snapshots, not live feeds.** Both the GitHub Pages and
-  Render URLs above serve whatever was last built and deployed; there is no
-  scheduled auto-redeploy, so a page added in a recent commit can lag behind on a
-  given deploy until the next manual rebuild. What is *in the repository* at any
-  commit is the source of truth; see [Deployment](docs/12-deployment.md).
-- **Render's free tier cold-starts and can drop idle websockets;** it is the
-  secondary, server-driven reference deployment on purpose, not the one this
-  project points people to first. Read [Deployment](docs/12-deployment.md) before
-  relying on it for anything time-sensitive.
+- **The GitHub Pages demo is a snapshot, not a live feed.** It serves
+  whatever was last built and deployed; there is no scheduled auto-redeploy,
+  so a page added in a recent commit can lag behind until the next manual
+  rebuild. What is *in the repository* at any commit is the source of truth;
+  see [Deployment](docs/12-deployment.md).
+- **The Reflex app (server-driven, EN/IT toggle) is local-only,** not
+  hosted anywhere: it needs a Python backend and a websocket, neither of
+  which a static host like Pages can run. Run it with `just run` or
+  `just docker-serve`; see [Deployment](docs/12-deployment.md).
 - **ISTAT's provincial crime data lags roughly two years,** and several series
   (foreign-resident denominators, NASPI, temperature) start well after 1950; exact
   coverage per dataset: [Datasets](docs/04-datasets.md).
@@ -324,8 +324,8 @@ scontata.
 <img src="docs/readme/bilingual-it.png" width="430" alt="La home page del deployment Reflex in italiano: selettore di lingua con IT evidenziato, ogni etichetta di navigazione e ogni KPI tradotti">
 <img src="docs/readme/bilingual-en.png" width="430" alt="La stessa pagina un clic prima: selettore con EN evidenziato, interfaccia in inglese, stessi dati">
 
-*Il [deployment secondario su Render](https://italy-dashboard.onrender.com) che
-cambia lingua dal vivo, stessa sessione, stessi dati.*
+*L'app Reflex, eseguita in locale (vedi [Deployment](docs/12-deployment.md)),
+che cambia lingua dal vivo, stessa sessione, stessi dati.*
 
 ### Come funziona
 
@@ -417,17 +417,16 @@ Detti chiaramente, non nascosti:
   nella [Roadmap](docs/11-roadmap.md).
 - **L'app statica non ha ancora un'interfaccia in italiano;** vedi
   [Come funziona](#come-funziona) sopra.
-- **I deployment live sono snapshot, non flussi live.** Sia GitHub Pages sia
-  Render servono l'ultima build pubblicata; non c'è un redeploy automatico
-  programmato, quindi una pagina aggiunta in un commit recente può non essere
-  ancora nel deployment finché non viene ripubblicato a mano. La verità di
-  riferimento è sempre il repository al commit corrente; vedi
+- **La demo su GitHub Pages è uno snapshot, non un flusso live.** Serve
+  l'ultima build pubblicata; non c'è un redeploy automatico programmato,
+  quindi una pagina aggiunta in un commit recente può non essere ancora nel
+  deployment finché non viene ripubblicato a mano. La verità di riferimento
+  è sempre il repository al commit corrente; vedi
   [Deployment](docs/12-deployment.md).
-- **Il piano gratuito di Render ha cold start e può perdere websocket
-  inattivi;** è il deployment secondario, di riferimento per la versione
-  server-side, non quello consigliato per primo. Leggi
-  [Deployment](docs/12-deployment.md) prima di farci affidamento per qualcosa
-  di urgente.
+- **L'app Reflex (con selettore EN/IT) è solo locale,** non è ospitata da
+  nessuna parte: richiede un backend Python e un websocket, cosa che un
+  host statico come Pages non può eseguire. Si avvia con `just run` o
+  `just docker-serve`; vedi [Deployment](docs/12-deployment.md).
 - **I dati provinciali sulla criminalità ISTAT hanno un ritardo di circa due
   anni,** e diverse serie (residenti stranieri, NASPI, temperature) iniziano
   molto dopo il 1950; copertura esatta per dataset:

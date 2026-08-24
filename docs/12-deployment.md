@@ -1,19 +1,18 @@
 # Deployment
 
-Three deployments exist, of two different frontends, with different
-purposes. **GitHub Pages is the primary public demo**: it serves the static
+**One deployment exists: GitHub Pages**, serving the static
 (TypeScript/DuckDB-WASM) frontend under `web/` — no backend, no websocket,
-every query runs client-side against Parquet fetched over HTTP, so there is no
-cold start and nothing to keep warm. **Render is secondary**: it serves the
-full Reflex app (Python backend, server-driven state over a websocket), kept
-running as the reference implementation of the server-driven version of this
-dashboard, with the free-tier caveats that come with that shape. **Netlify is
-legacy**: it served the same static frontend GitHub Pages does now, is no
-longer this project's release target, and is not actively kept current — see
-its own section at the end of this page. This page covers GitHub Pages first,
-then Render, then Netlify.
+every query runs client-side against Parquet fetched over HTTP, so there is
+no cold start and nothing to keep warm. The Reflex app (Python backend,
+server-driven state over a websocket) is a **local-only reference
+implementation**: it is not hosted anywhere, it never was on Pages (a static
+host cannot run a Python backend or hold a websocket open), and the Netlify
+and Render deployments that used to host the static frontend and the Reflex
+app respectively have both been retired — see "Why hosting was dropped"
+below for what that leaves as the one real gap in the public demo. This page
+covers GitHub Pages first, then how to run the Reflex app locally.
 
-## GitHub Pages (primary public demo)
+## GitHub Pages
 
 **Live:** <https://montanarograziano.github.io/italy-dashboard/> — a GitHub
 Pages *project site* (this repo has no custom domain attached, and neither
@@ -59,31 +58,32 @@ mart, not a clean skip.
 Hash routes never hit the server for a route change at all — the browser
 resolves everything after `#` client-side, so there is nothing for a rewrite
 rule to do and therefore no reason to add one. GitHub Pages has no
-rewrite-rule mechanism to reach for even if this app wanted one (unlike
-Netlify's `[[redirects]]`, which the legacy deploy below deliberately never
-used either, for the same reason) — hash routing needs no server
-configuration on ANY static host, which is exactly why moving hosts did not
-touch this at all.
+rewrite-rule mechanism to reach for even if this app wanted one (unlike, say,
+Netlify's `[[redirects]]`, deliberately never used by this app's previous
+Netlify build either, for the same reason) — hash routing needs no server
+configuration on ANY static host, which is exactly why moving hosts never
+touched this at all.
 
 ### The one thing that DOES change across hosts: the path prefix
 
 A GitHub Pages *project* site (this one) is served under `/italy-dashboard/`,
-not site root — unlike Netlify's and Render's own domains, which serve from
-`/`. `web/vite.config.ts` has no hardcoded `base`; instead
-`.github/workflows/pages.yml` passes `--base` to `vite build` from
-`actions/configure-pages`'s own `base_path` output (`/italy-dashboard` today;
-`""` if this repo ever grows a custom domain), so the build always matches
-wherever Pages actually serves it, no matter how that changes later.
+not site root — unlike a plain domain root, which is where this frontend's
+previous Netlify build served from. `web/vite.config.ts` has no hardcoded
+`base`; instead `.github/workflows/pages.yml` passes `--base` to `vite
+build` from `actions/configure-pages`'s own `base_path` output
+(`/italy-dashboard` today; `""` if this repo ever grows a custom domain), so
+the build always matches wherever Pages actually serves it, no matter how
+that changes later.
 
 Getting this right required one real code fix, not just a build flag:
 `registerParquetViews` (`web/src/db.ts`) used to build every parquet URL off
-`window.location.origin` directly — correct at site root (where every other
-deploy on this page serves from), silently wrong under a path prefix, since
-it would request `{origin}/economy_inflation.parquet` instead of
+`window.location.origin` directly — correct at site root, silently wrong
+under a path prefix, since it would request
+`{origin}/economy_inflation.parquet` instead of
 `{origin}/italy-dashboard/economy_inflation.parquet`. It now reads
 `import.meta.env.BASE_URL` (the same value Vite bakes in from `--base`) and
 prefixes every parquet URL with it, so the same source works unmodified at
-root (Netlify, Render, local dev) or under a subpath (GitHub Pages).
+root (local dev) or under a subpath (GitHub Pages).
 `tests/browser/test_pages_subpath.py` is the standing regression check: a
 real `vite build --base=/italy-dashboard/`, served from under that exact
 prefix with no SPA fallback, asserting every first-party request (bundle,
@@ -128,7 +128,7 @@ not a number to pin.
 
 Builds against the git-tracked `data/marts` snapshot committed to `main` — no
 ISTAT/INPS/USTAT fetch, no dbt run, happens in this workflow; the data is
-whatever was last committed, same as every deploy on this page.
+whatever was last committed.
 
 ### What ships, and what's deliberately excluded
 
@@ -155,12 +155,12 @@ therefore have **zero effect** on bundle selection here: the app always
 resolves to the `eh` (exception-handling, single-threaded) bundle in any
 browser with WebAssembly exception support, which is every current major
 browser. Moot for GitHub Pages specifically, too: Pages has no mechanism to
-set custom response headers at all (unlike Netlify's optional `_headers`
-file), so there is no COOP/COEP knob to reach for even if it mattered. Adding
-it anyway would only add risk: `require-corp` blocks cross-origin
-subresources unless they opt in, and this page's DuckDB wasm/workers, and
-the parquet extension, all load from jsDelivr/`extensions.duckdb.org` —
-cross-origin CDNs this app depends on working.
+set custom response headers at all, so there is no COOP/COEP knob to reach
+for even if it mattered. Adding it anyway would only add risk:
+`require-corp` blocks cross-origin subresources unless they opt in, and this
+page's DuckDB wasm/workers, and the parquet extension, all load from
+jsDelivr/`extensions.duckdb.org` — cross-origin CDNs this app depends on
+working.
 
 ### Verification
 
@@ -177,8 +177,8 @@ that condition regardless of whether the path ends in `.parquet`. Confirmed
 by hand: a bare `curl` against a running `npm run dev` gets `200`/`text/html`
 for the missing mart; only forcing `Accept: application/octet-stream` gets
 the real `404`. Only a plain server with no SPA fallback at all — matching
-both Netlify's and GitHub Pages' default of no rewrite rule — gives the real
-status), driven with Playwright:
+GitHub Pages' own default of no rewrite rule — gives the real status),
+driven with Playwright:
 
 - All eight routes (home, crime, population, education, climate,
   climate × crime, labor, economy) render a heading, draw real chart marks
@@ -223,44 +223,62 @@ the `/italy-dashboard/` prefix, as expected). Verified against commit
    reports the live URL in its own summary (and in `steps.deployment.outputs.
    page_url`, surfaced as this workflow's `environment: github-pages` URL in
    the Actions UI).
-3. **The build needs real data checked in.** Same rule as every deploy on
-   this page: the workflow builds from a fresh checkout of `main`, so
-   whatever `data/marts` snapshot is committed there is what ships — no
-   fetch-on-deploy step, a push is how you publish (`just refresh`/`just
-   sample` + `just transform`, committed, same as any other data update).
+3. **The build needs real data checked in.** The workflow builds from a
+   fresh checkout of `main`, so whatever `data/marts` snapshot is committed
+   there is what ships — no fetch-on-deploy step, a push is how you publish
+   (`just refresh`/`just sample` + `just transform`, committed, same as any
+   other data update).
 4. To publish a data update: commit the refreshed snapshot to `main` and
    push; the workflow rebuilds and redeploys automatically.
 
-## Render (secondary: the full Reflex implementation)
+## Running the Reflex app locally
 
-**Live:** <https://italy-dashboard.onrender.com> (verified reachable, HTTP
-200, as of this writing; expect a cold-start delay on the free tier's first
-request after idle — see Free-tier caveats below). Like Netlify, this rebuilds
-and redeploys from `origin/main` on its own trigger, not on every local
-commit, so a fix that only exists in an unpushed local checkout is not live
-here yet.
+The Reflex app (compiled React frontend on 3000, a Starlette/FastAPI plus
+websocket backend on 8000 by default) is not hosted publicly. It runs two
+ways: directly via `uv`/`just` for day-to-day development, or as a single
+Docker container that reproduces the same single-port shape a real host
+would need — useful for verifying a deploy-shaped build without actually
+deploying it anywhere.
 
-The dashboard also runs on [Render](https://render.com)'s free tier as a
-single Docker container, as a working reference for the server-driven
-(Python backend, websocket state) version of this app — not the deployment
-this project points people to first. Render gives one exposed port,
-terminates TLS itself, and spins the service down when idle, none of which
-matches Reflex's default shape (a compiled React frontend on 3000, a
-Starlette/FastAPI plus websocket backend on 8000). This section covers how
-that gap is closed, what's genuinely verified to work, and the caveats that
-come with the free tier.
+### Day-to-day: `just run`
 
-### The single-port shape
+```
+just setup     # uv sync: creates .venv, installs everything
+just sample    # instant synthetic data (fake numbers, clearly labeled)
+just run       # -> http://localhost:3000
+```
 
-[Caddy](https://caddyserver.com) runs inside the same container and is the
-only thing Render's edge talks to. It serves the frontend, pre-exported to
-static files at image-build time, and reverse-proxies the few routes that
-belong to the Reflex backend:
+`just run` (`uv run reflex run`) starts frontend and backend as one
+integrated dev process with hot reload — this is what
+[Getting started](01-getting-started.md) walks through in full, including
+`just fetch-and-run` for real data.
+
+### The single-port Docker shape
+
+For anything closer to a real deploy — one container, one port, no dev
+tooling — the Dockerfile bakes the frontend and backend into a single image
+served through [Caddy](https://caddyserver.com):
+
+```
+just docker-build   # docker build -t italy-dashboard .
+just docker-serve   # build, then: docker run --rm -p 10000:10000 italy-dashboard
+```
+
+`just docker-serve` depends on `docker-build`, so one command does both; it
+serves `http://localhost:10000` once Caddy and the backend are both up.
+`PORT` defaults to `10000` (`ENV PORT=10000` in the Dockerfile) but is fully
+configurable — the Caddyfile listens on `:{$PORT}`, so `docker run -p
+8080:8080 -e PORT=8080 italy-dashboard` works identically on a different
+port.
+
+Caddy runs inside the container and is the only thing the exposed port talks
+to. It serves the frontend, pre-exported to static files at image-build
+time, and reverse-proxies the few routes that belong to the Reflex backend:
 
 | Route | Owner |
 | --- | --- |
 | `/_event/*` | Backend: the Socket.IO/websocket endpoint (state sync) |
-| `/ping` | Backend: liveness probe, also Render's health check path |
+| `/ping` | Backend: liveness probe |
 | `/_upload` | Backend: file uploads (registered only if `rx.upload()` is used; this app doesn't use it, proxied anyway for correctness) |
 | everything else | Static files from the exported frontend |
 
@@ -277,38 +295,29 @@ At runtime, `scripts/start.sh` starts the Reflex backend (`reflex run
 --backend-only`, bound to `127.0.0.1:8000`, unreachable from outside the
 container) and Caddy (bound to `$PORT`) as sibling processes, and exits
 non-zero the moment either one dies, so a crashed backend takes the
-container down with it instead of leaving Caddy serving a static shell over a
-dead backend.
+container down with it instead of leaving Caddy serving a static shell over
+a dead backend.
 
 ### `API_URL`: a build-time concern, not a runtime one
 
 The frontend's websocket/API base URL is baked into the exported static JS
 bundle when `reflex export` runs (Reflex writes it to `.web/env.json`, which
 Vite inlines into the built chunks): setting an env var on the *running*
-container has no effect on an already-exported bundle. The Dockerfile exposes
-it as a **build arg**, `API_URL`, defaulting to `http://localhost:10000`.
+container has no effect on an already-exported bundle. The Dockerfile
+exposes it as a **build arg**, `API_URL`, defaulting to
+`http://localhost:10000`.
 
-That default works for both cases here, for a reason worth understanding
+That default works for a plain local run, for a reason worth understanding
 rather than taking on faith: Reflex's own frontend runtime
 (`utils/state.js::getBackendURL`) treats the hostnames `localhost`, `0.0.0.0`
 and a couple of IPv6 equivalents as "same origin as the page" and rewrites
-them to the page's real hostname at connection time. When the page is loaded
-over **https** (Render terminates TLS in front of Caddy), it additionally
-upgrades `ws:`/`http:` to `wss:`/`https:` and drops the port entirely,
-assuming a load balancer in front. That's exactly Render's topology, so the
-built-in default self-heals to the correct public `wss://` URL with no
-override needed. It only stays completely literal under plain http (this
-project's own local single-port test), which is why the baked port must
-match Caddy's `$PORT` rather than Reflex's usual 8000, verified by actually
+them to the page's real hostname at connection time. It stays completely
+literal under plain http (this project's local single-port container), which
+is why the baked port must match Caddy's `$PORT`, verified by actually
 running the container and confirming the websocket connects (see
-Verification below).
-
-Render's Blueprint (`render.yaml`) **cannot** pass custom Docker build args,
-confirmed against Render's Blueprint spec, which documents `dockerfilePath`
-and `dockerContext` but no build-arg mechanism, so `REFLEX_API_URL` is
-deliberately **not** set as a Render env var: it would be a silent no-op
-against an already-built image. Override `API_URL` only if you change the
-topology (custom domain quirks, a non-TLS proxy in front, etc.):
+Verification below). Override `API_URL` only if you change the port or put
+something else in front (a reverse proxy, TLS termination, a different
+domain):
 
 ```
 docker build --build-arg API_URL=https://your-domain.example .
@@ -339,9 +348,9 @@ writing into.
 
 If `data/marts` is empty, the build fails loudly at that `COPY` step with a
 message telling you to run `just refresh` or `just sample` first, rather than
-silently shipping an empty dashboard. **A rebuild is how you publish updated
-data**: there is no scheduled refresh or fetch-on-deploy step; redeploying
-without rebuilding just redeploys the same snapshot.
+silently shipping an empty dashboard. **A rebuild is how you update the
+image**: there is no scheduled refresh or fetch-on-run step; rerunning
+without rebuilding just reruns the same snapshot.
 
 ### What else the image has to carry
 
@@ -353,61 +362,23 @@ the coverage denominators. A file like that is invisible to the entire test
 suite when it is missing from the image: the code imports fine and the
 container still raises `FileNotFoundError` on the first query. It happened
 once — `shared/` was extracted out of `queries.py` and the Dockerfile was not
-updated, which would have left three pages stuck on the loading placeholder in
-production.
+updated, which would have left three pages stuck on the loading placeholder.
 
 `tests/unit/test_deployment_paths.py` now derives the required set from the
 code's own `Path` constants and fails if any of them stops being copied (or
 gets excluded by `.dockerignore`), so the next extraction is caught by the
-suite rather than by a deploy. **If you add a runtime-read file outside
-`italy_dashboard/`, add a `COPY` for it** — the test will tell you.
+suite rather than by a broken image. **If you add a runtime-read file
+outside `italy_dashboard/`, add a `COPY` for it** — the test will tell you.
 
-### Climate coverage on this deployment is whatever the backfill has reached
+### Climate coverage in a built image is whatever the backfill has reached
 
 The temperature backfill (see [Datasets](04-datasets.md#weather_daily-temperature-non-istat))
 progresses over days to weeks, not in one run. The Climate and Climate × Crime
 pages surface their current coverage themselves via a coverage line rather
 than silently presenting a partial snapshot as complete — that's a data
-property, not a deployment one, but it means a given deploy can legitimately
-be a partial snapshot, and the fix is the same rebuild-and-redeploy cycle
-above, once the backfill has progressed further.
-
-### Render setup
-
-`render.yaml` defines the service: Docker runtime, free plan,
-`healthCheckPath: /ping` (proxied straight to the backend by Caddy, so a 200
-there means the whole chain is up, not just that Caddy is serving static
-files). No secrets are needed or present: the app only ever reads public
-snapshots baked into the image.
-
-### Free-tier caveats
-
-Read these before treating this as more reliable than it is:
-
-- **Spin-down on idle.** Render's free tier stops the container after a
-  period of inactivity. The first request after that pays a full cold
-  start (container boot plus Reflex backend startup) before anything
-  responds.
-- **Websocket disconnects on spin-down.** Reflex holds per-session state over
-  that same websocket; a spin-down mid-session drops the connection and the
-  user's in-progress state with it. There's no session persistence across
-  that boundary on the free tier.
-- **A known Reflex/Caddy interaction drops idle websockets.** See
-  [reflex-dev/reflex#4236](https://github.com/reflex-dev/reflex/issues/4236):
-  the single-port Caddy setup this project uses is reported to drop
-  websocket connections after a period of client inactivity, independent of
-  Render's own spin-down. Not specifically reproduced here, but worth
-  watching for reports of "the page loads but stops updating" after a tab
-  has sat idle a while.
-- **512 MB RAM is not generous.** Measured locally (see Verification): the
-  container idles around 190 to 220 MB serving one browser session,
-  comfortably under the cap. That's a single-session baseline, not a load
-  test: Reflex keeps per-session state in-process, so concurrent sessions add
-  up faster than a stateless app would. Worth watching in production, not
-  just trusting the local measurement.
-
-This is exactly why Netlify, not Render, is the deployment this project
-points people to first: none of the above applies to a static site.
+property, not a deployment one, but it means a given image can legitimately
+be a partial snapshot, and the fix is the same rebuild cycle above, once the
+backfill has progressed further.
 
 ### Verification
 
@@ -462,33 +433,29 @@ Local proof this actually works, using `just docker-serve`:
    React error #418 on every route but `/`, reproduced locally against this
    exact build before the `try_files` fix landed.
 
-### Deploying
+## Why hosting was dropped
 
-Push to the branch Render is watching, or point a new Blueprint at this repo
-with `render.yaml`. There is no CI step that builds and bakes data
-automatically: build locally (or in whatever pipeline you set up) from a
-checkout with real data, then let Render build the image from the same
-Dockerfile. Redeploy after every data refresh you want published.
+A static Pages frontend is a better public demo than a free-tier server that
+cold-starts on the first request after idle and can drop its websocket
+mid-session (both real caveats of the old Render deployment; see the git
+history of this file if you need the specifics). Netlify hosted the exact
+same static output GitHub Pages does now, so keeping both was pure
+duplication with no functional upside. Running the Reflex app as a second
+public deployment was never a hard requirement either: it's the reference
+implementation of the server-driven shape, valuable to be able to run and
+inspect, not something that needs to stay live for anyone else to trust the
+numbers — the data, the SQL, and the provenance manifest (`just provenance`)
+are already public in this repository.
 
-## Netlify (legacy, stale)
+**The Reflex app cannot run on GitHub Pages at all** — a static host has no
+Python runtime and no way to hold a websocket open — so collapsing to one
+deployment target necessarily means the Reflex app is local-only now, not a
+choice made independently of the Pages migration.
 
-Netlify hosted this same static frontend before GitHub Pages became the
-primary deployment above. It is **no longer this project's release target**:
-`netlify.toml` is kept in the repo so an existing Netlify site pointed at it
-keeps building rather than breaking outright, but it is not part of this
-project's deploy workflow, is not exercised by CI, and its live state (if a
-Netlify site is still attached to this repo at all) is not verified as part
-of any change here going forward.
-
-Everything under "GitHub Pages" above (`scripts/stage_web_data.py`'s
-allowlist, the hash-routing/no-rewrite-rule reasoning, the COOP/COEP
-reasoning) applied identically to the Netlify build — the two shipped the
-same `web/dist` output from the same source, differing only in build host
-and, before the GitHub Pages migration, in never needing a `--base` other
-than the default root. If reviving a Netlify deployment of this repo,
-`netlify.toml`'s existing `[build]` command still works unmodified — Netlify
-serves from a domain root, so the `--base` flag GitHub Pages needs (see
-"The one thing that DOES change across hosts" above) is not required there.
-
-Do not link a Netlify URL from README.md or this doc's introduction as the
-current demo — GitHub Pages is.
+**The one real functional gap this leaves in the public demo:** the Reflex
+app has a live EN/IT toggle and `web/` (what GitHub Pages serves) is
+English-only. That gap already existed before this cleanup — see "GitHub
+Pages" above, "English-only, unlike the Reflex app" — dropping the other two
+hosted deployments doesn't create it, but it does mean there is no longer a
+public URL where the Italian UI can be seen live; `just run` or `just
+docker-serve` are the only ways to see it now.
