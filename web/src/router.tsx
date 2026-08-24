@@ -27,14 +27,15 @@ export const ROUTES: readonly RouteDef[] = [
 
 const DEFAULT_SLUG = "home";
 
-/** Hash routing (`#/crime`), deliberately NOT real paths with a Netlify SPA
- * rewrite (`[[redirects]] from="/*" to="/index.html"`). That catch-all would
+/** Hash routing (`#/crime`), deliberately NOT real paths with a server-side
+ * SPA rewrite rule (e.g. Netlify's `[[redirects]] from="/*" to="/index.html"`,
+ * a mechanism GitHub Pages does not even have). That catch-all would
  * also intercept the request for `mart_climate_daily.parquet`, which is
  * deliberately absent from this build: `registerParquetViews` (db.ts) relies
  * on that request genuinely 404ing to record the dataset as unavailable --
  * with a catch-all it would get `200 OK` and an HTML document instead,
  * turning a handled absence into a DuckDB parse error. Hash routing needs no
- * server config at all, so it cannot be broken by a later `netlify.toml` edit.
+ * server config at all, so there is no rewrite rule to ever misconfigure.
  *
  * An empty or bare `#`/`#/` hash (fresh load, or a link back to `#/`) means
  * "home" -- but an unrecognised slug is returned VERBATIM, not coerced to

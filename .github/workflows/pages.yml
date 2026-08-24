@@ -1,7 +1,7 @@
 # Deploys the static (TypeScript/DuckDB-WASM) frontend under web/ to GitHub
-# Pages -- this repo's PRIMARY public deployment (see docs/12-deployment.md).
-# Render stays the secondary deployment and Netlify (netlify.toml) is now
-# legacy/stale; neither is touched by this workflow.
+# Pages -- this repo's ONLY hosted deployment (see docs/12-deployment.md).
+# The Reflex app (Python backend, websocket state) is local-only: it cannot
+# run on Pages at all, and is not deployed anywhere else either.
 #
 # `actions/configure-pages` supplies `base_path` (e.g. "/italy-dashboard", or
 # "" for a user site / a site with a custom domain attached) rather than a

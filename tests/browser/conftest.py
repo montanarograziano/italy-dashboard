@@ -241,11 +241,11 @@ def app_server(_require_chromium: None) -> Iterator[str]:
     way that would require a fresh instance per test.
 
     Set `BROWSER_TEST_BASE_URL` to point these tests at an already-running
-    server instead (e.g. the Render deployment's single-port Docker
-    container), rather than spawning a `reflex run` subprocess: this is how
-    the Docker deployment verification proves the websocket path survives
-    Caddy's proxy, since a chart only renders a data-driven element like an
-    axis tick if the state connection actually came up.
+    server instead (e.g. the single-port Docker container from `just
+    docker-serve`), rather than spawning a `reflex run` subprocess: this is
+    how the Docker verification proves the websocket path survives Caddy's
+    proxy, since a chart only renders a data-driven element like an axis
+    tick if the state connection actually came up.
     """
     if base_url := os.environ.get("BROWSER_TEST_BASE_URL"):
         _wait_until_reachable(base_url)
@@ -355,7 +355,7 @@ def built_static_app(_require_chromium: None) -> Iterator[str]:
     with a default `Accept`, and a real `404` only once `Accept:
     application/octet-stream` is forced. So `static_app` cannot tell a
     genuine 404 apart from this fallback either -- only a plain server with
-    no SPA fallback at all (what this fixture spawns, matching Netlify's
+    no SPA fallback at all (what this fixture spawns, matching GitHub Pages'
     default of no rewrite rule) can.
 
     Set `BUILT_STATIC_APP_BASE_URL` to point at an already-built,
@@ -492,7 +492,7 @@ def render_deploy_shape(
     `try_files {path} /index.html` bug shipped and stayed invisible: it only
     manifests when a route's request is resolved by Caddy against the
     EXPORTED static files (`reflex export --frontend-only`, what
-    `Dockerfile`/`render.yaml` actually ship), which `{path}` alone cannot
+    `Dockerfile` actually ships), which `{path}` alone cannot
     match -- Reflex writes each route as `<route>.html` and
     `<route>/index.html`, never a bare extension-less file -- so the old rule
     fell through to `/index.html` (home's prerendered markup) for every

@@ -23,7 +23,6 @@ import pkgutil
 from pathlib import Path, PurePosixPath
 
 import pytest
-import yaml
 
 import italy_dashboard
 
@@ -156,17 +155,3 @@ def test_dockerignore_does_not_exclude_a_runtime_path(relative: PurePosixPath):
             f".dockerignore excludes {pattern}, which contains the runtime path "
             f"{relative} ({RUNTIME_PATHS[relative]})"
         )
-
-
-def test_render_builds_the_image_from_the_repo_root():
-    """The Dockerfile's COPY paths are repo-root-relative, so the build context
-    has to BE the repo root. A narrower `dockerContext` would break every COPY
-    at once on Render while `docker build .` kept working locally.
-    """
-    blueprint = yaml.safe_load((REPO_ROOT / "render.yaml").read_text())
-    services = blueprint["services"]
-    docker_services = [s for s in services if s.get("runtime") == "docker"]
-    assert docker_services, "render.yaml declares no docker service"
-    for service in docker_services:
-        assert service["dockerContext"] == ".", service
-        assert (REPO_ROOT / service["dockerfilePath"]).is_file(), service

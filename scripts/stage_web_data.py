@@ -19,7 +19,8 @@ erroring (see italy_dashboard's Task 3 report).
 
 No third-party imports on purpose: this only copies files, so it must not
 need `uv sync` (or any dependency install) to run. That matters most on
-Netlify's build image, which is not guaranteed to have `uv` at all -- see
+the GitHub Pages build image (`.github/workflows/pages.yml`), which has no
+reason to carry `uv` at all when it only needs `python3` -- see
 docs/12-deployment.md.
 
 Run directly (`python3 scripts/stage_web_data.py`) or via the `predev`/
