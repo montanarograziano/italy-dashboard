@@ -30,7 +30,7 @@ from pathlib import Path
 
 import reflex as rx
 
-from italy_dashboard import theme
+from italy_dashboard import palette, theme
 
 _REMOVED_BARE_NAMES = (
     "SERIES_1",
@@ -107,18 +107,37 @@ def test_fstring_interpolation_of_a_var_bakes_in_a_broken_marker():
     assert s.count("1px solid") == 1  # the literal prefix, not a resolved pair
 
 
+# The three tests below assert each accessor renders a COMPLETE CSS
+# declaration (the bug they exist for -- see test_fstring_interpolation_... above)
+# for BOTH modes, under a real colour-mode conditional, and that it is built on
+# the palette token its docstring says it is.
+#
+# The expected colours are read from `palette` rather than written out as hex.
+# They used to be hardcoded, which made this file a SECOND place every palette
+# value had to be updated -- and the failure it produced said "assert '1px solid
+# rgba(11,11,11,0.10)' in ...", i.e. it reported a stale copy in the test as if
+# it were a regression in the code. Naming the constant keeps every real
+# assertion (complete declaration, both modes, correct token) while removing the
+# duplication: substituting the wrong token in theme.py still fails, because
+# each test names the specific constant that accessor is documented to use.
+
+
 def test_border_css_is_a_complete_declaration_for_both_modes():
     rendered = str(rx.box(border=theme.border_css()).render())
-    assert '"1px solid rgba(11,11,11,0.10)"' in rendered  # light
-    assert '"1px solid rgba(244,244,242,0.12)"' in rendered  # dark
+    assert f'"1px solid {palette.BORDER_LIGHT}"' in rendered
+    assert f'"1px solid {palette.BORDER_DARK}"' in rendered
     assert "resolvedColorMode" in rendered
 
 
 def test_tooltip_border_css_is_a_complete_declaration_for_both_modes():
+    """Built on GRIDLINE, deliberately subtler than the card BORDER token."""
     rendered = str(rx.box(border=theme.tooltip_border_css()).render())
-    assert '"1px solid #e1e0d9"' in rendered  # light
-    assert '"1px solid #2e2e2c"' in rendered  # dark
+    assert f'"1px solid {palette.GRIDLINE_LIGHT}"' in rendered
+    assert f'"1px solid {palette.GRIDLINE_DARK}"' in rendered
     assert "resolvedColorMode" in rendered
+    # ...and therefore NOT the card-edge token, which is the distinction this
+    # accessor exists to make.
+    assert palette.BORDER_LIGHT not in rendered
 
 
 def test_selection_border_css_is_a_complete_declaration_for_both_modes():
@@ -128,6 +147,10 @@ def test_selection_border_css_is_a_complete_declaration_for_both_modes():
     border_css()), which would defeat a selection ring meant to stand out.
     """
     rendered = str(rx.box(border=theme.selection_border_css()).render())
-    assert '"2px solid #0b0b0b"' in rendered  # light
-    assert '"2px solid #f4f4f2"' in rendered  # dark
+    assert f'"2px solid {palette.INK_PRIMARY_LIGHT}"' in rendered
+    assert f'"2px solid {palette.INK_PRIMARY_DARK}"' in rendered
     assert "resolvedColorMode" in rendered
+    # Not the hairline BORDER token: that is the whole point of this accessor
+    # (see the docstring above), so a future edit that "simplifies" it into
+    # border_css() has to fail here.
+    assert palette.BORDER_LIGHT not in rendered
