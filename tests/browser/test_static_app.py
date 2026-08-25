@@ -282,13 +282,10 @@ def test_the_stripes_grid_has_no_phantom_facet_at_italia_scope(page, static_app)
     """
     page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
-    labels = page.eval_on_selector_all(
-        "[data-testid='climate-grid'] [aria-label='fx-axis tick label'] text",
-        "els => els.map(e => e.textContent)",
-    )
-    assert labels.count("") == 0, f"a blank fx facet label is present: {labels}"
+    labels = page.locator("[data-testid='climate-stripe-city']").all_text_contents()
+    assert all(labels), f"a blank city label is present: {labels}"
     assert len(labels) == 12, (
-        f"expected exactly 12 city facets at Italia scope, got {len(labels)}: {labels}"
+        f"expected exactly 12 city panels at Italia scope, got {len(labels)}: {labels}"
     )
 
 

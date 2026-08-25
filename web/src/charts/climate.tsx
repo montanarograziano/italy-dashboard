@@ -184,7 +184,7 @@ export function stripesSpec(rows: Row[]): Plot.PlotOptions {
   return themed({
     x: {
       label: null,
-      ticks: thinTicks(years, 12),
+      ticks: thinTicks(years, 6),
       tickFormat: (y: number) => String(y),
     },
     // `grid: false` overrides `themed()`'s y-grid default: this chart's y axis
@@ -581,6 +581,11 @@ export function monthHeatmapSpec(rows: Row[]): Plot.PlotOptions {
       domain: [-maxAbs, maxAbs],
       range: steps,
       legend: true,
+      // Keep the continuous ramp, but show only a handful of rounded labels.
+      // Plot otherwise places every quantize boundary on one short strip and
+      // the values overlap into an unreadable block.
+      ticks: 5,
+      tickFormat: (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(1)}°`,
       label: "Anomaly (°C)",
     },
     marks: [
