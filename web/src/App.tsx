@@ -10,11 +10,11 @@ import NotFound from "./pages/NotFound";
 import Population from "./pages/Population";
 import { ROUTES, useRoute } from "./router";
 import {
+  border,
   currentMode,
-  gridline,
   inkPrimary,
   inkSecondary,
-  surface,
+  pageBg,
   type Mode,
 } from "./theme";
 
@@ -45,7 +45,12 @@ function applyChoice(choice: Choice): void {
  * -- see `cycle()` and the system-preference listener below.
  */
 function paintShell(): void {
-  document.body.style.backgroundColor = surface();
+  // `pageBg()`, not `surface()`. These were the same colour until this pass,
+  // which is why the app read as one flat sheet: every `Card` paints itself
+  // `surface()`, so painting the body the same value left a card visible only
+  // by its 1px border. The page is now the darker of the two in both modes and
+  // the cards sit on top of it. See italy_dashboard/palette.py's PAGE_BG_*.
+  document.body.style.backgroundColor = pageBg();
   document.body.style.color = inkPrimary();
 }
 
@@ -142,7 +147,9 @@ export default function App() {
       // `route` is not a `case` above: branded not-found for a slug that was
       // never in ROUTES at all, nothing for one that is (see the comment
       // above the switch for why those two must stay different).
-      page = ROUTES.some((r) => r.slug === route) ? null : <NotFound slug={route} />;
+      page = ROUTES.some((r) => r.slug === route) ? null : (
+        <NotFound slug={route} />
+      );
   }
 
   return (
@@ -157,7 +164,12 @@ export default function App() {
         }}
       >
         <span
-          style={{ color: inkPrimary(), fontSize: "1.25em", fontWeight: 700 }}
+          style={{
+            color: inkPrimary(),
+            fontSize: "1.25em",
+            fontWeight: 700,
+            letterSpacing: "-0.01em",
+          }}
         >
           Italy Dashboard
         </span>
@@ -165,16 +177,39 @@ export default function App() {
           type="button"
           className="mode-toggle"
           onClick={cycle}
+          // The VISIBLE label was shortened (see the comment on the text
+          // below), which would otherwise have changed this button's accessible
+          // name -- the thing assistive tech and
+          // `get_by_role("button", name="Colour mode")` both read. A bare
+          // "Dark" is also worse a11y than it looks: it names a state without
+          // saying what pressing it does.
+          //
+          // `aria-label` keeps the full, unambiguous name (identical to the old
+          // visible text) for screen readers while the sighted label stays a
+          // compact chip. Do not drop the "Colour mode" prefix: it is what
+          // tests/browser/test_static_app.py's mode-toggle test locates this
+          // button by, and shortening the visible text without this attribute
+          // is exactly what broke it once already.
+          aria-label={`Colour mode: ${choice} (currently ${mode})`}
           style={{
-            color: inkPrimary(),
-            border: `1px solid ${gridline()}`,
+            color: inkSecondary(),
+            border: `1px solid ${border()}`,
             background: "transparent",
-            borderRadius: "4px",
-            padding: "0.4rem 0.8rem",
+            borderRadius: "6px",
+            padding: "0.4rem 0.7rem",
+            fontSize: "0.8rem",
             cursor: "pointer",
           }}
         >
-          Colour mode: {choice} (currently {mode})
+          {/* Shortened from "Colour mode: system (currently light)": the old
+              label restated the resolved mode in prose in the page's top-right
+              corner, where it was the widest piece of chrome on the page and
+              drew more attention than the page title. */}
+          {choice === "system"
+            ? `Auto (${mode})`
+            : mode === "dark"
+              ? "Dark"
+              : "Light"}
         </button>
       </div>
       <nav
@@ -182,9 +217,9 @@ export default function App() {
           display: "flex",
           flexWrap: "wrap",
           gap: "1.25rem",
-          margin: "1rem 0 1.5rem",
+          margin: "1rem 0 1.75rem",
           paddingBottom: "0.75rem",
-          borderBottom: `1px solid ${gridline()}`,
+          borderBottom: `1px solid ${border()}`,
         }}
       >
         {ROUTES.map((r) => {

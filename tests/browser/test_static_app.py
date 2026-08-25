@@ -1,13 +1,34 @@
 import csv
+import json
 import re
 from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
+# Environment artefact, not a missing dependency: pytest is a dev dependency and
+# is installed in .venv -- `uv run pyrefly check` (the typechecker `just check`
+# and CI run) reports 0 errors on this file. The suppression is for a
+# Pyright-based language server whose workspace root sits ABOVE this repo, which
+# therefore never reads our pyrightconfig.json and resolves imports against the
+# system interpreter. Same case, and same one-rule-one-line scoping, as the
+# `import reflex` suppression in italy_dashboard/theme.py.
+import pytest  # pyright: ignore[reportMissingImports]
 
 pytestmark = pytest.mark.browser
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+# The same artefact the frontend itself reads (web/src/theme.ts imports it), so
+# a palette change cannot leave this file asserting a stale colour. Loaded once
+# at module scope rather than re-read per test.
+PALETTE = json.loads((REPO_ROOT / "shared" / "palette.json").read_text())
+
+
+def _rgb(hex_colour: str) -> str:
+    """`#rrggbb` as the `rgb(r, g, b)` string `getComputedStyle` returns."""
+    h = hex_colour.lstrip("#")
+    r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    return f"rgb({r}, {g}, {b})"
+
 
 STORAGE_KEY = "italy-dashboard-color-mode"
 
@@ -46,15 +67,47 @@ def page(browser) -> Iterator:
         p.close()
 
 
-def test_the_shell_paints_the_palette_surface(page, static_app):
+def test_the_shell_paints_the_palette_page_background(page, static_app):
     """The page background must come from shared/palette.json, not a CSS default.
 
     A page that renders with the browser's default white looks fine in light
     mode and wrong in dark mode, and nothing else in this suite would notice.
+
+    `page_bg`, not `surface`: those were the same colour until the readability
+    pass, which is precisely why the app read as one flat sheet -- every `Card`
+    paints itself `surface()`, so a body painted the same value left a card
+    detectable only by its 1px border. They are now two roles, and this asserts
+    the body gets the PAGE one. Read from palette.json rather than hardcoded, so
+    a future palette edit does not fail here with a stale literal reported as if
+    it were a regression in the app.
     """
     page.goto(static_app)
     background = page.evaluate("() => getComputedStyle(document.body).backgroundColor")
-    assert background == "rgb(252, 252, 251)", background  # palette surface.light
+    assert background == _rgb(PALETTE["page_bg"]["light"]), background
+    # ...and specifically NOT the card surface, which is the distinction the
+    # whole two-surface change exists to create.
+    assert background != _rgb(PALETTE["surface"]["light"])
+
+
+def test_a_card_is_visually_raised_off_the_page(page, static_app):
+    """A `Card` must not be the same colour as the page behind it.
+
+    The regression this pins: the app shipped with `pageBg()` and `surface()`
+    as one value, so every card was distinguishable only by a 1px hairline and
+    the entire UI read as flat. A test asserting only "the card has a border"
+    would have passed throughout. This asserts the two surfaces actually
+    differ, in the browser's own computed values.
+    """
+    page.goto(static_app + CLIMATE_HREF)
+    card = page.locator("main section").first
+    card.wait_for(state="visible")
+    card_bg = card.evaluate("el => getComputedStyle(el).backgroundColor")
+    body_bg = page.evaluate("() => getComputedStyle(document.body).backgroundColor")
+    assert card_bg != body_bg, (
+        f"card background ({card_bg}) is identical to the page ({body_bg}): "
+        "the elevation cue is gone"
+    )
+    assert card_bg == _rgb(PALETTE["surface"]["light"]), card_bg
 
 
 def test_keyboard_focus_shows_a_visible_ring_on_the_first_frame(page, static_app):
