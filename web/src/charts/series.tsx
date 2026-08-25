@@ -1,5 +1,6 @@
 import * as Plot from "@observablehq/plot";
 import { gridline } from "../theme";
+import { pointerRuleX, themed, tipOptions } from "./plotTheme";
 
 // Generic time-series chart specs, shared by every page whose query returns
 // one row per period plus one or more numeric columns (economy's inflation,
@@ -11,6 +12,8 @@ import { gridline } from "../theme";
 //
 // Colour always comes from a caller-supplied `SeriesDef.color` (itself read
 // from theme.ts's `series()` at the call site) -- never a literal hex here.
+// Axis ink, typography, gridline colour, tick sizing and margins all come
+// from `themed()` (plotTheme.ts) rather than being restated per spec.
 
 type Row = Record<string, unknown>;
 
@@ -29,6 +32,22 @@ export interface LineSeriesOptions {
   xKey?: string;
   xLabel?: string;
   yLabel?: string;
+  /** Decimal places shown in the hover tip. Each caller's unit has its own
+   * natural precision -- a percentage point (inflation, unemployment, foreign
+   * share) reads as 1-2 decimals, a resident headcount as 0. */
+  valueDecimals?: number;
+  /** Suffix appended to the tip's value, e.g. "%" -- the unit belongs next to
+   * the number in a tooltip, where there is no axis label in view to carry
+   * it. */
+  valueSuffix?: string;
+  /** Whether zero is a meaningful baseline for this quantity. `true` (the
+   * default) keeps the `Plot.ruleY([0])` zero line, which also forces 0 into
+   * the y domain -- correct for a rate that can go negative (inflation) or a
+   * count. `false` drops it, letting the domain fit the data: see
+   * `bandTrendSpec` in climate.tsx for the same distinction and why it
+   * matters (a 20-24 degree C series plotted from 0 is a flat line in the top
+   * 15% of the chart). */
+  zeroBaseline?: boolean;
 }
 
 const toNumber = (row: Row, key: string): number => Number(row[key]);
@@ -56,10 +75,24 @@ const toNumberOrNull = (row: Row, key: string): number | null => {
  * (Plot's `isColor` check recognises it as a literal, not a column
  * reference, the same mechanism `rankingSpec`'s `fill: series(1)` relies
  * on).
+ *
+ * Interaction: a `Plot.dot` + `Plot.tip` pair under `Plot.pointerX`, plus a
+ * `pointerRuleX` guide line. `pointerX` (not plain `pointer`) is the right transform
+ * for a time series -- it selects on x-distance alone, so the nearest YEAR is
+ * found wherever in the card's height the cursor happens to be, rather than
+ * requiring the reader to trace the line itself. The dot is what makes the
+ * selection visible; without it the tip appears with nothing marking which
+ * datum it describes.
  */
-export function lineSeriesSpec(rows: Row[], opts: LineSeriesOptions): Plot.PlotOptions {
+export function lineSeriesSpec(
+  rows: Row[],
+  opts: LineSeriesOptions,
+): Plot.PlotOptions {
   const xKey = opts.xKey ?? "period";
   const multi = opts.series.length > 1;
+  const decimals = opts.valueDecimals ?? 1;
+  const suffix = opts.valueSuffix ?? "";
+  const zeroBaseline = opts.zeroBaseline ?? true;
   const long = opts.series.flatMap((def) =>
     rows.map((row) => ({
       x: toNumber(row, xKey),
@@ -67,33 +100,83 @@ export function lineSeriesSpec(rows: Row[], opts: LineSeriesOptions): Plot.PlotO
       label: def.label,
     })),
   );
-  return {
-    // `tickSize: 0` on both axes: see climate.tsx's bandTrendSpec for the
-    // full diagnosis -- Plot's axis tick dashes are unconditionally the
-    // FIRST `path` elements in DOM order, and a purely horizontal/vertical
-    // tick dash has a zero-height/zero-width bounding box. A Playwright
-    // `wait_for_selector` on a plain `path` selector resolves to that first,
-    // never-visible element and hangs for the full timeout rather than ever
-    // reaching a real data mark a few siblings later -- confirmed here: the
-    // element count was already correct (26/21 `path`s) while the wait still
-    // timed out, the same failure mode that comment documents.
+
+  // Only the points the pointer transform can actually select. A null value
+  // has no y position, so leaving it in would let `pointerX` "select" a year
+  // whose tip then reads `null` -- a gap in the data must stay a gap in the
+  // interaction too.
+  const selectable = long.filter((d) => d.value !== null);
+
+  return themed({
     // `tickFormat`: every caller plots a year on this axis (`xKey` always
-    // defaults to "period", never overridden -- see the plan's final
-    // review, F6), and Plot's default numeric tick formatter applies
-    // thousands grouping to any continuous scale, rendering years as
-    // `2,024` rather than `2024`. `String(y)` is the whole fix: a year is
-    // never fractional, so nothing is lost by skipping Plot's default
-    // formatter entirely.
-    x: { label: opts.xLabel ?? "Year", tickSize: 0, tickFormat: (y: number) => String(y) },
-    y: { label: opts.yLabel, grid: true, tickSize: 0 },
+    // defaults to "period", never overridden -- see the plan's final review,
+    // F6), and Plot's default numeric tick formatter applies thousands
+    // grouping to any continuous scale, rendering years as `2,024` rather
+    // than `2024`. `String(y)` is the whole fix: a year is never fractional,
+    // so nothing is lost by skipping Plot's default formatter entirely.
+    x: { label: opts.xLabel ?? "Year", tickFormat: (y: number) => String(y) },
+    y: { label: opts.yLabel },
     color: multi
-      ? { legend: true, domain: opts.series.map((s) => s.label), range: opts.series.map((s) => s.color) }
+      ? {
+          legend: true,
+          domain: opts.series.map((s) => s.label),
+          range: opts.series.map((s) => s.color),
+        }
       : undefined,
     marks: [
-      Plot.line(long, { x: "x", y: "value", stroke: multi ? "label" : opts.series[0]!.color }),
-      Plot.ruleY([0], { stroke: gridline() }),
+      ...(zeroBaseline ? [Plot.ruleY([0], { stroke: gridline() })] : []),
+      // strokeWidth 2, up from Plot's 1.5 default. Not cosmetic: every
+      // categorical colour in this palette sits UNDER 4.5:1 against its own
+      // card surface (measured: light 2.74-4.30:1, dark 3.63-4.75:1), and
+      // WCAG's 3:1 non-text minimum assumes a chunky shape rather than a hairline
+      // stroke. The hues themselves are not changed here on purpose -- they were
+      // selected by a colourblind-separation validator (see
+      // italy_dashboard/palette.py) that is no longer available on this machine,
+      // so re-picking them blind would trade a measurable contrast gain for an
+      // unverifiable regression in colourblind distinctness. A wider stroke buys
+      // real legibility at zero risk to that property.
+      Plot.line(long, {
+        x: "x",
+        y: "value",
+        stroke: multi ? "label" : opts.series[0]!.color,
+        strokeWidth: 2,
+      }),
+      pointerRuleX(selectable, "x"),
+      // The selected point. `fill` carries the series identity (a channel
+      // reference when multi, a literal colour when single -- Plot's `isColor`
+      // check tells them apart), and `stroke` is deliberately NOT used for
+      // that: it is spent on a halo in the card colour so the marker reads as
+      // sitting ON TOP of the line rather than as a kink in it. An earlier
+      // version of this passed `stroke: "label"` for the multi case and then
+      // overwrote it with the halo two lines later, silently dropping the
+      // series colour from the marker -- fill is the channel that has to
+      // carry it.
+      Plot.dot(
+        selectable,
+        Plot.pointerX({
+          x: "x",
+          y: "value",
+          fill: multi ? "label" : opts.series[0]!.color,
+          r: 3.5,
+          stroke: "var(--plot-background)",
+          strokeWidth: 2,
+        }),
+      ),
+      Plot.tip(
+        selectable,
+        Plot.pointerX({
+          x: "x",
+          y: "value",
+          title: (d: { x: number; value: number; label: string }) =>
+            [
+              String(d.x),
+              `${multi ? `${d.label}: ` : ""}${d.value.toFixed(decimals)}${suffix}`,
+            ].join("\n"),
+          ...tipOptions(),
+        }),
+      ),
     ],
-  };
+  });
 }
 
 // A `stackedAreaSpec` companion to `lineSeriesSpec` used to live here (Task 2

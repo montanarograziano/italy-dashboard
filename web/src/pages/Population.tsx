@@ -74,6 +74,12 @@ export default function Population({ mode }: { mode: Mode }) {
       lineSeriesSpec(residents, {
         series: [{ key: "value", label: "Residents (millions)", color: series(1) }],
         yLabel: "Residents (millions)",
+        valueDecimals: 2,
+        valueSuffix: "M",
+        // A resident headcount never approaches zero, so anchoring the axis
+        // there flattened the whole series into a line at the top of the card:
+        // the change this chart exists to show is a few percent of the total.
+        zeroBaseline: false,
       }),
     [residents, mode],
   );
@@ -82,6 +88,11 @@ export default function Population({ mode }: { mode: Mode }) {
       lineSeriesSpec(foreignShare, {
         series: [{ key: "value", label: "Foreign share (%)", color: series(2) }],
         yLabel: "Foreign share (%)",
+        valueDecimals: 2,
+        valueSuffix: "%",
+        // Zero KEPT here, unlike the residents chart above: this is a share of
+        // a whole, so 0% is a real floor and growth from a low base should be
+        // read in proportion to it, not zoomed.
       }),
     [foreignShare, mode],
   );

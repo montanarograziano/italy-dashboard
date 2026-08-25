@@ -1,4 +1,5 @@
 import * as Plot from "@observablehq/plot";
+import { themed, tipOptions } from "./plotTheme";
 
 type Row = Record<string, unknown>;
 
@@ -22,11 +23,19 @@ export interface ScatterOptions {
   yKey: string;
   xLabel?: string;
   yLabel?: string;
-  /** Column shown in each point's native SVG `<title>` tooltip (Plot's
-   * `title` mark option) -- mirrors `scatter_chart`'s `label_key` in
-   * components.py (the region name), the recharts ZAxis-tooltip idiom
-   * ported to Plot's own, simpler mechanism. */
+  /** Column naming each point (the region name) -- mirrors `scatter_chart`'s
+   * `label_key` in components.py.
+   *
+   * This used to be passed as Plot's `title` mark option, which renders a
+   * native SVG `<title>` element: the BROWSER's tooltip, which needs a ~1s
+   * motionless hover to appear, cannot be styled, and shows only the label,
+   * never the x/y values. It is now the heading of a real `Plot.tip`, which
+   * appears immediately and carries the coordinates too. */
   titleKey?: string;
+  /** Decimals for the x value shown in the tip. */
+  xDecimals?: number;
+  /** Decimals for the y value shown in the tip. */
+  yDecimals?: number;
 }
 
 /** A two-(or-more)-group scatter, one coloured dot series per group sharing
@@ -44,17 +53,17 @@ export interface ScatterOptions {
  * is exactly the kind of "looks right, isn't wired up" bug this project has
  * hit before (see App.tsx's colour-mode memo-dependency finding).
  *
- * `tickSize: 0` on both axes from the start, same reasoning as `bar.tsx`'s
- * `hBarSpec`: a purely horizontal/vertical Plot axis tick dash has a
- * zero-width or zero-height bounding box, which breaks a plain Playwright
- * `path` wait -- this project's Plot work has hit that trap on every new
- * spec file that skipped it.
+ * `tickSize: 0` on both axes is no longer set here: it is a shared default in
+ * `themed()` (plotTheme.ts), which documents the Playwright `path`-wait trap
+ * that makes it load-bearing rather than cosmetic.
  */
 export function scatterSpec(series: ScatterSeriesDef[], opts: ScatterOptions): Plot.PlotOptions {
   const long: Row[] = series.flatMap((s) => s.rows.map((r) => ({ ...r, __series: s.label })));
-  return {
-    x: { label: opts.xLabel, grid: true, tickSize: 0 },
-    y: { label: opts.yLabel, grid: true, tickSize: 0 },
+  const xd = opts.xDecimals ?? 0;
+  const yd = opts.yDecimals ?? 1;
+  return themed({
+    x: { label: opts.xLabel, grid: true },
+    y: { label: opts.yLabel, grid: true },
     color: {
       legend: true,
       domain: series.map((s) => s.label),
@@ -65,8 +74,36 @@ export function scatterSpec(series: ScatterSeriesDef[], opts: ScatterOptions): P
         x: opts.xKey,
         y: opts.yKey,
         fill: "__series",
-        title: opts.titleKey,
+        // A little transparency plus a slightly larger radius: this scatter
+        // overplots heavily (two citizenship groups over the same ~100
+        // regions), and fully opaque dots hide how many points share a spot.
+        fillOpacity: 0.75,
+        r: 4,
       }),
+      // Plain `Plot.pointer`, not `pointerX`/`pointerY`: in a scatter BOTH
+      // coordinates are data, so the nearest point in 2-D is the one the
+      // reader means. `maxRadius` is raised from Plot's 40px default because
+      // this cloud is sparse at its edges, where the default leaves the
+      // outliers -- the most interesting points in a correlation chart --
+      // unhoverable.
+      Plot.tip(
+        long,
+        Plot.pointer({
+          x: opts.xKey,
+          y: opts.yKey,
+          maxRadius: 60,
+          title: (d: Row) =>
+            [
+              opts.titleKey ? String(d[opts.titleKey]) : "",
+              String(d.__series),
+              `${opts.xLabel ?? "x"}: ${Number(d[opts.xKey]).toFixed(xd)}`,
+              `${opts.yLabel ?? "y"}: ${Number(d[opts.yKey]).toFixed(yd)}`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          ...tipOptions(),
+        }),
+      ),
     ],
-  };
+  });
 }

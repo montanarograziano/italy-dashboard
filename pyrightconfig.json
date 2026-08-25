@@ -1,0 +1,17 @@
+{
+  "$comment": [
+    "Points editor/agent language servers at the SAME interpreter pyrefly and pytest use.",
+    "Without this, a language server started outside `uv run` resolves imports against the",
+    "system Python, which has no reflex/duckdb/playwright installed, and reports",
+    "'Import \"reflex\" could not be resolved' on italy_dashboard/theme.py and every other",
+    "framework import in the repo -- pure false positives: `.venv/bin/pyrefly check` reports",
+    "0 errors on the same files. Type checking in CI is pyrefly (see [tool.pyrefly] in",
+    "pyproject.toml); this file exists only so an editor agrees with it.",
+    "Paths mirror [tool.pyrefly]'s project-includes/project-excludes and search-path."
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": ["ingestion", "italy_dashboard", "scripts", "tests"],
+  "exclude": ["**/.venv", "**/.web", "**/node_modules", "**/_to_delete"],
+  "extraPaths": ["scripts"]
+}

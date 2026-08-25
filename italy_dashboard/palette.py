@@ -17,13 +17,59 @@ from __future__ import annotations
 SURFACE_LIGHT = "#fcfcfb"
 SURFACE_DARK = "#1a1a19"
 
+# The PAGE behind the cards, deliberately NOT equal to SURFACE_*.
+#
+# Both frontends used to paint the page and every card the same colour, so a
+# card was readable only by its 1px border and the whole UI read as one flat
+# sheet with hairlines drawn on it. Two surfaces give a real elevation cue at
+# zero interaction cost. The card is the lighter of the pair in BOTH modes
+# (light: paper on a desk; dark: a raised surface catches more light), so the
+# page colour is the darker one in both -- which is why this is a new token
+# rather than a change to SURFACE_*.
+#
+# SURFACE_* is unchanged on purpose: it is the background every chart colour
+# below was validated against (the colourblind checks in
+# tests/unit/test_palette.py), so moving it would invalidate the whole
+# categorical/diverging/sequential set. Only the new, chart-free page colour
+# moves. Contrast against SURFACE_* is 1.11:1 (light) and 1.08:1 (dark):
+# deliberately sub-perceptual as *text* contrast, which is the point -- it is
+# a depth cue, not information, and anything stronger reads as a coloured
+# panel rather than a lifted one.
+PAGE_BG_LIGHT = "#f1f0ec"
+PAGE_BG_DARK = "#111110"
+
+# Card, control and table edges: a hairline visible on EITHER surface without
+# competing with the data. Distinct from GRIDLINE_* below, which is the
+# inside-the-chart line and is deliberately fainter still.
+BORDER_LIGHT = "#dedcd4"
+BORDER_DARK = "#333331"
+
+# Chart axis lines and tick labels: dimmer than INK_SECONDARY (chrome, not
+# copy) but both well clear of WCAG's 3:1 non-text floor against their own
+# SURFACE_* -- the floor tests/browser/test_axis_contrast.py enforces.
+# #63625d is 5.95:1 on SURFACE_LIGHT, #9c9b95 is 6.25:1 on SURFACE_DARK.
+# Observable Plot's own default axis ink is `currentColor` at full strength,
+# i.e. INK_PRIMARY, which is why every static-app chart used to shout its
+# tick labels as loudly as its title.
+AXIS_LIGHT = "#63625d"
+AXIS_DARK = "#9c9b95"
+
 # UI text and gridline tokens (not chart-data colours, so not run through the
 # colourblind validator below). Shared with the static frontend via
 # scripts/generate_palette.py so its body text and gridlines match Reflex's:
 # italy_dashboard/theme.py wraps these in rx.color_mode_cond rather than
 # hardcoding its own copies.
-INK_PRIMARY_LIGHT = "#0b0b0b"
-INK_PRIMARY_DARK = "#f4f4f2"
+# INK_PRIMARY was #0b0b0b / #f4f4f2: 19.2:1 and 15.8:1 against their own
+# surfaces. Both clear AAA several times over, and both sit ABOVE the range
+# where more contrast still buys legibility -- near-black on near-white (and
+# its inverse) is the usual cause of the halation that reads as "harsh" and,
+# paradoxically, as "flat": with headings, body copy and chart ink all pinned
+# at maximum contrast there is no headroom left to rank them, so nothing has
+# emphasis. Pulled back to 14.4:1 (light) and 13.0:1 (dark) -- still AAA at
+# every size this app renders, with real separation now available between
+# primary, secondary, muted and axis ink.
+INK_PRIMARY_LIGHT = "#282825"
+INK_PRIMARY_DARK = "#e0dfd9"
 INK_SECONDARY_LIGHT = "#52514e"
 INK_SECONDARY_DARK = "#b8b7b2"
 # INK_MUTED_LIGHT was #898781 (3.50:1 on SURFACE_LIGHT): under WCAG AA's

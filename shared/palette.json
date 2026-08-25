@@ -4,9 +4,21 @@
     "light": "#fcfcfb",
     "dark": "#1a1a19"
   },
+  "page_bg": {
+    "light": "#f1f0ec",
+    "dark": "#111110"
+  },
+  "border": {
+    "light": "#dedcd4",
+    "dark": "#333331"
+  },
+  "axis": {
+    "light": "#63625d",
+    "dark": "#9c9b95"
+  },
   "ink_primary": {
-    "light": "#0b0b0b",
-    "dark": "#f4f4f2"
+    "light": "#282825",
+    "dark": "#e0dfd9"
   },
   "ink_secondary": {
     "light": "#52514e",

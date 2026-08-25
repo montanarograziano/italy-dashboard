@@ -71,6 +71,10 @@ export default function Labor({ mode }: { mode: Mode }) {
           { key: "national", label: "National average", color: series(2) },
         ],
         yLabel: "Unemployment rate (%)",
+        valueDecimals: 1,
+        valueSuffix: "%",
+        // Zero baseline kept (the default): a rate is a share, so 0% is a real
+        // floor and the selected-vs-national gap reads against it.
       }),
     [rows, mode],
   );

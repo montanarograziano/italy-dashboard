@@ -42,6 +42,34 @@ export function surface(): string {
   return palette.surface[currentMode()];
 }
 
+/** The page behind the cards -- NOT the same colour as `surface()`.
+ *
+ * The shell used to paint the body and every `Card` from `surface()` alike,
+ * which left a card detectable only by its 1px border: the whole page read as
+ * one flat sheet. See italy_dashboard/palette.py's PAGE_BG_* for why the card
+ * is the lighter of the pair in both modes.
+ */
+export function pageBg(): string {
+  return palette.page_bg[currentMode()];
+}
+
+/** Card/control/table edges. Distinct from `gridline()`, which is the fainter
+ * inside-the-chart line -- previously both roles shared one token, so a card
+ * edge was drawn no more strongly than a gridline. */
+export function border(): string {
+  return palette.border[currentMode()];
+}
+
+/** Axis lines and tick labels: chrome, deliberately dimmer than any ink used
+ * for copy, but still over WCAG's 3:1 non-text floor. Observable Plot's own
+ * default is `currentColor` at full strength (i.e. `inkPrimary()`), which is
+ * why an untreated chart shouts its tick labels as loudly as its title -- see
+ * charts/plotTheme.ts, which feeds this into every spec.
+ */
+export function axis(): string {
+  return palette.axis[currentMode()];
+}
+
 export function inkPrimary(): string {
   return palette.ink_primary[currentMode()];
 }

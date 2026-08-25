@@ -30,7 +30,22 @@ callers never assemble it themselves.
 
 from __future__ import annotations
 
-import reflex as rx
+# NOT a guarded optional import (contrast ingestion/cds.py): `reflex` is a
+# hard runtime dependency, is declared in pyproject.toml's [project]
+# dependencies, and is installed in .venv -- `uv run python -c "import
+# italy_dashboard.theme"` works, and `uv run pyrefly check italy_dashboard/`
+# (the typechecker `just check` and CI actually run, see [tool.pyrefly])
+# reports 0 errors on this file.
+#
+# The suppression exists for a Pyright-based language server whose workspace
+# root is a directory ABOVE this repo (e.g. an editor/agent opened on the
+# parent projects folder). Such a server never reads our pyrightconfig.json
+# and so resolves imports against the system interpreter, where reflex is
+# absent -- a pure environment artefact that also produces knock-on
+# reportCallIssue noise on every `rx.*` call in components.py. Scoped to the
+# one rule on the one line, per the convention in f1b989e, so a genuinely
+# missing import elsewhere still surfaces.
+import reflex as rx  # pyright: ignore[reportMissingImports]
 
 from italy_dashboard import palette
 
@@ -39,27 +54,35 @@ FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
 # Light and dark chrome & ink values, keyed identically. Private: nothing
 # outside this module should reach for a single mode's colour directly — that
 # is exactly the bug described above. Always go through the accessors below.
+# PAGE_BG, AXIS and BORDER used to be local literals here, so the static
+# frontend (which reads shared/palette.json, generated from palette.py) had no
+# way to reach them and painted its page, its cards and its chart axes all
+# from SURFACE/INK_PRIMARY instead -- the flat, over-contrasted look this pass
+# exists to fix. They now live in palette.py alongside every other role and
+# are shared by both frontends. The old AXIS values (#c3c2b7 / #3d3d3a) were
+# also under WCAG's 3:1 non-text floor against their own surfaces (1.53:1 and
+# 1.61:1 respectively); palette.AXIS_* clears it at ~6:1.
 _LIGHT = {
     "SURFACE": palette.SURFACE_LIGHT,
-    "PAGE_BG": "#f9f9f7",
+    "PAGE_BG": palette.PAGE_BG_LIGHT,
     "INK_PRIMARY": palette.INK_PRIMARY_LIGHT,
     "INK_SECONDARY": palette.INK_SECONDARY_LIGHT,
     "INK_MUTED": palette.INK_MUTED_LIGHT,
     "GRIDLINE": palette.GRIDLINE_LIGHT,
-    "AXIS": "#c3c2b7",
-    "BORDER": "rgba(11,11,11,0.10)",
+    "AXIS": palette.AXIS_LIGHT,
+    "BORDER": palette.BORDER_LIGHT,
 }
 
 # Dark counterparts, selected against the dark surface (not inverted).
 _DARK = {
     "SURFACE": palette.SURFACE_DARK,
-    "PAGE_BG": "#131312",
+    "PAGE_BG": palette.PAGE_BG_DARK,
     "INK_PRIMARY": palette.INK_PRIMARY_DARK,
     "INK_SECONDARY": palette.INK_SECONDARY_DARK,
     "INK_MUTED": palette.INK_MUTED_DARK,
     "GRIDLINE": palette.GRIDLINE_DARK,
-    "AXIS": "#3d3d3a",
-    "BORDER": "rgba(244,244,242,0.12)",
+    "AXIS": palette.AXIS_DARK,
+    "BORDER": palette.BORDER_DARK,
 }
 
 
