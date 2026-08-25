@@ -48,6 +48,11 @@ export default function Economy({ mode }: { mode: Mode }) {
       lineSeriesSpec(inflation, {
         series: [{ key: "value", label: "Change (%)", color: series(1) }],
         yLabel: "Change (%)",
+        valueDecimals: 1,
+        valueSuffix: "%",
+        // Zero baseline kept (the default), and it matters more here than
+        // anywhere else in the app: inflation goes NEGATIVE, so the zero line
+        // is the difference between prices rising and prices falling.
       }),
     [inflation, mode],
   );

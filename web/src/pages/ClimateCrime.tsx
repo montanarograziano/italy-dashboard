@@ -194,6 +194,11 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
         xLabel: CC_X_PANEL,
         yLabel: CC_Y_PANEL,
         titleKey: "region",
+        // Both axes here are DE-MEANED residuals (region and year effects
+        // removed), so they span a fraction of a degree / of a log point.
+        // Rounding to 0-1 places would collapse most of the cloud to one value.
+        xDecimals: 2,
+        yDecimals: 3,
       }),
     [panelPoints, mode],
   );
@@ -205,6 +210,9 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
         xLabel: CC_X_RAW,
         yLabel: CC_Y_RAW,
         titleKey: "region",
+        // Raw levels, not residuals: a summer mean in degrees and a log count.
+        xDecimals: 1,
+        yDecimals: 2,
       }),
     [rawPoints, mode],
   );

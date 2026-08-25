@@ -426,7 +426,8 @@ function OffendersTab({ mode }: { mode: Mode }) {
       trendLabels.length === 0
         ? [{ key: "value", label: "Offenders", color: series(1) }]
         : trendLabels.map((label, i) => ({ key: `s${i + 1}`, label, color: series(i + 1) }));
-    return lineSeriesSpec(trendRows, { series: seriesDefs, yLabel: "Offenders" });
+    // Offenders are a headcount: no decimals, zero is a real floor.
+    return lineSeriesSpec(trendRows, { series: seriesDefs, yLabel: "Offenders", valueDecimals: 0 });
   }, [trendRows, trendLabels, mode]);
 
   const ratesSpec = useMemo(
@@ -437,12 +438,19 @@ function OffendersTab({ mode }: { mode: Mode }) {
           { key: "s2", label: "Foreigners", color: series(2) },
         ],
         yLabel: "Offenders per 1,000 residents",
+        // A rate per 1,000 sits in the low single-to-double digits here, so
+        // whole numbers would discard most of the gap between the two series
+        // this chart exists to compare.
+        valueDecimals: 2,
       }),
     [rates, mode],
   );
 
   const rankingSpec = useMemo(
-    () => hBarSpec(ranking, { xLabel: "Offenders per 1,000", color: series(2) }),
+    // Same unit as `ratesSpec`, so the same precision: hBarSpec defaults to 0
+    // decimals for the count breakdowns, which would round every region in
+    // this ranking to the same handful of integers.
+    () => hBarSpec(ranking, { xLabel: "Offenders per 1,000", color: series(2), valueDecimals: 2 }),
     [ranking, mode],
   );
 
@@ -451,6 +459,8 @@ function OffendersTab({ mode }: { mode: Mode }) {
       lineSeriesSpec(share, {
         series: [{ key: "value", label: "Foreign share (%)", color: series(2) }],
         yLabel: "Foreign share (%)",
+        valueDecimals: 1,
+        valueSuffix: "%",
       }),
     [share, mode],
   );
@@ -758,6 +768,10 @@ function IncomeCard({ mode }: { mode: Mode }) {
           xLabel: "Income per capita (EUR)",
           yLabel: "Offenders per 1,000",
           titleKey: "region",
+          // Euros to the whole unit; rates at the same 2 places the rate charts
+          // above use.
+          xDecimals: 0,
+          yDecimals: 2,
         },
       ),
     [itl, frg, mode],
@@ -964,7 +978,8 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
       trendLabels.length === 0
         ? [{ key: "value", label: "Convictions", color: series(1) }]
         : trendLabels.map((label, i) => ({ key: `s${i + 1}`, label, color: series(i + 1) }));
-    return lineSeriesSpec(trendRows, { series: seriesDefs, yLabel: "Convictions" });
+    // Convictions are a headcount, same as the offenders trend above.
+    return lineSeriesSpec(trendRows, { series: seriesDefs, yLabel: "Convictions", valueDecimals: 0 });
   }, [trendRows, trendLabels, mode]);
 
   const byOffenceSpec = useMemo(

@@ -1,5 +1,12 @@
 import * as Plot from "@observablehq/plot";
 import { divergingSteps, gridline, inkPrimary, series } from "../theme";
+import {
+  labelInk,
+  pointerRuleX,
+  themed,
+  thinTicks,
+  tipOptions,
+} from "./plotTheme";
 
 // Pure functions from ported-query rows (see web/src/queries/climate.ts,
 // climateScope.ts and static.ts) to Observable Plot specs. Nothing here
@@ -45,7 +52,9 @@ const year = (d: Row) => Number(d.period);
  */
 export function bandTrendSpec(rows: Row[]): Plot.PlotOptions {
   const hue = series(1);
-  return {
+  const fmt = (v: unknown) =>
+    v === null || v === undefined ? "n/a" : `${Number(v).toFixed(1)}°C`;
+  return themed({
     // `tickSize: 0` drops the little tick-mark dashes, not the tick labels
     // (still rendered as `<text>`) or the y gridlines already on above --
     // it is the only way to also stop them being drawn as `<path>` elements
@@ -63,15 +72,80 @@ export function bandTrendSpec(rows: Row[]): Plot.PlotOptions {
     // formatter would otherwise group as `1,950` -- see `thresholdSpec`
     // below (the same bug, same fix) and series.tsx's `lineSeriesSpec`,
     // where the plan's final review (F6) first caught it.
-    x: { label: "Year", tickSize: 0, tickFormat: (y: number) => String(y) },
-    y: { label: "Temperature (°C)", grid: true, tickSize: 0 },
+    x: { label: "Year", tickFormat: (y: number) => String(y) },
+    // No `Plot.ruleY([0])` here, unlike every other spec in this file.
+    //
+    // A zero rule does not just DRAW a line at zero, it forces 0 into the y
+    // domain -- and 0°C is not a meaningful baseline for an absolute
+    // temperature, it is an arbitrary point on the Celsius scale. With it, an
+    // Italian annual mean series (roughly 12-24°C) was squeezed into the top
+    // sixth of the chart as a visually flat line, with five sixths of every
+    // card given over to empty space between 0 and the data: the warming this
+    // chart exists to show was compressed into near-invisibility. Letting the
+    // domain fit the data is what makes the trend and the min-max band
+    // legible. `zero: false` is stated explicitly rather than left implicit so
+    // a future edit adding a zero rule back has to argue with this comment
+    // first.
+    y: { label: "Temperature (°C)", zero: false },
     marks: [
-      Plot.areaY(rows, { x: year, y1: "t_min", y2: "t_max", fill: hue, fillOpacity: 0.16 }),
-      Plot.line(rows, { x: year, y: "t_mean", stroke: hue, strokeWidth: 1.25 }),
-      Plot.line(rows, { x: year, y: "t_rolling", stroke: hue, strokeWidth: 2.75 }),
-      Plot.ruleY([0], { stroke: gridline() }),
+      // fillOpacity down from 0.16 to 0.10, and the mean line back to full
+      // strength. Once `zero: false` (above) let the domain fit the data, the
+      // band stopped being a thin sliver and became the whole plot area -- at
+      // 0.16 it read as a solid muddy block in dark mode with the two lines
+      // lost inside it, which inverts the intended hierarchy: the ROLLING
+      // AVERAGE is the signal, the band is context.
+      Plot.areaY(rows, {
+        x: year,
+        y1: "t_min",
+        y2: "t_max",
+        fill: hue,
+        fillOpacity: 0.1,
+      }),
+      Plot.line(rows, {
+        x: year,
+        y: "t_mean",
+        stroke: hue,
+        strokeWidth: 1,
+        strokeOpacity: 0.8,
+      }),
+      Plot.line(rows, {
+        x: year,
+        y: "t_rolling",
+        stroke: hue,
+        strokeWidth: 2.75,
+      }),
+      pointerRuleX(rows, year),
+      Plot.dot(
+        rows,
+        Plot.pointerX({
+          x: year,
+          y: "t_mean",
+          fill: hue,
+          r: 3.5,
+          stroke: "var(--plot-background)",
+          strokeWidth: 2,
+        }),
+      ),
+      // All four values for the hovered year in one tip -- the whole point of
+      // a band chart is the relationship between them, so showing only the
+      // series the cursor happens to be nearest would be the less useful half.
+      Plot.tip(
+        rows,
+        Plot.pointerX({
+          x: year,
+          y: "t_mean",
+          title: (d: Row) =>
+            [
+              String(d.period),
+              `Mean: ${fmt(d.t_mean)}`,
+              `Range: ${fmt(d.t_min)} to ${fmt(d.t_max)}`,
+              `10-yr average: ${fmt(d.t_rolling)}`,
+            ].join("\n"),
+          ...tipOptions(),
+        }),
+      ),
     ],
-  };
+  });
 }
 
 /** One city's (or region's) warming stripes: one cell per year, coloured by
@@ -88,17 +162,61 @@ export function bandTrendSpec(rows: Row[]): Plot.PlotOptions {
  * `test_the_stripes_resolve_to_distinct_diverging_colours` selects on.
  */
 export function stripesSpec(rows: Row[]): Plot.PlotOptions {
-  return {
-    x: { label: null },
-    y: { axis: null },
+  // The axis fix this chart is named for in the bug report: it rendered EVERY
+  // year as its own tick label, ~75 of them in a ~1000px card, printed on top
+  // of one another into an illegible smear -- and with Plot's default numeric
+  // formatter grouping each one as `1,950`, so the smear was of five-character
+  // labels rather than four.
+  //
+  // Two independent defects, two fixes:
+  //
+  // 1. `tickFormat` -- drop the thousands separator. Same bug and same fix as
+  //    `bandTrendSpec`/`thresholdSpec`/`monthHeatmapSpec`; this spec was the
+  //    one that never got it.
+  // 2. `ticks` -- thin the tick VALUES by hand. `Plot.cell` hardcodes its x
+  //    scale to a BAND scale (see the note below on `x: year`), and band
+  //    scales are precisely where Plot's automatic tick thinning does not
+  //    apply: with no `interval` set, Plot falls through to `data = domain`,
+  //    i.e. one tick per category, and `ticks: 10`/`tickSpacing` have no
+  //    effect at all. `thinTicks` (plotTheme.ts) picks evenly-spaced years
+  //    and keeps the last, so the axis still states the range it covers.
+  const years = [...new Set(rows.map(year))].sort((a, b) => a - b);
+  return themed({
+    x: {
+      label: null,
+      ticks: thinTicks(years, 12),
+      tickFormat: (y: number) => String(y),
+    },
+    // `grid: false` overrides `themed()`'s y-grid default: this chart's y axis
+    // is a single unlabelled band (`axis: null`), so a horizontal gridline
+    // would be a line drawn across the stripes for no reason.
+    y: { axis: null, grid: false },
     // `x: year` (the numeric accessor above), not `x: "period"`: Plot's
     // `Cell` mark hardcodes its x scale `type` to "band" regardless of the
     // channel's underlying value type, so this changes nothing about the
     // banding -- it only stops Plot's own heuristic from seeing numeric-
     // looking strings on an ordinal scale and logging "some data ... are
     // strings that appear to be numbers" to the console on every render.
-    marks: [Plot.cell(rows, { x: year, fill: "fill", inset: 0.5 })],
-  };
+    marks: [
+      Plot.cell(rows, { x: year, fill: "fill", inset: 0.5 }),
+      // Without a tip this chart is unreadable by design: a stripe encodes its
+      // anomaly ONLY as a colour bucket, so there is no way to recover the
+      // year or the value from the picture. `pointerX` matches the one-cell-
+      // per-year geometry -- the stripe is full-height, so x-distance is the
+      // only meaningful measure of "nearest".
+      Plot.tip(
+        rows,
+        Plot.pointerX({
+          x: year,
+          title: (d: Row) => {
+            const v = Number(d.anomaly);
+            return `${String(d.period)}\n${v > 0 ? "+" : ""}${v.toFixed(2)}\u00b0C vs 1981-2010`;
+          },
+          ...tipOptions(),
+        }),
+      ),
+    ],
+  });
 }
 
 // Target pixel width for the narrowest year band in the faceted grid below.
@@ -146,7 +264,10 @@ const FACETED_MARGIN_RIGHT = 20;
  * `inkPrimary` box drawn around it. A real branch is required instead of a
  * sentinel value.
  */
-export function facetedStripesSpec(rows: Row[], highlight: string = ""): Plot.PlotOptions {
+export function facetedStripesSpec(
+  rows: Row[],
+  highlight: string = "",
+): Plot.PlotOptions {
   const bandsPerCity = new Map<string, number>();
   for (const r of rows) {
     const city = String(r.city);
@@ -155,15 +276,19 @@ export function facetedStripesSpec(rows: Row[], highlight: string = ""): Plot.Pl
   const facetCount = Math.max(1, bandsPerCity.size);
   const maxBandsInAnyFacet = Math.max(1, ...bandsPerCity.values());
   const width =
-    FACETED_MARGIN_LEFT + FACETED_MARGIN_RIGHT + facetCount * maxBandsInAnyFacet * MIN_BAND_PX;
+    FACETED_MARGIN_LEFT +
+    FACETED_MARGIN_RIGHT +
+    facetCount * maxBandsInAnyFacet * MIN_BAND_PX;
 
-  return {
+  return themed({
     width,
     marginLeft: FACETED_MARGIN_LEFT,
     marginRight: FACETED_MARGIN_RIGHT,
     fx: { label: null },
-    x: { axis: null },
-    y: { axis: null },
+    x: { axis: null, grid: false },
+    // `grid: false` -- see stripesSpec: `themed()` turns the y grid on for the
+    // line/bar charts that want it, and an axis-less cell grid does not.
+    y: { axis: null, grid: false },
     marks: [
       // inset: 0 (not stripesSpec's 0.5) -- at this many bands per facet,
       // shaving even a single pixel off each side is the other half of what
@@ -171,9 +296,32 @@ export function facetedStripesSpec(rows: Row[], highlight: string = ""): Plot.Pl
       // single-chart variant's inset because adjacent cells are already
       // visually separated by the gap the diverging fills create.
       Plot.cell(rows, { x: year, fill: "fill", fx: "city", inset: 0 }),
-      ...(highlight ? [Plot.frame({ fx: highlight, stroke: inkPrimary(), strokeWidth: 3 })] : []),
+      ...(highlight
+        ? [Plot.frame({ fx: highlight, stroke: inkPrimary(), strokeWidth: 3 })]
+        : []),
+      // LAST in the mark list, not first: Plot renders marks in array order, so
+      // a tip declared before the `cell` mark is painted underneath every
+      // stripe and is invisible wherever it overlaps the data -- which, in a
+      // chart that is nothing but stripes, is everywhere.
+      //
+      // The x axis is deliberately absent from this grid (no room for year
+      // labels in a 76-band facet), which makes this tip the ONLY way to find
+      // out which year a stripe is: the small-multiples grid was otherwise a
+      // pure texture with no readable value anywhere in it.
+      Plot.tip(
+        rows,
+        Plot.pointerX({
+          x: year,
+          fx: "city",
+          title: (d: Row) => {
+            const v = Number(d.anomaly);
+            return `${String(d.city)} ${String(d.period)}\n${v > 0 ? "+" : ""}${v.toFixed(2)}\u00b0C vs 1981-2010`;
+          },
+          ...tipOptions(),
+        }),
+      ),
     ],
-  };
+  });
 }
 
 /** Daily-maximum histogram, one city's record split into an early and a late
@@ -192,14 +340,27 @@ export function distributionSpec(
   const earlyLabel = `${earlyLo}-${earlyHi}`;
   const lateLabel = `${lateLo}-${lateHi}`;
   const long: Row[] = [
-    ...rows.map((r) => ({ period: r.period, share: r.early, window: earlyLabel })),
-    ...rows.map((r) => ({ period: r.period, share: r.late, window: lateLabel })),
+    ...rows.map((r) => ({
+      period: r.period,
+      share: r.early,
+      window: earlyLabel,
+    })),
+    ...rows.map((r) => ({
+      period: r.period,
+      share: r.late,
+      window: lateLabel,
+    })),
   ];
-  return {
+  return themed({
     x: { label: "Daily max (°C)" },
-    y: { label: "Share of days (%)", grid: true },
-    color: { legend: true, domain: [earlyLabel, lateLabel], range: [series(1), series(2)] },
+    y: { label: "Share of days (%)" },
+    color: {
+      legend: true,
+      domain: [earlyLabel, lateLabel],
+      range: [series(1), series(2)],
+    },
     marks: [
+      Plot.ruleY([0], { stroke: gridline() }),
       Plot.areaY(long, {
         x: "period",
         y: "share",
@@ -208,9 +369,28 @@ export function distributionSpec(
         stroke: "window",
         strokeWidth: 2,
       }),
-      Plot.ruleY([0], { stroke: gridline() }),
+      // Both windows at the hovered temperature in ONE tip: this chart exists
+      // to compare the two distributions at the same x, so a tip showing only
+      // whichever curve the cursor is nearest would answer the wrong question.
+      // Hence the tip is bound to `rows` (the WIDE shape, one row per
+      // temperature bin with an `early` and a `late` column) rather than to
+      // the long-form `long` array the areas are drawn from.
+      pointerRuleX(rows, "period"),
+      Plot.tip(
+        rows,
+        Plot.pointerX({
+          x: "period",
+          title: (d: Row) =>
+            [
+              `${Number(d.period).toFixed(0)}\u00b0C daily max`,
+              `${earlyLabel}: ${Number(d.early).toFixed(2)}% of days`,
+              `${lateLabel}: ${Number(d.late).toFixed(2)}% of days`,
+            ].join("\n"),
+          ...tipOptions(),
+        }),
+      ),
     ],
-  };
+  });
 }
 
 /** Hot days, tropical nights and frost days per year -- three counts, one
@@ -227,16 +407,43 @@ export function thresholdSpec(rows: Row[]): Plot.PlotOptions {
   const long: Row[] = keys.flatMap(([key, label]) =>
     rows.map((r) => ({ year: year(r), value: r[key], kind: label })),
   );
-  return {
+  return themed({
     // `tickFormat` -- see `bandTrendSpec` above, the same bug and fix.
     x: { label: "Year", tickFormat: (y: number) => String(y) },
-    y: { label: "Days / year", grid: true },
-    color: { legend: true, domain: keys.map(([, label]) => label), range: colors },
+    // Zero IS meaningful here (unlike `bandTrendSpec`'s temperature axis):
+    // these are counts of days, and "no frost days at all" is a real and
+    // important reading, so the zero rule stays and the domain includes it.
+    y: { label: "Days / year" },
+    color: {
+      legend: true,
+      domain: keys.map(([, label]) => label),
+      range: colors,
+    },
     marks: [
-      Plot.line(long, { x: "year", y: "value", stroke: "kind" }),
       Plot.ruleY([0], { stroke: gridline() }),
+      Plot.line(long, { x: "year", y: "value", stroke: "kind" }),
+      // All three counts for the hovered year in one tip, read off the WIDE
+      // rows rather than the long-form array -- same reasoning as
+      // `distributionSpec`: the comparison between the three series at one
+      // year is the question, so selecting only the nearest series would
+      // answer less than the reader asked.
+      pointerRuleX(rows, year),
+      Plot.tip(
+        rows,
+        Plot.pointerX({
+          x: year,
+          title: (d: Row) =>
+            [
+              String(d.period),
+              ...keys.map(
+                ([key, label]) => `${label}: ${Number(d[key]).toFixed(0)}`,
+              ),
+            ].join("\n"),
+          ...tipOptions(),
+        }),
+      ),
     ],
-  };
+  });
 }
 
 /** Fastest-warming cities, cross-city and NEVER filtered by the selected city
@@ -246,9 +453,15 @@ export function thresholdSpec(rows: Row[]): Plot.PlotOptions {
  * counterpart to `facetedStripesSpec`'s ring, both ACKNOWLEDGING the
  * selection rather than filtering to it, per `h_bar_chart`'s docstring.
  */
-export function rankingSpec(rows: Row[], highlight: string = ""): Plot.PlotOptions {
-  return {
+export function rankingSpec(
+  rows: Row[],
+  highlight: string = "",
+): Plot.PlotOptions {
+  return themed({
     marginLeft: 110,
+    // Room for the value labels below, which would otherwise be clipped at the
+    // frame edge.
+    marginRight: 60,
     x: { label: "°C / decade", grid: true },
     y: { label: null, domain: rows.map((r) => String(r.name)) },
     marks: [
@@ -257,11 +470,43 @@ export function rankingSpec(rows: Row[], highlight: string = ""): Plot.PlotOptio
         x: "value",
         y: "name",
         fill: series(1),
-        stroke: (d: Row) => (String(d.name) === highlight ? inkPrimary() : "none"),
+        stroke: (d: Row) =>
+          String(d.name) === highlight ? inkPrimary() : "none",
         strokeWidth: 2,
       }),
+      // The number at the end of each bar. This ranking spans roughly
+      // 0.30-0.35°C/decade across twenty cities, so every bar is within ~15%
+      // of every other and the lengths alone are visually indistinguishable --
+      // the chart looked like a solid block. The labels are what make it an
+      // actual ranking rather than a texture.
+      // TWO decimals, not three. The query rounds this value to 2 dp in SQL
+      // (`ROUND(10.0 * regr_slope(...), 2)`), so a third digit is always a
+      // literal trailing zero -- fabricated precision. At 2 dp several cities
+      // genuinely tie at 0.36, which is the honest reading: this data cannot
+      // rank them apart, and a fake third digit would have implied it could.
+      Plot.text(rows, {
+        x: "value",
+        y: "name",
+        text: (d: Row) => Number(d.value).toFixed(2),
+        textAnchor: "start",
+        dx: 6,
+        fill: labelInk(),
+      }),
+      // `pointerY`: a horizontal bar chart selects by ROW, so pointing
+      // anywhere along a band -- including past the end of a short bar --
+      // must select that city.
+      Plot.tip(
+        rows,
+        Plot.pointerY({
+          x: "value",
+          y: "name",
+          title: (d: Row) =>
+            `${String(d.name)}\n${Number(d.value).toFixed(2)}\u00b0C / decade`,
+          ...tipOptions(),
+        }),
+      ),
     ],
-  };
+  });
 }
 
 /** Year x month anomaly grid, using Plot's `cell` mark -- which Recharts has
@@ -296,9 +541,13 @@ export function monthHeatmapSpec(rows: Row[]): Plot.PlotOptions {
       long.push({ year: y, month: m, anomaly: Number(value) });
     }
   }
-  const maxAbs = long.reduce((acc, d) => Math.max(acc, Math.abs(d.anomaly)), 0) || 1;
+  const maxAbs =
+    long.reduce((acc, d) => Math.max(acc, Math.abs(d.anomaly)), 0) || 1;
   const steps = divergingSteps();
-  return {
+  const observedYears = [...new Set(long.map((d) => d.year))].sort(
+    (a, b) => a - b,
+  );
+  return themed({
     marginLeft: 50,
     x: {
       label: null,
@@ -312,7 +561,20 @@ export function monthHeatmapSpec(rows: Row[]): Plot.PlotOptions {
     // formatter regardless of the underlying scale type. Confirmed by
     // rendering this chart before and after: `1,950 ... 2,026` becomes
     // `1950 ... 2026`.
-    y: { label: "Year", tickFormat: (y: number) => String(y) },
+    // `ticks` -- the same band-scale thinning `stripesSpec` needs, on the y
+    // axis this time: this grid is one row per year over ~75 years, and
+    // `Plot.cell` forces a band scale, so without thinning Plot emits one tick
+    // label per year and they overlap into a smear exactly as the stripes did.
+    // `tickSpacing`/`ticks: <count>` do nothing on a band scale (Plot falls
+    // through to `data = domain`), so the values are thinned by hand.
+    y: {
+      label: "Year",
+      ticks: thinTicks(observedYears, 14),
+      tickFormat: (y: number) => String(y),
+      // No gridlines between the cells: the cells tile the plot area with no
+      // gaps, so a grid would only ever draw on top of the data.
+      grid: false,
+    },
     color: {
       type: "quantize",
       n: steps.length,
@@ -321,6 +583,22 @@ export function monthHeatmapSpec(rows: Row[]): Plot.PlotOptions {
       legend: true,
       label: "Anomaly (°C)",
     },
-    marks: [Plot.cell(long, { x: "month", y: "year", fill: "anomaly", inset: 0.5 })],
-  };
+    marks: [
+      Plot.cell(long, { x: "month", y: "year", fill: "anomaly", inset: 0.5 }),
+      // A heatmap cell encodes its value only as a colour bucket, so without a
+      // tip there is no way to read the actual anomaly for a given month.
+      // Plain `Plot.pointer` (not `pointerX`/`pointerY`): both axes are
+      // categorical data here, so the nearest cell in 2-D is the right target.
+      Plot.tip(
+        long,
+        Plot.pointer({
+          x: "month",
+          y: "year",
+          title: (d: { year: number; month: number; anomaly: number }) =>
+            `${MONTHS[d.month - 1] ?? d.month} ${d.year}\n${d.anomaly > 0 ? "+" : ""}${d.anomaly.toFixed(2)}\u00b0C`,
+          ...tipOptions(),
+        }),
+      ),
+    ],
+  });
 }
