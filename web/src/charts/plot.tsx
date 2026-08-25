@@ -1,5 +1,5 @@
 import * as Plot from "@observablehq/plot";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** Renders an Observable Plot spec into a div.
  *
@@ -30,13 +30,55 @@ import { useEffect, useRef } from "react";
  */
 export function PlotFigure({ spec, scrollable = false }: { spec: Plot.PlotOptions; scrollable?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  // Measure the container and hand Plot a real pixel width.
+  //
+  // This fixes the most visible layout defect in the app: Plot's default width
+  // is 640px, sized for a notebook cell, and nothing overrode it -- so every
+  // chart rendered as a 640px block inside a ~1050px card, leaving ~40% of the
+  // card as dead space to the right of the data. It cannot be fixed in CSS:
+  // Plot's injected stylesheet sets `max-width: 100%`, which only ever SHRINKS
+  // a chart, never grows it, so the width has to be a real number in the spec.
+  //
+  // A ResizeObserver rather than a one-off measurement, because the container
+  // width changes without this component re-rendering: a window resize, and --
+  // the case a single read gets wrong -- the appearance of the page's vertical
+  // scrollbar as later cards stream in, which narrows every chart above them
+  // after they have already been drawn.
+  //
+  // `scrollable` charts are exempt: they compute their own width from their
+  // data (see facetedStripesSpec, which sizes itself so no cell falls under a
+  // pixel), and clamping that to the container is the exact bug that sizing
+  // exists to avoid.
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || scrollable) return;
+    const observer = new ResizeObserver(([entry]) => {
+      // `contentRect` excludes padding: the drawable width, not the box.
+      const next = entry?.contentRect.width ?? 0;
+      // Ignore sub-pixel churn. A fractional container width would otherwise
+      // re-fire this and rebuild the whole SVG for a visually identical result.
+      setWidth((prev) => (Math.abs(prev - next) < 1 ? prev : Math.round(next)));
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [scrollable]);
+
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
-    const chart = Plot.plot(spec);
+    // Before the first measurement lands there is no honest width to draw at,
+    // so draw nothing rather than flash a 640px chart that immediately resizes.
+    // `scrollable` specs carry their own width and never wait.
+    if (!scrollable && width === 0) return;
+    // The caller's own explicit `width` still wins: only a spec that does not
+    // state one gets the measured container width.
+    const chart = Plot.plot(scrollable ? spec : { width, ...spec });
     if (scrollable) chart.style.maxWidth = "none";
     node.replaceChildren(chart);
     return () => chart.remove();
-  }, [spec, scrollable]);
-  return <div ref={ref} style={scrollable ? { overflowX: "auto" } : undefined} />;
+  }, [spec, scrollable, width]);
+
+  return <div ref={ref} style={scrollable ? { overflowX: "auto" } : { width: "100%" }} />;
 }
