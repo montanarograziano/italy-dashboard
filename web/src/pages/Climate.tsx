@@ -3,7 +3,6 @@ import provinceCapitalsCsv from "../../../dbt/seeds/province_capitals.csv?raw";
 import {
   bandTrendSpec,
   distributionSpec,
-  facetedStripesSpec,
   monthHeatmapSpec,
   rankingSpec,
   stripesSpec,
@@ -27,7 +26,7 @@ import {
 } from "../queries/climateScope";
 import { climateReady, climateRegionReady } from "../queries/ready";
 import { climateAnnualSeries, climateDistribution, climateDistributionWindows } from "../queries/static";
-import { inkMuted, inkPrimary, inkSecondary, type Mode } from "../theme";
+import { gridline, inkMuted, inkPrimary, inkSecondary, type Mode } from "../theme";
 import { Callout, Card, EmptyNote, SectionHeading, Select } from "../ui";
 
 // The static frontend's climate page. italy_dashboard/pages/climate.py is the
@@ -115,7 +114,7 @@ function regionCompositionNote(region: string, covered: number, total: number): 
 }
 
 /** Stripes for the top-N fastest-warming cities, flattened and tagged with
- * `city` for `facetedStripesSpec`'s `fx` channel.
+ * `city` for the responsive small-multiples grid.
  *
  * Built here, not in the query layer: `climate_stripes_grid` (queries.py:1129)
  * was deliberately not ported to `web/src/queries/` (see that file's own
@@ -332,9 +331,9 @@ export default function Climate({ mode }: { mode: Mode }) {
   const isCityScope = city !== "All";
   const isNationalScope = region === "Italia" && !isCityScope;
   const scopeName = isCityScope ? city : region;
-  // "" (never a real city name) disables the ring/outline in rankingSpec and
-  // facetedStripesSpec -- both region and Italia scope select many cities at
-  // once, so nothing is singled out there. See requirement 1 above.
+  // "" (never a real city name) disables the outline in rankingSpec; region
+  // and Italia scope select many cities at once, so nothing is singled out
+  // there. See requirement 1 above.
   const highlightedCity = isCityScope ? city : "";
 
   // A region scope (not Italia, not a city) whose covered capitals are fewer
@@ -379,10 +378,16 @@ export default function Climate({ mode }: { mode: Mode }) {
     () => rankingSpec(ranking, highlightedCity),
     [ranking, highlightedCity, mode],
   );
-  const gridChartSpec = useMemo(
-    () => facetedStripesSpec(grid, highlightedCity),
-    [grid, highlightedCity, mode],
-  );
+  const stripesByCity = useMemo(() => {
+    const grouped = new Map<string, Row[]>();
+    for (const row of grid) {
+      const name = String(row.city);
+      const rows = grouped.get(name) ?? [];
+      rows.push(row);
+      grouped.set(name, rows);
+    }
+    return [...grouped.entries()];
+  }, [grid]);
 
   // The heading renders unconditionally, regardless of `phase` -- a
   // heading is not data and should never wait on a query. Previously
@@ -562,10 +567,41 @@ export default function Climate({ mode }: { mode: Mode }) {
           subtitle="Fastest-warming capitals, same colour scale in every panel. Not filtered by the selection above — the selected city's panel (if present) is ringed instead."
         >
           <div data-testid="climate-grid">
-            {grid.length === 0 ? (
+            {stripesByCity.length === 0 ? (
               <EmptyNote>No grid data.</EmptyNote>
             ) : (
-              <PlotFigure spec={gridChartSpec} scrollable />
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: "1.25rem 1rem",
+                }}
+              >
+                {stripesByCity.map(([name, rows]) => (
+                  <section
+                    key={name}
+                    data-testid="climate-stripe-panel"
+                    style={{
+                      border: `1px solid ${name === highlightedCity ? inkPrimary() : gridline()}`,
+                      borderRadius: "6px",
+                      padding: "0.6rem 0.6rem 0.25rem",
+                    }}
+                  >
+                    <h3
+                      data-testid="climate-stripe-city"
+                      style={{
+                        color: inkSecondary(),
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                        margin: 0,
+                      }}
+                    >
+                      {name}
+                    </h3>
+                    <PlotFigure spec={stripesSpec(rows)} />
+                  </section>
+                ))}
+              </div>
             )}
           </div>
         </Card>
