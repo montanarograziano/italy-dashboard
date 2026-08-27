@@ -3,7 +3,7 @@ import { PlotFigure } from "../charts/plot";
 import { vBarSpec } from "../charts/bar";
 import { inflationSeries } from "../queries/static";
 import { inkMuted, inkPrimary, series, type Mode } from "../theme";
-import { Card, EmptyNote } from "../ui";
+import { Card, DataTable, EmptyNote } from "../ui";
 
 // The static frontend's economy page. italy_dashboard/pages/economy.py (27
 // lines, one chart, no region selector -- inflation_series() takes none) is
@@ -78,6 +78,16 @@ export default function Economy({ mode }: { mode: Mode }) {
             <PlotFigure spec={inflationSpec} />
           )}
         </div>
+        {!loading && inflation.length > 0 && (
+          <DataTable
+            rows={inflation}
+            columns={[
+              { key: "period", label: "Year" },
+              { key: "value", label: "Change (%)" },
+            ]}
+            testId="inflation-table"
+          />
+        )}
       </Card>
     </div>
   );

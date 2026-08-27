@@ -3,7 +3,7 @@ import { hBarSpec } from "../charts/bar";
 import { PlotFigure } from "../charts/plot";
 import { dsuRanking } from "../queries/education";
 import { inkMuted, inkPrimary, series, type Mode } from "../theme";
-import { Card, EmptyNote } from "../ui";
+import { Card, DataTable, EmptyNote } from "../ui";
 
 type Row = Record<string, unknown>;
 
@@ -59,6 +59,16 @@ export default function Education({ mode }: { mode: Mode }) {
             <PlotFigure spec={rankingSpec} />
           )}
         </div>
+        {!loading && rows.length > 0 && (
+          <DataTable
+            rows={rows}
+            columns={[
+              { key: "name", label: "Region" },
+              { key: "value", label: "Scholarships granted" },
+            ]}
+            testId="dsu-ranking-table"
+          />
+        )}
       </Card>
     </div>
   );

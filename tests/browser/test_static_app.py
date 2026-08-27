@@ -585,6 +585,28 @@ def test_the_cc_panel_has_zero_lines_but_the_raw_scatter_does_not(page, static_a
     assert raw_zero == 0, (panel_zero, raw_zero)
 
 
+def test_every_chart_card_has_an_expandable_view_as_table(page, static_app):
+    """Parity with Reflex's `data_table(...)`: every static chart card that
+    has rows exposes a native `<details>` "View as table" (ui.tsx `DataTable`).
+    Exercise the economy one end-to-end -- it is gated on real rows, so a
+    broken data path cannot pass by absence -- and assert the native toggle
+    actually reveals the table's header + cells on click.
+    """
+    page.goto(f"{static_app}/#/economy")
+    page.wait_for_selector("[data-testid='inflation'] rect", timeout=30_000)
+    details = page.locator("details[data-testid='inflation-table']")
+    assert details.is_visible(), "data table should be rendered under the card"
+    assert details.get_attribute("open") is None, "table should start collapsed"
+    details.locator("summary").click()
+    assert details.get_attribute("open") is not None, "summary click should expand the table"
+    headers = details.locator("th").all_text_contents()
+    assert headers == ["Year", "Change (%)"], headers
+    rows = details.locator("tbody tr").count()
+    assert rows > 0, rows
+    first = details.locator("tbody tr td").first.text_content()
+    assert first, first
+
+
 def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
     """Nav must not promise pages that do not exist.
 

@@ -23,7 +23,7 @@ import {
 import { martReady } from "../queries/ready";
 import { incomeCorrelations, incomeScatter, incomeYears } from "../queries/static";
 import { gridline, inkMuted, inkPrimary, inkSecondary, series, surface, type Mode } from "../theme";
-import { Card, EmptyNote, Select } from "../ui";
+import { Card, DataTable, EmptyNote, Select } from "../ui";
 
 // The static frontend's crime page. italy_dashboard/pages/crime.py (397
 // lines, two tabs, 11 chart calls) is the reference for WHAT is shown, not
@@ -613,6 +613,23 @@ function OffendersTab({ mode }: { mode: Mode }) {
             <PlotFigure spec={trendSpec} />
           )}
         </div>
+        {/*
+         * Table gated the same way Reflex gates it (crime.py's
+         * `rx.cond(s.series_count == 0, ...)`): with a split active the rows
+         * carry s1/s2/s3 columns whose labels depend on the split chosen, and
+         * Reflex hides the table there entirely rather than label them
+         * conditionally -- mirrored as-is.
+         */}
+        {!loading && trendRows.length > 0 && trendLabels.length === 0 && (
+          <DataTable
+            rows={trendRows}
+            columns={[
+              { key: "period", label: "Year" },
+              { key: "value", label: "Offenders" },
+            ]}
+            testId="crime-offenders-trend-table"
+          />
+        )}
       </Card>
 
       <Card
@@ -628,6 +645,17 @@ function OffendersTab({ mode }: { mode: Mode }) {
             <PlotFigure spec={ratesSpec} />
           )}
         </div>
+        {!loading && rates.length > 0 && (
+          <DataTable
+            rows={rates}
+            columns={[
+              { key: "period", label: "Year" },
+              { key: "s1", label: "Italians" },
+              { key: "s2", label: "Foreigners" },
+            ]}
+            testId="crime-offenders-rates-table"
+          />
+        )}
       </Card>
 
       <Card
@@ -650,6 +678,16 @@ function OffendersTab({ mode }: { mode: Mode }) {
             <PlotFigure spec={rankingSpec} />
           )}
         </div>
+        {!loading && ranking.length > 0 && (
+          <DataTable
+            rows={ranking}
+            columns={[
+              { key: "name", label: "Region" },
+              { key: "value", label: "Offenders per 1,000" },
+            ]}
+            testId="crime-offenders-ranking-table"
+          />
+        )}
       </Card>
 
       <Card title="Foreign share of offenders" subtitle="% of alleged offenders who are foreign nationals">
@@ -662,6 +700,16 @@ function OffendersTab({ mode }: { mode: Mode }) {
             <PlotFigure spec={shareSpec} />
           )}
         </div>
+        {!loading && share.length > 0 && (
+          <DataTable
+            rows={share}
+            columns={[
+              { key: "period", label: "Year" },
+              { key: "value", label: "Foreign share (%)" },
+            ]}
+            testId="crime-offenders-share-table"
+          />
+        )}
       </Card>
 
       <Card title="By type of crime" subtitle="Selected year, current filters -- top 10 (same year as above)">
@@ -674,6 +722,16 @@ function OffendersTab({ mode }: { mode: Mode }) {
             <PlotFigure spec={byCrimeSpec} />
           )}
         </div>
+        {!loading && byCrime.length > 0 && (
+          <DataTable
+            rows={byCrime}
+            columns={[
+              { key: "name", label: "Type of crime" },
+              { key: "value", label: "Offenders" },
+            ]}
+            testId="crime-offenders-by-crime-table"
+          />
+        )}
       </Card>
 
       <IncomeCard mode={mode} />
@@ -1065,6 +1123,18 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
             <PlotFigure spec={trendSpec} />
           )}
         </div>
+        {/* Same no-split gate as the offenders trend table (see the comment
+         * there): s1/s2/s3 rows under a split have labels Reflex never prints. */}
+        {!loading && trendRows.length > 0 && trendLabels.length === 0 && (
+          <DataTable
+            rows={trendRows}
+            columns={[
+              { key: "period", label: "Year" },
+              { key: "value", label: "Convictions" },
+            ]}
+            testId="crime-convictions-trend-table"
+          />
+        )}
       </Card>
 
       <Card title="By offence type" subtitle="Selected year, current filters -- top 10">
@@ -1084,6 +1154,16 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
             <PlotFigure spec={byOffenceSpec} />
           )}
         </div>
+        {!loading && byOffence.length > 0 && (
+          <DataTable
+            rows={byOffence}
+            columns={[
+              { key: "name", label: "Offence type" },
+              { key: "value", label: "Convictions" },
+            ]}
+            testId="crime-convictions-by-offence-table"
+          />
+        )}
       </Card>
 
       <Card title="By region" subtitle="Totals by region, selected year, current filters (same year as above)">
@@ -1096,6 +1176,16 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
             <PlotFigure spec={byRegionSpec} />
           )}
         </div>
+        {!loading && byRegion.length > 0 && (
+          <DataTable
+            rows={byRegion}
+            columns={[
+              { key: "name", label: "Region" },
+              { key: "value", label: "Convictions" },
+            ]}
+            testId="crime-convictions-by-region-table"
+          />
+        )}
       </Card>
     </div>
   );

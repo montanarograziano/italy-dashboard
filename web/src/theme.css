@@ -189,3 +189,32 @@ p {
   outline: none;
   box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 45%, transparent);
 }
+
+/* Collapsible "View as table" (ui.tsx `DataTable`): native
+ * `<details>`/`<summary>` exposed over every chart's rows. Colour is inline
+ * from theme.ts (same split as `.select`/`.spinner`), so this file only fixes
+ * layout, the summary's weight and focus affordance. The summary is a small
+ * label, so the ring uses the same `currentColor` trick as `.nav-link` above.
+ */
+.data-table {
+  margin-top: 0.9rem;
+  font-size: 0.86em;
+}
+
+.data-table > summary {
+  font-weight: 500;
+  border-radius: 4px;
+}
+
+.data-table > summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.data-table summary::marker {
+  color: currentColor;
+}
+
+.data-table table {
+  margin-top: 0.4rem;
+}

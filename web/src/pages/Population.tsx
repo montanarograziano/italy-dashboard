@@ -3,7 +3,7 @@ import { PlotFigure } from "../charts/plot";
 import { lineSeriesSpec } from "../charts/series";
 import { NATIONAL, foreignShareTimeseries, populationTimeseries, regionNames } from "../queries/economy";
 import { inkMuted, inkPrimary, inkSecondary, series, type Mode } from "../theme";
-import { Card, EmptyNote, Select } from "../ui";
+import { Card, DataTable, EmptyNote, Select } from "../ui";
 
 // The static frontend's population page. italy_dashboard/pages/population.py
 // (45 lines, two charts) is the reference for WHAT is shown, not for
@@ -127,6 +127,16 @@ export default function Population({ mode }: { mode: Mode }) {
             <PlotFigure spec={residentsSpec} />
           )}
         </div>
+        {!loading && residents.length > 0 && (
+          <DataTable
+            rows={residents}
+            columns={[
+              { key: "period", label: "Year" },
+              { key: "value", label: "Residents (millions)" },
+            ]}
+            testId="resident-table"
+          />
+        )}
       </Card>
 
       <Card title="Foreign residents share" subtitle="Foreign residents as % of resident population">
@@ -139,6 +149,16 @@ export default function Population({ mode }: { mode: Mode }) {
             <PlotFigure spec={foreignShareSpec} />
           )}
         </div>
+        {!loading && foreignShare.length > 0 && (
+          <DataTable
+            rows={foreignShare}
+            columns={[
+              { key: "period", label: "Year" },
+              { key: "value", label: "Foreign share (%)" },
+            ]}
+            testId="foreign-share-table"
+          />
+        )}
       </Card>
     </div>
   );

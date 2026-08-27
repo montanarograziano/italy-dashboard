@@ -3,7 +3,7 @@ import { PlotFigure } from "../charts/plot";
 import { lineSeriesSpec } from "../charts/series";
 import { NATIONAL, naspiSeries, regionNames, unemploymentSeries } from "../queries/economy";
 import { inkMuted, inkPrimary, inkSecondary, series, type Mode } from "../theme";
-import { Card, EmptyNote, Select } from "../ui";
+import { Card, DataTable, EmptyNote, Select } from "../ui";
 
 // The static frontend's labor page. italy_dashboard/pages/labor.py (58
 // lines, TWO charts -- unemployment AND the NASPI recipients card) is the
@@ -153,6 +153,17 @@ export default function Labor({ mode }: { mode: Mode }) {
             <PlotFigure spec={unemploymentSpec} />
           )}
         </div>
+        {!loading && rows.length > 0 && (
+          <DataTable
+            rows={rows}
+            columns={[
+              { key: "period", label: "Year" },
+              { key: "selected", label: "Selected (%)" },
+              { key: "national", label: "National (%)" },
+            ]}
+            testId="unemployment-table"
+          />
+        )}
       </Card>
 
       {/* Gated on rows, like Reflex's `rx.cond(LaborState.naspi_ready, ...)`:
@@ -162,6 +173,15 @@ export default function Labor({ mode }: { mode: Mode }) {
           <div data-testid="naspi">
             <PlotFigure spec={naspiSpec} />
           </div>
+          <DataTable
+            rows={naspi}
+            columns={[
+              { key: "period", label: "Year" },
+              { key: "selected", label: "Selected" },
+              { key: "national", label: "National" },
+            ]}
+            testId="naspi-table"
+          />
         </Card>
       )}
     </div>

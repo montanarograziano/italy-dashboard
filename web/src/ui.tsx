@@ -214,3 +214,86 @@ export function Select({ style, ...props }: SelectHTMLAttributes<HTMLSelectEleme
     </span>
   );
 }
+
+/** One column of a `DataTable`: the row key and its header label. The labels
+ * mirror Reflex's `data_table(...)` column tuples -- the same EN text (see
+ * italy_dashboard/translations.py), in the same order, e.g. inflation
+ * `[("period","Year"), ("value","Change (%)")]`. The i18n task later swaps
+ * these labels per language exactly as it swaps every other UI string; the
+ * keys are the query columns and never change.
+ */
+export interface DataColumn {
+  key: string;
+  label: string;
+}
+
+/**
+ * The other side of every chart card: an accessible table view of the exact
+ * rows the chart plots, collapsed by default. Mirrors Reflex's `data_table`
+ * (components.py -- a Radix accordion whose header text is t("view_table"),
+ * "View as table", opening to an HTML table) using NATIVE
+ * `<details>`/`<summary>`: no state, keyboard- and screen-reader-accessible
+ * with zero JS, and collapsed by default the same way. It is an alternative
+ * to the chart, so the card shows it only on request.
+ *
+ * Formatting is deliberately RAW (`String(row[key])`): the queries already
+ * ship display-ready values (ROUNDed in SQL, the same numbers the Reflex
+ * table prints) and Reflex's own table prints them unformatted.
+ */
+export function DataTable({
+  rows,
+  columns,
+  testId,
+}: {
+  rows: Record<string, unknown>[];
+  columns: DataColumn[];
+  testId?: string;
+}) {
+  return (
+    <details className="data-table" data-testid={testId}>
+      <summary style={{ color: inkSecondary(), cursor: "pointer" }}>View as table</summary>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", fontVariantNumeric: "tabular-nums" }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${border()}` }}>
+              {columns.map((c) => (
+                <th
+                  key={c.key}
+                  scope="col"
+                  style={{
+                    color: inkSecondary(),
+                    fontWeight: 600,
+                    textAlign: "left",
+                    padding: "0.3rem 0.8rem 0.3rem 0",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr
+                key={i}
+                style={{
+                  borderTop: `1px solid color-mix(in srgb, ${border()} 55%, transparent)`,
+                }}
+              >
+                {columns.map((c) => (
+                  <td
+                    key={c.key}
+                    style={{ color: inkPrimary(), padding: "0.3rem 0.8rem 0.3rem 0" }}
+                  >
+                    {String(r[c.key] ?? "")}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}

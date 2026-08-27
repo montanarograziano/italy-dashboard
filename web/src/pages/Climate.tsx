@@ -27,7 +27,7 @@ import {
 import { climateReady, climateRegionReady } from "../queries/ready";
 import { climateAnnualSeries, climateDistribution, climateDistributionWindows } from "../queries/static";
 import { gridline, inkMuted, inkPrimary, inkSecondary, type Mode } from "../theme";
-import { Callout, Card, EmptyNote, SectionHeading, Select } from "../ui";
+import { Callout, Card, DataTable, EmptyNote, SectionHeading, Select } from "../ui";
 
 // The static frontend's climate page. italy_dashboard/pages/climate.py is the
 // reference for WHAT is shown and HOW it is grouped (an Italia -> region ->
@@ -471,6 +471,18 @@ export default function Climate({ mode }: { mode: Mode }) {
               <PlotFigure spec={annualSpec} />
             )}
           </div>
+          {!scopeLoading && annual.length > 0 && (
+            <DataTable
+              rows={annual}
+              columns={[
+                { key: "period", label: "Year" },
+                { key: "t_min", label: "Min (mean of daily minima)" },
+                { key: "t_mean", label: "Mean" },
+                { key: "t_max", label: "Max (mean of daily maxima)" },
+              ]}
+              testId="climate-annual-table"
+            />
+          )}
         </Card>
 
         <Card title="Anomaly against the 1981-2010 normal" subtitle="Degrees Celsius above or below the own 1981-2010 average.">
@@ -483,6 +495,16 @@ export default function Climate({ mode }: { mode: Mode }) {
               <PlotFigure spec={stripesChartSpec} />
             )}
           </div>
+          {!scopeLoading && stripes.length > 0 && (
+            <DataTable
+              rows={stripes}
+              columns={[
+                { key: "period", label: "Year" },
+                { key: "anomaly", label: "Anomaly (°C)" },
+              ]}
+              testId="climate-stripes-table"
+            />
+          )}
         </Card>
 
         <Card
@@ -560,6 +582,16 @@ export default function Climate({ mode }: { mode: Mode }) {
           <div data-testid="climate-ranking">
             {ranking.length === 0 ? <EmptyNote>No ranking data.</EmptyNote> : <PlotFigure spec={rankingChartSpec} />}
           </div>
+          {ranking.length > 0 && (
+            <DataTable
+              rows={ranking}
+              columns={[
+                { key: "name", label: "City" },
+                { key: "value", label: "°C / decade" },
+              ]}
+              testId="climate-ranking-table"
+            />
+          )}
         </Card>
 
         <Card
