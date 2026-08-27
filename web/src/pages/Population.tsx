@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PlotFigure } from "../charts/plot";
 import { lineSeriesSpec } from "../charts/series";
+import { tr, trt, useLang } from "../i18n";
 import { NATIONAL, foreignShareTimeseries, populationTimeseries, regionNames } from "../queries/economy";
 import { inkMuted, inkPrimary, inkSecondary, series, type Mode } from "../theme";
 import { Card, DataTable, EmptyNote, Select } from "../ui";
@@ -20,7 +21,7 @@ function Loading() {
   return (
     <p className="loading-row" style={{ color: inkMuted(), margin: 0 }} aria-live="polite">
       <span className="spinner" aria-hidden="true" />
-      Loading data…
+      {tr("Loading data…")}
     </p>
   );
 }
@@ -31,6 +32,7 @@ export default function Population({ mode }: { mode: Mode }) {
   const [loading, setLoading] = useState(true);
   const [residents, setResidents] = useState<Row[]>([]);
   const [foreignShare, setForeignShare] = useState<Row[]>([]);
+  const { lang } = useLang();
 
   // Region list: fetched once, independent of the selected region itself.
   useEffect(() => {
@@ -72,8 +74,8 @@ export default function Population({ mode }: { mode: Mode }) {
   const residentsSpec = useMemo(
     () =>
       lineSeriesSpec(residents, {
-        series: [{ key: "value", label: "Residents (millions)", color: series(1) }],
-        yLabel: "Residents (millions)",
+        series: [{ key: "value", label: tr("Residents (millions)"), color: series(1) }],
+        yLabel: tr("Residents (millions)"),
         valueDecimals: 2,
         valueSuffix: "M",
         // A resident headcount never approaches zero, so anchoring the axis
@@ -81,20 +83,20 @@ export default function Population({ mode }: { mode: Mode }) {
         // the change this chart exists to show is a few percent of the total.
         zeroBaseline: false,
       }),
-    [residents, mode],
+    [residents, mode, lang],
   );
   const foreignShareSpec = useMemo(
     () =>
       lineSeriesSpec(foreignShare, {
-        series: [{ key: "value", label: "Foreign share (%)", color: series(2) }],
-        yLabel: "Foreign share (%)",
+        series: [{ key: "value", label: tr("Foreign share (%)"), color: series(2) }],
+        yLabel: tr("Foreign share (%)"),
         valueDecimals: 2,
         valueSuffix: "%",
         // Zero KEPT here, unlike the residents chart above: this is a share of
         // a whole, so 0% is a real floor and growth from a low base should be
         // read in proportion to it, not zoomed.
       }),
-    [foreignShare, mode],
+    [foreignShare, mode, lang],
   );
 
   return (
@@ -102,7 +104,7 @@ export default function Population({ mode }: { mode: Mode }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
         <h1 style={{ color: inkPrimary(), margin: 0 }}>Population &amp; migration</h1>
         <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
-          Region{" "}
+          {tr("Region")}{" "}
           <Select
             data-testid="population-region-select"
             value={region}
@@ -117,12 +119,12 @@ export default function Population({ mode }: { mode: Mode }) {
         </label>
       </div>
 
-      <Card title="Resident population" subtitle="Residents on 1 January">
+      <Card title={tr("Resident population")} subtitle={tr("Residents on 1 January")}>
         <div data-testid="resident">
           {loading ? (
             <Loading />
           ) : residents.length === 0 ? (
-            <EmptyNote>No population data for {region}.</EmptyNote>
+            <EmptyNote>{trt("No population data for {region}.", { region })}</EmptyNote>
           ) : (
             <PlotFigure spec={residentsSpec} />
           )}
@@ -131,20 +133,20 @@ export default function Population({ mode }: { mode: Mode }) {
           <DataTable
             rows={residents}
             columns={[
-              { key: "period", label: "Year" },
-              { key: "value", label: "Residents (millions)" },
+              { key: "period", label: tr("Year") },
+              { key: "value", label: tr("Residents (millions)") },
             ]}
             testId="resident-table"
           />
         )}
       </Card>
 
-      <Card title="Foreign residents share" subtitle="Foreign residents as % of resident population">
+      <Card title={tr("Foreign residents share")} subtitle={tr("Foreign residents as % of resident population")}>
         <div data-testid="foreign-share">
           {loading ? (
             <Loading />
           ) : foreignShare.length === 0 ? (
-            <EmptyNote>No foreign-share data for {region}.</EmptyNote>
+            <EmptyNote>{trt("No foreign-share data for {region}.", { region })}</EmptyNote>
           ) : (
             <PlotFigure spec={foreignShareSpec} />
           )}
@@ -153,8 +155,8 @@ export default function Population({ mode }: { mode: Mode }) {
           <DataTable
             rows={foreignShare}
             columns={[
-              { key: "period", label: "Year" },
-              { key: "value", label: "Foreign share (%)" },
+              { key: "period", label: tr("Year") },
+              { key: "value", label: tr("Foreign share (%)") },
             ]}
             testId="foreign-share-table"
           />

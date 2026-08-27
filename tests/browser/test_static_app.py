@@ -743,3 +743,54 @@ def test_only_the_deliberately_excluded_mart_404s_across_every_route(page, built
         "routes; none was observed -- check scripts/stage_web_data.py's EXCLUDED_FROM_STATIC_BUILD "
         "and that web/public-data was actually staged before this build"
     )
+
+
+LANG_STORAGE_KEY = "italy-dashboard-lang"
+
+
+def test_the_language_toggle_switches_every_landmark_to_italian_and_back(
+    page, static_app
+):
+    """The EN · IT toggle in the header must swap the shell's own copy, run the
+    per-page strings (home title + card labels + the 404 template) with it, and
+    persist the choice across a reload -- in both directions.
+
+    The static app ships as a single English bundle that subscribes to a
+    language after mount (i18n.tsx), so there is nothing else in this suite
+    that would notice a toggle that updated only the chip itself. This test is
+    the parity check for `_lang_toggle` in Reflex's components.py: the same
+    two-chip control, the same default (browser language, otherwise English),
+    the same persistence. `aria-pressed` marks the active chip, and asserts the
+    control state rather than font weight, which the ink-priority styles could
+    re-shuffle without breaking behaviour.
+    """
+    page.goto(static_app)
+    # Deterministic starting point: the shared module-scoped page keeps the
+    # browser context (and its localStorage) across tests, so clear any choice
+    # left behind and reload to exercise the no-preference path (EN default).
+    page.evaluate(f'() => localStorage.removeItem("{LANG_STORAGE_KEY}")')
+    page.goto(static_app)
+    page.get_by_role("heading", name="Italy at a glance").wait_for(state="visible")
+    assert page.get_by_role("button", name="IT", exact=True).get_attribute("aria-pressed") == "false"
+    assert page.get_by_role("button", name="EN", exact=True).get_attribute("aria-pressed") == "true"
+
+    page.get_by_role("button", name="IT", exact=True).click()
+    assert page.get_by_role("button", name="IT", exact=True).get_attribute("aria-pressed") == "true"
+    assert page.get_by_role("button", name="EN", exact=True).get_attribute("aria-pressed") == "false"
+    page.get_by_role("heading", name="L'Italia in sintesi").wait_for(state="visible")
+    page.get_by_role("link", name="Popolazione").wait_for(state="visible")
+    page.wait_for_timeout(300)  # let the sync localStorage write land
+    assert page.evaluate(
+        f'() => localStorage.getItem("{LANG_STORAGE_KEY}")'
+    ) == "it"
+
+    # Choice survives a reload (module-level currentLang re-initialises from
+    # localStorage before the first paint).
+    page.reload()
+    page.get_by_role("heading", name="L'Italia in sintesi").wait_for(state="visible")
+    page.get_by_role("button", name="IT", exact=True).wait_for(state="visible")
+
+    # And back to English.
+    page.get_by_role("button", name="EN", exact=True).click()
+    page.get_by_role("heading", name="Italy at a glance").wait_for(state="visible")
+    assert page.get_by_role("button", name="IT", exact=True).get_attribute("aria-pressed") == "false"

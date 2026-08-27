@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { LangProvider, LangToggle, tr, useLang } from "./i18n";
 import Climate from "./pages/Climate";
 import ClimateCrime from "./pages/ClimateCrime";
 import Crime from "./pages/Crime";
@@ -61,7 +62,18 @@ applyChoice(readStoredChoice());
 paintShell();
 
 export default function App() {
+  return (
+    <LangProvider>
+      <Shell />
+    </LangProvider>
+  );
+}
+
+function Shell() {
   const [choice, setChoice] = useState<Choice>(readStoredChoice);
+  // Subscribe to the language so the nav labels (and nothing else here) swap
+  // on toggle. The page H1s swap because each page subscribes itself.
+  const { lang } = useLang();
   // The RESOLVED mode ("system" collapsed to whatever it means right now),
   // lifted into state so it can be a dependency of downstream `useMemo`s.
   // theme.ts's accessors (series/gridline/inkPrimary/divergingSteps) are read
@@ -173,7 +185,9 @@ export default function App() {
         >
           Italy Dashboard
         </span>
-        <button
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "1rem" }}>
+          <LangToggle />
+          <button
           type="button"
           className="mode-toggle"
           onClick={cycle}
@@ -211,6 +225,7 @@ export default function App() {
               ? "Dark"
               : "Light"}
         </button>
+        </span>
       </div>
       <nav
         style={{
@@ -237,7 +252,7 @@ export default function App() {
                 textDecoration: "none",
               }}
             >
-              {r.label}
+              {tr(r.label)}
             </a>
           );
         })}

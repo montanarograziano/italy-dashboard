@@ -1,4 +1,5 @@
 import type { ReactNode, SelectHTMLAttributes } from "react";
+import { useLang, tr } from "./i18n";
 import { border, inkMuted, inkPrimary, inkSecondary, surface, warning } from "./theme";
 
 // Shared page-shell components, pulled out of six near-identical copies
@@ -249,9 +250,10 @@ export function DataTable({
   columns: DataColumn[];
   testId?: string;
 }) {
+  useLang(); // column labels and the summary toggle swap language
   return (
     <details className="data-table" data-testid={testId}>
-      <summary style={{ color: inkSecondary(), cursor: "pointer" }}>View as table</summary>
+      <summary style={{ color: inkSecondary(), cursor: "pointer" }}>{tr("View as table")}</summary>
       <div style={{ overflowX: "auto" }}>
         <table style={{ borderCollapse: "collapse", fontVariantNumeric: "tabular-nums" }}>
           <thead>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PlotFigure } from "../charts/plot";
 import { scatterSpec } from "../charts/scatter";
+import { tr, trt, useLang } from "../i18n";
 import { climateCoverage } from "../queries/climate";
 import { crimeClimateScatter, crimeClimateStats } from "../queries/crimeClimate";
 import { crimeClimateReady } from "../queries/ready";
@@ -108,12 +109,13 @@ function Loading() {
   return (
     <p className="loading-row" style={{ color: inkMuted(), margin: 0 }} aria-live="polite">
       <span className="spinner" aria-hidden="true" />
-      Loading data…
+      {tr("Loading data…")}
     </p>
   );
 }
 
 function StatTile({ label, value, note, testId }: { label: string; value: string; note: string; testId: string }) {
+  useLang();
   return (
     <div
       style={{
@@ -125,7 +127,7 @@ function StatTile({ label, value, note, testId }: { label: string; value: string
         minWidth: "200px",
       }}
     >
-      <p style={{ color: inkSecondary(), fontSize: "0.85em", margin: "0 0 0.3rem" }}>{label}</p>
+      <p style={{ color: inkSecondary(), fontSize: "0.85em", margin: "0 0 0.3rem" }}>{tr(label)}</p>
       {/* `value` comes straight from crimeClimateStats() (queries/crimeClimate.ts),
        * already formatted (`slope = +0.281, r = +0.39`) -- rendered verbatim,
        * never recomputed here, same rule as every other KPI/stat tile in
@@ -133,7 +135,7 @@ function StatTile({ label, value, note, testId }: { label: string; value: string
       <p data-testid={testId} style={{ color: inkPrimary(), fontSize: "1.4em", fontWeight: 700, margin: 0 }}>
         {value}
       </p>
-      <p style={{ color: inkMuted(), fontSize: "0.72em", margin: "0.3rem 0 0" }}>{note}</p>
+      <p style={{ color: inkMuted(), fontSize: "0.72em", margin: "0.3rem 0 0" }}>{tr(note)}</p>
     </div>
   );
 }
@@ -146,6 +148,7 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
   const [rawPoints, setRawPoints] = useState<Row[]>([]);
   const [panelPoints, setPanelPoints] = useState<Row[]>([]);
   const [stats, setStats] = useState<Stats>(EMPTY_STATS);
+  const { lang } = useLang();
 
   // Mirrors ClimateCrimeState.load (state.py): coverage is fetched even when
   // the mart itself is not ready (same reasoning as ClimateState -- the
@@ -188,11 +191,11 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
   // render time (see App.tsx's colour-mode memo-dependency finding).
   const panelSpec = useMemo(
     () =>
-      scatterSpec([{ rows: panelPoints, label: CC_PANEL_TITLE, color: series(1) }], {
+      scatterSpec([{ rows: panelPoints, label: tr(CC_PANEL_TITLE), color: series(1) }], {
         xKey: "x",
         yKey: "y",
-        xLabel: CC_X_PANEL,
-        yLabel: CC_Y_PANEL,
+        xLabel: tr(CC_X_PANEL),
+        yLabel: tr(CC_Y_PANEL),
         titleKey: "region",
         // Both axes here are DE-MEANED residuals (region and year effects
         // removed), so they span a fraction of a degree / of a log point.
@@ -207,31 +210,31 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
         // none, because raw levels do not cross zero by construction.
         zeroLines: true,
       }),
-    [panelPoints, mode],
+    [panelPoints, mode, lang],
   );
   const rawSpec = useMemo(
     () =>
-      scatterSpec([{ rows: rawPoints, label: CC_RAW_TITLE, color: series(2) }], {
+      scatterSpec([{ rows: rawPoints, label: tr(CC_RAW_TITLE), color: series(2) }], {
         xKey: "x",
         yKey: "y",
-        xLabel: CC_X_RAW,
-        yLabel: CC_Y_RAW,
+        xLabel: tr(CC_X_RAW),
+        yLabel: tr(CC_Y_RAW),
         titleKey: "region",
         // Raw levels, not residuals: a summer mean in degrees and a log count.
         xDecimals: 1,
         yDecimals: 2,
       }),
-    [rawPoints, mode],
+    [rawPoints, mode, lang],
   );
 
   return (
     <div>
-      <h1 style={{ color: inkPrimary(), margin: "0 0 1rem" }}>Summer heat and violent crime</h1>
+      <h1 style={{ color: inkPrimary(), margin: "0 0 1rem" }}>{tr("Summer heat and violent crime")}</h1>
 
       {phase === "loading" ? (
         <Loading />
       ) : phase === "no-data" ? (
-        <EmptyNote>{NO_CLIMATE_CRIME_TEXT}</EmptyNote>
+        <EmptyNote>{tr(NO_CLIMATE_CRIME_TEXT)}</EmptyNote>
       ) : (
         <>
           {/* The caveat comes FIRST, before either chart: see this file's
@@ -250,7 +253,7 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
            * not blend into body text -- a deliberate, content-not-styling
            * departure from Reflex's exact severity choice, not an oversight. */}
           <div style={{ margin: "0 0 1rem" }}>
-            <Callout testId="cc-caveat">{CC_CAVEAT}</Callout>
+            <Callout testId="cc-caveat">{tr(CC_CAVEAT)}</Callout>
           </div>
 
           {/* Coverage, before either scatter: the raw view's whole argument
@@ -263,11 +266,13 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
            * itself stays plain text, matching Climate.tsx's identical split
            * between a plain stats line and a `Callout` for the caveat about it. */}
           <p style={{ color: inkPrimary(), fontWeight: 700, margin: "0 0 0.4rem", fontSize: "0.9em" }}>
-            Coverage: {coverage.capitals} of {coverage.capitals_total} capitals, {coverage.regions} of{" "}
-            {coverage.regions_total} regions, {coverage.year_start}-{coverage.year_end}
+            {trt(
+              "Coverage: {capitals} of {capitals_total} capitals, {regions} of {regions_total} regions, {year_start}-{year_end}",
+              coverage,
+            )}
           </p>
           <div style={{ margin: "0 0 1rem" }}>
-            <Callout>{CC_COVERAGE_NOTE}</Callout>
+            <Callout>{tr(CC_COVERAGE_NOTE)}</Callout>
           </div>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
@@ -276,20 +281,20 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
             <StatTile label={CC_STAT_N} value={stats.n} note={CC_OBS_NOTE} testId="cc-stat-n" />
           </div>
 
-          <Card title={CC_PANEL_TITLE} subtitle={CC_PANEL_SUB}>
+          <Card title={tr(CC_PANEL_TITLE)} subtitle={tr(CC_PANEL_SUB)}>
             <div data-testid="cc-panel">
               {panelPoints.length === 0 ? (
-                <EmptyNote>No region-year observations.</EmptyNote>
+                <EmptyNote>{tr("No region-year observations.")}</EmptyNote>
               ) : (
                 <PlotFigure spec={panelSpec} />
               )}
             </div>
           </Card>
 
-          <Card title={CC_RAW_TITLE} subtitle={CC_RAW_SUB}>
+          <Card title={tr(CC_RAW_TITLE)} subtitle={tr(CC_RAW_SUB)}>
             <div data-testid="cc-raw">
               {rawPoints.length === 0 ? (
-                <EmptyNote>No region-year observations.</EmptyNote>
+                <EmptyNote>{tr("No region-year observations.")}</EmptyNote>
               ) : (
                 <PlotFigure spec={rawSpec} />
               )}

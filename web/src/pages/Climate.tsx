@@ -26,6 +26,7 @@ import {
 } from "../queries/climateScope";
 import { climateReady, climateRegionReady } from "../queries/ready";
 import { climateAnnualSeries, climateDistribution, climateDistributionWindows } from "../queries/static";
+import { tr, trt, useLang } from "../i18n";
 import { gridline, inkMuted, inkPrimary, inkSecondary, type Mode } from "../theme";
 import { Callout, Card, DataTable, EmptyNote, SectionHeading, Select } from "../ui";
 
@@ -107,9 +108,9 @@ function regionCapitalTotals(): Map<string, number> {
 const REGION_CAPITAL_TOTALS = regionCapitalTotals();
 
 function regionCompositionNote(region: string, covered: number, total: number): string {
-  return (
-    `${region} here means ${covered} of ${total} capitals covered so far, not the ` +
-    `whole region: the rest of ${region} has no temperature data in this snapshot yet.`
+  return trt(
+    "{region} here means {covered} of {total} capitals covered so far, not the whole region: the rest of {region} has no temperature data in this snapshot yet.",
+    { region, covered, total },
   );
 }
 
@@ -158,7 +159,7 @@ function Loading({ stage }: { stage: LoadStage }) {
   return (
     <p className="loading-row" style={{ color: inkMuted(), margin: 0 }} aria-live="polite">
       <span className="spinner" aria-hidden="true" />
-      {LOAD_STAGE_LABEL[stage]}
+      {tr(LOAD_STAGE_LABEL[stage])}
     </p>
   );
 }
@@ -166,6 +167,7 @@ function Loading({ stage }: { stage: LoadStage }) {
 type Phase = "loading" | "no-data" | "ready";
 
 export default function Climate({ mode }: { mode: Mode }) {
+  const { lang } = useLang();
   const [phase, setPhase] = useState<Phase>("loading");
   const [loadStage, setLoadStage] = useState<LoadStage>("engine");
   const [coverage, setCoverage] = useState<Coverage>(EMPTY_COVERAGE);
@@ -352,8 +354,11 @@ export default function Climate({ mode }: { mode: Mode }) {
   const cityOutsideRankingNote = useMemo(() => {
     if (!isCityScope) return "";
     if (ranking.some((r) => String(r.name) === city)) return "";
-    return `${city} is not among the top 20 fastest-warming cities, so it isn't highlighted below.`;
-  }, [isCityScope, city, ranking]);
+    return trt(
+      "{name} is not among the top 20 fastest-warming cities, so it isn't highlighted below.",
+      { name: city },
+    );
+  }, [isCityScope, city, ranking, lang]);
 
   // Every PlotFigure spec is memoised on the rows/highlight that feed it --
   // PlotFigure's effect keys on `[spec]`, so an object rebuilt on every
@@ -366,17 +371,17 @@ export default function Climate({ mode }: { mode: Mode }) {
   // spec, leaving the chart's Plot-baked colours stuck on whichever mode was
   // active on first render (only the CSS-driven `var(--div-N)` paths were
   // ever exempt from this).
-  const annualSpec = useMemo(() => bandTrendSpec(annual), [annual, mode]);
-  const stripesChartSpec = useMemo(() => stripesSpec(stripes), [stripes, mode]);
-  const thresholdsChartSpec = useMemo(() => thresholdSpec(thresholds), [thresholds, mode]);
-  const heatmapSpec = useMemo(() => monthHeatmapSpec(heatmap), [heatmap, mode]);
+  const annualSpec = useMemo(() => bandTrendSpec(annual), [annual, mode, lang]);
+  const stripesChartSpec = useMemo(() => stripesSpec(stripes), [stripes, mode, lang]);
+  const thresholdsChartSpec = useMemo(() => thresholdSpec(thresholds), [thresholds, mode, lang]);
+  const heatmapSpec = useMemo(() => monthHeatmapSpec(heatmap), [heatmap, mode, lang]);
   const distributionChartSpec = useMemo(
     () => (distributionWindows ? distributionSpec(distribution, distributionWindows) : null),
-    [distribution, distributionWindows, mode],
+    [distribution, distributionWindows, mode, lang],
   );
   const rankingChartSpec = useMemo(
     () => rankingSpec(ranking, highlightedCity),
-    [ranking, highlightedCity, mode],
+    [ranking, highlightedCity, mode, lang],
   );
   const stripesByCity = useMemo(() => {
     const grouped = new Map<string, Row[]>();
@@ -400,19 +405,22 @@ export default function Climate({ mode }: { mode: Mode }) {
   // environment-load coincidence it was first taken for.
   return (
     <div>
-      <h1 style={{ color: inkPrimary(), margin: "0 0 1rem" }}>Climate</h1>
+      <h1 style={{ color: inkPrimary(), margin: "0 0 1rem" }}>{tr("Climate")}</h1>
       {phase === "loading" ? (
         <Loading stage={loadStage} />
       ) : phase === "no-data" ? (
         <EmptyNote>
-          No temperature data yet. Run <code>just refresh-weather</code> (or <code>just sample</code> for
-          synthetic dev data), then reload.
+          {tr("No temperature data yet. Run ")}
+          <code>just refresh-weather</code>
+          {tr("(or ")}
+          <code>just sample</code>
+          {tr(" for synthetic dev data), then reload.")}
         </EmptyNote>
       ) : (
         <>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
           <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
-            Region{" "}
+            {tr("Region")}{" "}
             <Select
               data-testid="climate-region-select"
               value={region}
@@ -426,7 +434,7 @@ export default function Climate({ mode }: { mode: Mode }) {
             </Select>
           </label>
           <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
-            City{" "}
+            {tr("City")}{" "}
             <Select data-testid="climate-city-select" value={city} onChange={(e) => setCity(e.target.value)}>
               {cityOptions.map((c) => (
                 <option key={c} value={c}>
@@ -438,8 +446,10 @@ export default function Climate({ mode }: { mode: Mode }) {
         </div>
 
         <p style={{ color: inkSecondary(), fontSize: "0.9em", fontWeight: 600 }}>
-          Coverage: {coverage.capitals} of {coverage.capitals_total} capitals, {coverage.regions} of{" "}
-          {coverage.regions_total} regions, {coverage.year_start}-{coverage.year_end}
+          {trt(
+            "Coverage: {capitals} of {capitals_total} capitals, {regions} of {regions_total} regions, {year_start}-{year_end}",
+            coverage,
+          )}
         </p>
 
         {isNationalScope || isPartialRegionScope ? (
@@ -451,22 +461,22 @@ export default function Climate({ mode }: { mode: Mode }) {
           // identical to a neutral "no data" message, and easy to miss.
           <Callout testId="climate-scope-note">
             {isNationalScope
-              ? CLIMATE_COVERAGE_NOTE
+              ? tr(CLIMATE_COVERAGE_NOTE)
               : regionCompositionNote(region, regionCapitalCovered, regionCapitalTotal)}
           </Callout>
         ) : null}
 
-        <SectionHeading>Selected scope: {scopeName}</SectionHeading>
+        <SectionHeading>{trt("Selected scope: {name}", { name: scopeName })}</SectionHeading>
 
         <Card
-          title="Annual temperature"
-          subtitle="Annual mean (thin line), the min-max band each year (shaded), and a 10-year centred rolling average (heavy line)."
+          title={tr("Annual temperature")}
+          subtitle={tr("Annual mean (thin line), the min-max band each year (shaded), and a 10-year centred rolling average (heavy line).")}
         >
           <div data-testid="climate-annual">
             {scopeLoading ? (
               <Loading stage="data" />
             ) : annual.length === 0 ? (
-              <EmptyNote>No annual temperature data for {scopeName}.</EmptyNote>
+              <EmptyNote>{trt("No annual temperature data for {name}.", { name: scopeName })}</EmptyNote>
             ) : (
               <PlotFigure spec={annualSpec} />
             )}
@@ -475,22 +485,22 @@ export default function Climate({ mode }: { mode: Mode }) {
             <DataTable
               rows={annual}
               columns={[
-                { key: "period", label: "Year" },
-                { key: "t_min", label: "Min (mean of daily minima)" },
-                { key: "t_mean", label: "Mean" },
-                { key: "t_max", label: "Max (mean of daily maxima)" },
+                { key: "period", label: tr("Year") },
+                { key: "t_min", label: tr("Min (mean of daily minima)") },
+                { key: "t_mean", label: tr("Mean") },
+                { key: "t_max", label: tr("Max (mean of daily maxima)") },
               ]}
               testId="climate-annual-table"
             />
           )}
         </Card>
 
-        <Card title="Anomaly against the 1981-2010 normal" subtitle="Degrees Celsius above or below the own 1981-2010 average.">
+        <Card title={tr("Anomaly against the 1981-2010 normal")} subtitle={tr("Degrees Celsius above or below the own 1981-2010 average.")}>
           <div data-testid="climate-stripes">
             {scopeLoading ? (
               <Loading stage="data" />
             ) : stripes.length === 0 ? (
-              <EmptyNote>No anomaly data for {scopeName}.</EmptyNote>
+              <EmptyNote>{trt("No anomaly data for {name}.", { name: scopeName })}</EmptyNote>
             ) : (
               <PlotFigure spec={stripesChartSpec} />
             )}
@@ -499,8 +509,8 @@ export default function Climate({ mode }: { mode: Mode }) {
             <DataTable
               rows={stripes}
               columns={[
-                { key: "period", label: "Year" },
-                { key: "anomaly", label: "Anomaly (°C)" },
+                { key: "period", label: tr("Year") },
+                { key: "anomaly", label: tr("Anomaly (°C)") },
               ]}
               testId="climate-stripes-table"
             />
@@ -508,14 +518,14 @@ export default function Climate({ mode }: { mode: Mode }) {
         </Card>
 
         <Card
-          title="Hot days, tropical nights and frost days"
-          subtitle="Days per year with max ≥ 30°C, min ≥ 20°C and min ≤ 0°C."
+          title={tr("Hot days, tropical nights and frost days")}
+          subtitle={tr("Days per year with max ≥ 30°C, min ≥ 20°C and min ≤ 0°C.")}
         >
           <div data-testid="climate-thresholds">
             {scopeLoading ? (
               <Loading stage="data" />
             ) : thresholds.length === 0 ? (
-              <EmptyNote>No threshold-day data for {scopeName}.</EmptyNote>
+              <EmptyNote>{trt("No threshold-day data for {name}.", { name: scopeName })}</EmptyNote>
             ) : (
               <PlotFigure spec={thresholdsChartSpec} />
             )}
@@ -523,32 +533,38 @@ export default function Climate({ mode }: { mode: Mode }) {
         </Card>
 
         <Card
-          title="Distribution of daily maxima"
+          title={tr("Distribution of daily maxima")}
           subtitle={
             isCityScope && distributionChartSpec
-              ? "Share of days per 2°C bucket, the city's record split into an early and a late window."
+              ? tr("Share of days per 2°C bucket, the city's record split into an early and a late window.")
               : undefined
           }
         >
           <div data-testid="climate-distribution">
             {!isCityScope ? (
               <EmptyNote>
-                Daily histograms need a single city: the regional mart holds yearly aggregates, not daily
-                readings. Pick a city above to see it.
+                {tr(
+                  "Daily histograms need a single city: the regional mart holds yearly aggregates, not daily readings. Pick a city above to see it.",
+                )}
               </EmptyNote>
             ) : scopeLoading ? (
               <Loading stage="data" />
             ) : distributionUnavailable ? (
               <EmptyNote>
-                Daily temperature data isn't included in this build, so the distribution chart isn't
-                available for any city.
+                {tr(
+                  "Daily temperature data isn't included in this build, so the distribution chart isn't available for any city.",
+                )}
               </EmptyNote>
             ) : distributionErrored ? (
               <EmptyNote>
-                Couldn't load the daily-maxima distribution for {city} just now. Reloading the page may help.
+                {trt("Couldn't load the daily-maxima distribution for {name} just now. Reloading the page may help.", {
+                  name: city,
+                })}
               </EmptyNote>
             ) : !distributionChartSpec ? (
-              <EmptyNote>{city} doesn't have two complete years of daily data to compare yet.</EmptyNote>
+              <EmptyNote>
+                {trt("{name} doesn't have two complete years of daily data to compare yet.", { name: city })}
+              </EmptyNote>
             ) : (
               <PlotFigure spec={distributionChartSpec} />
             )}
@@ -556,38 +572,40 @@ export default function Climate({ mode }: { mode: Mode }) {
         </Card>
 
         <Card
-          title="Month-by-month anomaly"
-          subtitle={isCityScope && heatmap.length > 0 ? "Each cell is one month's anomaly against 1981-2010; unobserved months are left blank, not zero." : undefined}
+          title={tr("Month-by-month anomaly")}
+          subtitle={isCityScope && heatmap.length > 0 ? tr("Each cell is one month's anomaly against 1981-2010; unobserved months are left blank, not zero.") : undefined}
         >
           <div data-testid="climate-heatmap">
             {!isCityScope ? (
-              <EmptyNote>The month-by-month grid needs a single city too — pick one above to see it.</EmptyNote>
+              <EmptyNote>
+                {tr("The month-by-month grid needs a single city too — pick one above to see it.")}
+              </EmptyNote>
             ) : scopeLoading ? (
               <Loading stage="data" />
             ) : heatmap.length === 0 ? (
-              <EmptyNote>No monthly data for {city}.</EmptyNote>
+              <EmptyNote>{trt("No monthly data for {name}.", { name: city })}</EmptyNote>
             ) : (
               <PlotFigure spec={heatmapSpec} />
             )}
           </div>
         </Card>
 
-        <SectionHeading>Across Italy</SectionHeading>
+        <SectionHeading>{tr("Across Italy")}</SectionHeading>
         {cityOutsideRankingNote ? <EmptyNote>{cityOutsideRankingNote}</EmptyNote> : null}
 
         <Card
-          title="Fastest-warming cities"
-          subtitle="Degrees Celsius per decade, ordinary least squares over annual means. Not filtered by the selection above — the selected city (if any) is outlined instead."
+          title={tr("Fastest-warming cities")}
+          subtitle={tr("Degrees Celsius per decade, ordinary least squares over annual means. Not filtered by the selection above — the selected city (if any) is outlined instead.")}
         >
           <div data-testid="climate-ranking">
-            {ranking.length === 0 ? <EmptyNote>No ranking data.</EmptyNote> : <PlotFigure spec={rankingChartSpec} />}
+            {ranking.length === 0 ? <EmptyNote>{tr("No ranking data.")}</EmptyNote> : <PlotFigure spec={rankingChartSpec} />}
           </div>
           {ranking.length > 0 && (
             <DataTable
               rows={ranking}
               columns={[
-                { key: "name", label: "City" },
-                { key: "value", label: "°C / decade" },
+                { key: "name", label: tr("City") },
+                { key: "value", label: tr("°C / decade") },
               ]}
               testId="climate-ranking-table"
             />
@@ -595,12 +613,12 @@ export default function Climate({ mode }: { mode: Mode }) {
         </Card>
 
         <Card
-          title="Warming stripes across cities"
-          subtitle="Fastest-warming capitals, same colour scale in every panel. Not filtered by the selection above — the selected city's panel (if present) is ringed instead."
+          title={tr("Warming stripes across cities")}
+          subtitle={tr("Fastest-warming capitals, same colour scale in every panel. Not filtered by the selection above — the selected city's panel (if present) is ringed instead.")}
         >
           <div data-testid="climate-grid">
             {stripesByCity.length === 0 ? (
-              <EmptyNote>No grid data.</EmptyNote>
+              <EmptyNote>{tr("No grid data.")}</EmptyNote>
             ) : (
               <div
                 style={{

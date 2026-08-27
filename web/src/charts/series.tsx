@@ -1,5 +1,6 @@
 import * as Plot from "@observablehq/plot";
 import { gridline } from "../theme";
+import { tr } from "../i18n";
 import { pointerRuleX, themed, tipOptions } from "./plotTheme";
 
 // Generic time-series chart specs, shared by every page whose query returns
@@ -114,7 +115,7 @@ export function lineSeriesSpec(
     // grouping to any continuous scale, rendering years as `2,024` rather
     // than `2024`. `String(y)` is the whole fix: a year is never fractional,
     // so nothing is lost by skipping Plot's default formatter entirely.
-    x: { label: opts.xLabel ?? "Year", tickFormat: (y: number) => String(y) },
+    x: { label: opts.xLabel ?? tr("Year"), tickFormat: (y: number) => String(y) },
     y: { label: opts.yLabel },
     color: multi
       ? {

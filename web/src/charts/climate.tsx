@@ -1,4 +1,5 @@
 import * as Plot from "@observablehq/plot";
+import { tr, trt } from "../i18n";
 import { divergingSteps, gridline, inkPrimary, series } from "../theme";
 import {
   labelInk,
@@ -53,7 +54,7 @@ const year = (d: Row) => Number(d.period);
 export function bandTrendSpec(rows: Row[]): Plot.PlotOptions {
   const hue = series(1);
   const fmt = (v: unknown) =>
-    v === null || v === undefined ? "n/a" : `${Number(v).toFixed(1)}°C`;
+    v === null || v === undefined ? tr("n/a") : `${Number(v).toFixed(1)}°C`;
   return themed({
     // `tickSize: 0` drops the little tick-mark dashes, not the tick labels
     // (still rendered as `<text>`) or the y gridlines already on above --
@@ -72,7 +73,7 @@ export function bandTrendSpec(rows: Row[]): Plot.PlotOptions {
     // formatter would otherwise group as `1,950` -- see `thresholdSpec`
     // below (the same bug, same fix) and series.tsx's `lineSeriesSpec`,
     // where the plan's final review (F6) first caught it.
-    x: { label: "Year", tickFormat: (y: number) => String(y) },
+    x: { label: tr("Year"), tickFormat: (y: number) => String(y) },
     // No `Plot.ruleY([0])` here, unlike every other spec in this file.
     //
     // A zero rule does not just DRAW a line at zero, it forces 0 into the y
@@ -86,7 +87,7 @@ export function bandTrendSpec(rows: Row[]): Plot.PlotOptions {
     // legible. `zero: false` is stated explicitly rather than left implicit so
     // a future edit adding a zero rule back has to argue with this comment
     // first.
-    y: { label: "Temperature (°C)", zero: false },
+    y: { label: tr("Temperature (°C)"), zero: false },
     marks: [
       // fillOpacity down from 0.16 to 0.10, and the mean line back to full
       // strength. Once `zero: false` (above) let the domain fit the data, the
@@ -137,9 +138,9 @@ export function bandTrendSpec(rows: Row[]): Plot.PlotOptions {
           title: (d: Row) =>
             [
               String(d.period),
-              `Mean: ${fmt(d.t_mean)}`,
-              `Range: ${fmt(d.t_min)} to ${fmt(d.t_max)}`,
-              `10-yr average: ${fmt(d.t_rolling)}`,
+              trt("Mean: {v}", { v: fmt(d.t_mean) }),
+              trt("Range: {v1} to {v2}", { v1: fmt(d.t_min), v2: fmt(d.t_max) }),
+              trt("10-yr average: {v}", { v: fmt(d.t_rolling) }),
             ].join("\n"),
           ...tipOptions(),
         }),
@@ -247,7 +248,8 @@ export function stripesSpec(rows: Row[], height = 140): Plot.PlotOptions {
           x: year,
           title: (d: Row) => {
             const v = Number(d.anomaly);
-            return `${String(d.period)}\n${v > 0 ? "+" : ""}${v.toFixed(2)}\u00b0C vs 1981-2010`;
+            const s = `${v > 0 ? "+" : ""}${v.toFixed(2)}\u00b0C`;
+            return `${String(d.period)}\n${trt("{value} vs 1981-2010", { value: s })}`;
           },
           ...tipOptions(),
         }),
@@ -357,7 +359,8 @@ export function facetedStripesSpec(
           fx: "city",
           title: (d: Row) => {
             const v = Number(d.anomaly);
-            return `${String(d.city)} ${String(d.period)}\n${v > 0 ? "+" : ""}${v.toFixed(2)}\u00b0C vs 1981-2010`;
+            const s = `${v > 0 ? "+" : ""}${v.toFixed(2)}\u00b0C`;
+            return `${String(d.city)} ${String(d.period)}\n${trt("{value} vs 1981-2010", { value: s })}`;
           },
           ...tipOptions(),
         }),
@@ -394,8 +397,8 @@ export function distributionSpec(
     })),
   ];
   return themed({
-    x: { label: "Daily max (°C)" },
-    y: { label: "Share of days (%)" },
+    x: { label: tr("Daily max (°C)") },
+    y: { label: tr("Share of days (%)") },
     color: {
       legend: true,
       domain: [earlyLabel, lateLabel],
@@ -424,9 +427,15 @@ export function distributionSpec(
           x: "period",
           title: (d: Row) =>
             [
-              `${Number(d.period).toFixed(0)}\u00b0C daily max`,
-              `${earlyLabel}: ${Number(d.early).toFixed(2)}% of days`,
-              `${lateLabel}: ${Number(d.late).toFixed(2)}% of days`,
+              trt("{t} daily max", { t: Number(d.period).toFixed(0) }),
+              trt("{label}: {v}% of days", {
+                label: earlyLabel,
+                v: Number(d.early).toFixed(2),
+              }),
+              trt("{label}: {v}% of days", {
+                label: lateLabel,
+                v: Number(d.late).toFixed(2),
+              }),
             ].join("\n"),
           ...tipOptions(),
         }),
@@ -441,9 +450,9 @@ export function distributionSpec(
  */
 export function thresholdSpec(rows: Row[]): Plot.PlotOptions {
   const keys: [string, string][] = [
-    ["hot_days", "Hot days"],
-    ["tropical_nights", "Tropical nights"],
-    ["frost_days", "Frost days"],
+    ["hot_days", tr("Hot days")],
+    ["tropical_nights", tr("Tropical nights")],
+    ["frost_days", tr("Frost days")],
   ];
   const colors = [series(2), series(1), series(3)];
   const long: Row[] = keys.flatMap(([key, label]) =>
@@ -451,11 +460,11 @@ export function thresholdSpec(rows: Row[]): Plot.PlotOptions {
   );
   return themed({
     // `tickFormat` -- see `bandTrendSpec` above, the same bug and fix.
-    x: { label: "Year", tickFormat: (y: number) => String(y) },
+    x: { label: tr("Year"), tickFormat: (y: number) => String(y) },
     // Zero IS meaningful here (unlike `bandTrendSpec`'s temperature axis):
     // these are counts of days, and "no frost days at all" is a real and
     // important reading, so the zero rule stays and the domain includes it.
-    y: { label: "Days / year" },
+    y: { label: tr("Days / year") },
     color: {
       legend: true,
       domain: keys.map(([, label]) => label),
@@ -504,7 +513,7 @@ export function rankingSpec(
     // Room for the value labels below, which would otherwise be clipped at the
     // frame edge.
     marginRight: 60,
-    x: { label: "°C / decade", grid: true },
+    x: { label: tr("°C / decade"), grid: true },
     y: { label: null, domain: rows.map((r) => String(r.name)) },
     marks: [
       Plot.ruleX([0], { stroke: gridline() }),
@@ -543,7 +552,9 @@ export function rankingSpec(
           x: "value",
           y: "name",
           title: (d: Row) =>
-            `${String(d.name)}\n${Number(d.value).toFixed(2)}\u00b0C / decade`,
+            `${String(d.name)}\n${trt("{v}°C / decade", {
+              v: Number(d.value).toFixed(2),
+            })}`,
           ...tipOptions(),
         }),
       ),
@@ -610,7 +621,7 @@ export function monthHeatmapSpec(rows: Row[]): Plot.PlotOptions {
     // `tickSpacing`/`ticks: <count>` do nothing on a band scale (Plot falls
     // through to `data = domain`), so the values are thinned by hand.
     y: {
-      label: "Year",
+      label: tr("Year"),
       ticks: thinTicks(observedYears, 14),
       tickFormat: (y: number) => String(y),
       // No gridlines between the cells: the cells tile the plot area with no
@@ -628,7 +639,7 @@ export function monthHeatmapSpec(rows: Row[]): Plot.PlotOptions {
       // the values overlap into an unreadable block.
       ticks: 5,
       tickFormat: (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(1)}°`,
-      label: "Anomaly (°C)",
+      label: tr("Anomaly (°C)"),
     },
     marks: [
       Plot.cell(long, { x: "month", y: "year", fill: "anomaly", inset: 0.5 }),

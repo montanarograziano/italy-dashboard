@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PlotFigure } from "../charts/plot";
 import { lineSeriesSpec } from "../charts/series";
+import { tr, trt, useLang } from "../i18n";
 import { NATIONAL, naspiSeries, regionNames, unemploymentSeries } from "../queries/economy";
 import { inkMuted, inkPrimary, inkSecondary, series, type Mode } from "../theme";
 import { Card, DataTable, EmptyNote, Select } from "../ui";
@@ -29,7 +30,7 @@ function Loading() {
   return (
     <p className="loading-row" style={{ color: inkMuted(), margin: 0 }} aria-live="polite">
       <span className="spinner" aria-hidden="true" />
-      Loading data…
+      {tr("Loading data…")}
     </p>
   );
 }
@@ -41,6 +42,7 @@ export default function Labor({ mode }: { mode: Mode }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [naspiLoading, setNaspiLoading] = useState(true);
   const [naspi, setNaspi] = useState<Row[]>([]);
+  const { lang } = useLang();
 
   // Region list: fetched once, independent of the selected region itself.
   useEffect(() => {
@@ -92,16 +94,16 @@ export default function Labor({ mode }: { mode: Mode }) {
     () =>
       lineSeriesSpec(rows, {
         series: [
-          { key: "selected", label: "Selected region", color: series(1) },
-          { key: "national", label: "National average", color: series(2) },
+          { key: "selected", label: tr("Selected region"), color: series(1) },
+          { key: "national", label: tr("National average"), color: series(2) },
         ],
-        yLabel: "Unemployment rate (%)",
+        yLabel: tr("Unemployment rate (%)"),
         valueDecimals: 1,
         valueSuffix: "%",
         // Zero baseline kept (the default): a rate is a share, so 0% is a real
         // floor and the selected-vs-national gap reads against it.
       }),
-    [rows, mode],
+    [rows, mode, lang],
   );
 
   // NASPI recipients: selected region vs the national total, summed over both
@@ -114,21 +116,21 @@ export default function Labor({ mode }: { mode: Mode }) {
     () =>
       lineSeriesSpec(naspi, {
         series: [
-          { key: "selected", label: "Selected region", color: series(1) },
-          { key: "national", label: "National average", color: series(2) },
+          { key: "selected", label: tr("Selected region"), color: series(1) },
+          { key: "national", label: tr("National average"), color: series(2) },
         ],
-        yLabel: "Recipients",
+        yLabel: tr("Recipients"),
         valueDecimals: 0,
       }),
-    [naspi, mode],
+    [naspi, mode, lang],
   );
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
-        <h1 style={{ color: inkPrimary(), margin: 0 }}>Labor market</h1>
+        <h1 style={{ color: inkPrimary(), margin: 0 }}>{tr("Labor market")}</h1>
         <label style={{ color: inkSecondary(), fontSize: "0.9em" }}>
-          Region{" "}
+          {tr("Region")}{" "}
           <Select
             data-testid="labor-region-select"
             value={region}
@@ -143,12 +145,12 @@ export default function Labor({ mode }: { mode: Mode }) {
         </label>
       </div>
 
-      <Card title="Unemployment rate" subtitle="Selected region vs national average (%)">
+      <Card title={tr("Unemployment rate")} subtitle={tr("Selected region vs national average (%)")}>
         <div data-testid="unemployment">
           {loading ? (
             <Loading />
           ) : rows.length === 0 ? (
-            <EmptyNote>No unemployment data for {region}.</EmptyNote>
+            <EmptyNote>{trt("No unemployment data for {region}.", { region })}</EmptyNote>
           ) : (
             <PlotFigure spec={unemploymentSpec} />
           )}
@@ -157,9 +159,9 @@ export default function Labor({ mode }: { mode: Mode }) {
           <DataTable
             rows={rows}
             columns={[
-              { key: "period", label: "Year" },
-              { key: "selected", label: "Selected (%)" },
-              { key: "national", label: "National (%)" },
+              { key: "period", label: tr("Year") },
+              { key: "selected", label: tr("Selected (%)") },
+              { key: "national", label: tr("National (%)") },
             ]}
             testId="unemployment-table"
           />
@@ -169,16 +171,16 @@ export default function Labor({ mode }: { mode: Mode }) {
       {/* Gated on rows, like Reflex's `rx.cond(LaborState.naspi_ready, ...)`:
        * a labor snapshot that predates the NASPI mart simply shows no card. */}
       {naspiLoading ? null : naspi.length === 0 ? null : (
-        <Card title="NASPI benefit recipients" subtitle="Unemployment-benefit claimants, selected region vs national total (INPS)">
+        <Card title={tr("NASPI benefit recipients")} subtitle={tr("Unemployment-benefit claimants, selected region vs national total (INPS)")}>
           <div data-testid="naspi">
             <PlotFigure spec={naspiSpec} />
           </div>
           <DataTable
             rows={naspi}
             columns={[
-              { key: "period", label: "Year" },
-              { key: "selected", label: "Selected" },
-              { key: "national", label: "National" },
+              { key: "period", label: tr("Year") },
+              { key: "selected", label: tr("Selected") },
+              { key: "national", label: tr("National") },
             ]}
             testId="naspi-table"
           />

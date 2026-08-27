@@ -1,3 +1,4 @@
+import { tr, trt, useLang } from "../i18n";
 import { inkPrimary, inkSecondary } from "../theme";
 
 /** Branded "page not found" content for a genuinely unregistered hash route.
@@ -19,14 +20,15 @@ import { inkPrimary, inkSecondary } from "../theme";
  * regression that test exists to catch.
  */
 export default function NotFound({ slug }: { slug: string }) {
+  useLang();
   return (
     <div>
-      <h1 style={{ color: inkPrimary(), margin: "0 0 0.35rem" }}>Page not found</h1>
+      <h1 style={{ color: inkPrimary(), margin: "0 0 0.35rem" }}>{tr("Page not found")}</h1>
       <p style={{ color: inkSecondary(), margin: "0 0 1.5rem" }}>
-        There is no page at “#/{slug}”. Use the navigation above, or go back home.
+        {trt("There is no page at “#/{slug}”. Use the navigation above, or go back home.", { slug })}
       </p>
       <a href="#/" style={{ color: inkPrimary(), fontWeight: 600 }}>
-        Back to home
+        {tr("Back to home")}
       </a>
     </div>
   );

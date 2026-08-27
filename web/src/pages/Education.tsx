@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { hBarSpec } from "../charts/bar";
 import { PlotFigure } from "../charts/plot";
+import { tr, useLang } from "../i18n";
 import { dsuRanking } from "../queries/education";
 import { inkMuted, inkPrimary, series, type Mode } from "../theme";
 import { Card, DataTable, EmptyNote } from "../ui";
@@ -15,7 +16,7 @@ function Loading() {
       aria-live="polite"
     >
       <span className="spinner" aria-hidden="true" />
-      Loading data…
+      {tr("Loading data…")}
     </p>
   );
 }
@@ -23,6 +24,7 @@ function Loading() {
 export default function Education({ mode }: { mode: Mode }) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
+  const { lang } = useLang();
 
   useEffect(() => {
     let cancelled = false;
@@ -37,24 +39,25 @@ export default function Education({ mode }: { mode: Mode }) {
   }, []);
 
   const rankingSpec = useMemo(
-    () => hBarSpec(rows, { xLabel: "Scholarships granted", color: series(1) }),
-    [rows, mode],
+    () =>
+      hBarSpec(rows, { xLabel: tr("Scholarships granted"), color: series(1) }),
+    [rows, mode, lang],
   );
 
   return (
     <div>
       <h1 style={{ color: inkPrimary(), margin: "0 0 1rem" }}>
-        Education support
+        {tr("Education support")}
       </h1>
       <Card
-        title="University scholarships granted"
-        subtitle="Latest academic year, regional DSU grants (USTAT/MUR)"
+        title={tr("University scholarships granted")}
+        subtitle={tr("Latest academic year, regional DSU grants (USTAT/MUR)")}
       >
         <div data-testid="dsu-ranking">
           {loading ? (
             <Loading />
           ) : rows.length === 0 ? (
-            <EmptyNote>DSU scholarship mart not built yet.</EmptyNote>
+            <EmptyNote>{tr("DSU scholarship mart not built yet.")}</EmptyNote>
           ) : (
             <PlotFigure spec={rankingSpec} />
           )}
@@ -63,8 +66,8 @@ export default function Education({ mode }: { mode: Mode }) {
           <DataTable
             rows={rows}
             columns={[
-              { key: "name", label: "Region" },
-              { key: "value", label: "Scholarships granted" },
+              { key: "name", label: tr("Region") },
+              { key: "value", label: tr("Scholarships granted") },
             ]}
             testId="dsu-ranking-table"
           />

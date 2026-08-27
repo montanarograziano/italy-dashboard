@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PlotFigure } from "../charts/plot";
 import { vBarSpec } from "../charts/bar";
+import { tr, useLang } from "../i18n";
 import { inflationSeries } from "../queries/static";
 import { inkMuted, inkPrimary, series, type Mode } from "../theme";
 import { Card, DataTable, EmptyNote } from "../ui";
@@ -16,7 +17,7 @@ function Loading() {
   return (
     <p className="loading-row" style={{ color: inkMuted(), margin: 0 }} aria-live="polite">
       <span className="spinner" aria-hidden="true" />
-      Loading data…
+      {tr("Loading data…")}
     </p>
   );
 }
@@ -24,6 +25,7 @@ function Loading() {
 export default function Economy({ mode }: { mode: Mode }) {
   const [loading, setLoading] = useState(true);
   const [inflation, setInflation] = useState<Row[]>([]);
+  const { lang } = useLang();
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +48,7 @@ export default function Economy({ mode }: { mode: Mode }) {
   const inflationSpec = useMemo(
     () =>
       vBarSpec(inflation, {
-        yLabel: "Change (%)",
+        yLabel: tr("Change (%)"),
         color: series(1),
         valueDecimals: 1,
         valueSuffix: "%",
@@ -59,21 +61,21 @@ export default function Economy({ mode }: { mode: Mode }) {
         // `[0, auto]` domain would drop them off-frame (same fix as the
         // climate stripes).
       }),
-    [inflation, mode],
+    [inflation, mode, lang],
   );
 
   return (
     <div>
       <h1 style={{ color: inkPrimary(), margin: "0 0 1rem" }}>Economy &amp; prices</h1>
       <Card
-        title="Inflation (consumer prices)"
-        subtitle="Annual average change of the general index (%)"
+        title={tr("Inflation (consumer prices)")}
+        subtitle={tr("Annual average change of the general index (%)")}
       >
         <div data-testid="inflation">
           {loading ? (
             <Loading />
           ) : inflation.length === 0 ? (
-            <EmptyNote>No inflation data.</EmptyNote>
+            <EmptyNote>{tr("No inflation data.")}</EmptyNote>
           ) : (
             <PlotFigure spec={inflationSpec} />
           )}
@@ -82,8 +84,8 @@ export default function Economy({ mode }: { mode: Mode }) {
           <DataTable
             rows={inflation}
             columns={[
-              { key: "period", label: "Year" },
-              { key: "value", label: "Change (%)" },
+              { key: "period", label: tr("Year") },
+              { key: "value", label: tr("Change (%)") },
             ]}
             testId="inflation-table"
           />

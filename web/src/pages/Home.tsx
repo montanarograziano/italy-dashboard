@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { tr, useLang } from "../i18n";
 import { kpis } from "../queries/crime";
 import { gridline, inkMuted, inkPrimary, inkSecondary, surface } from "../theme";
 
@@ -23,7 +24,10 @@ const TILES: ReadonlyArray<{ key: keyof Kpis; label: string; note: string }> = [
   { key: "inflation", label: "Inflation", note: "latest annual change" },
 ];
 
+// The tile labels/notes are module constants (the reference app keys its own
+// labels by string id); the values are the EN strings, translated on render.
 function StatTile({ label, value, note }: { label: string; value: string; note: string }) {
+  useLang();
   return (
     <div
       style={{
@@ -35,15 +39,16 @@ function StatTile({ label, value, note }: { label: string; value: string; note: 
         minWidth: "200px",
       }}
     >
-      <p style={{ color: inkSecondary(), fontSize: "0.85em", margin: "0 0 0.35rem" }}>{label}</p>
+      <p style={{ color: inkSecondary(), fontSize: "0.85em", margin: "0 0 0.35rem" }}>{tr(label)}</p>
       <p style={{ color: inkPrimary(), fontSize: "1.75em", fontWeight: 700, margin: 0 }}>{value}</p>
-      <p style={{ color: inkMuted(), fontSize: "0.75em", margin: "0.35rem 0 0" }}>{note}</p>
+      <p style={{ color: inkMuted(), fontSize: "0.75em", margin: "0.35rem 0 0" }}>{tr(note)}</p>
     </div>
   );
 }
 
 export default function Home() {
   const [values, setValues] = useState<Kpis>(EMPTY_KPIS);
+  useLang();
 
   useEffect(() => {
     let cancelled = false;
@@ -57,9 +62,9 @@ export default function Home() {
 
   return (
     <div>
-      <h1 style={{ color: inkPrimary(), margin: "0 0 0.35rem" }}>Italy at a glance</h1>
+      <h1 style={{ color: inkPrimary(), margin: "0 0 0.35rem" }}>{tr("Italy at a glance")}</h1>
       <p style={{ color: inkSecondary(), margin: "0 0 1.5rem" }}>
-        Key indicators from ISTAT snapshots. Open a section for detail.
+        {tr("Key indicators from ISTAT snapshots. Open a section for detail.")}
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
         {TILES.map((tile) => (
