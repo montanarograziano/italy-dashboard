@@ -748,9 +748,7 @@ def test_only_the_deliberately_excluded_mart_404s_across_every_route(page, built
 LANG_STORAGE_KEY = "italy-dashboard-lang"
 
 
-def test_the_language_toggle_switches_every_landmark_to_italian_and_back(
-    page, static_app
-):
+def test_the_language_toggle_switches_every_landmark_to_italian_and_back(page, static_app):
     """The EN · IT toggle in the header must swap the shell's own copy, run the
     per-page strings (home title + card labels + the 404 template) with it, and
     persist the choice across a reload -- in both directions.
@@ -771,18 +769,20 @@ def test_the_language_toggle_switches_every_landmark_to_italian_and_back(
     page.evaluate(f'() => localStorage.removeItem("{LANG_STORAGE_KEY}")')
     page.goto(static_app)
     page.get_by_role("heading", name="Italy at a glance").wait_for(state="visible")
-    assert page.get_by_role("button", name="IT", exact=True).get_attribute("aria-pressed") == "false"
+    assert (
+        page.get_by_role("button", name="IT", exact=True).get_attribute("aria-pressed") == "false"
+    )
     assert page.get_by_role("button", name="EN", exact=True).get_attribute("aria-pressed") == "true"
 
     page.get_by_role("button", name="IT", exact=True).click()
     assert page.get_by_role("button", name="IT", exact=True).get_attribute("aria-pressed") == "true"
-    assert page.get_by_role("button", name="EN", exact=True).get_attribute("aria-pressed") == "false"
+    assert (
+        page.get_by_role("button", name="EN", exact=True).get_attribute("aria-pressed") == "false"
+    )
     page.get_by_role("heading", name="L'Italia in sintesi").wait_for(state="visible")
     page.get_by_role("link", name="Popolazione").wait_for(state="visible")
     page.wait_for_timeout(300)  # let the sync localStorage write land
-    assert page.evaluate(
-        f'() => localStorage.getItem("{LANG_STORAGE_KEY}")'
-    ) == "it"
+    assert page.evaluate(f'() => localStorage.getItem("{LANG_STORAGE_KEY}")') == "it"
 
     # Choice survives a reload (module-level currentLang re-initialises from
     # localStorage before the first paint).
@@ -793,4 +793,6 @@ def test_the_language_toggle_switches_every_landmark_to_italian_and_back(
     # And back to English.
     page.get_by_role("button", name="EN", exact=True).click()
     page.get_by_role("heading", name="Italy at a glance").wait_for(state="visible")
-    assert page.get_by_role("button", name="IT", exact=True).get_attribute("aria-pressed") == "false"
+    assert (
+        page.get_by_role("button", name="IT", exact=True).get_attribute("aria-pressed") == "false"
+    )
