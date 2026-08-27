@@ -598,7 +598,7 @@ export default function Climate({ mode }: { mode: Mode }) {
                     >
                       {name}
                     </h3>
-                    <PlotFigure spec={stripesSpec(rows)} />
+                    <PlotFigure spec={stripesSpec(rows, 90)} />
                   </section>
                 ))}
               </div>

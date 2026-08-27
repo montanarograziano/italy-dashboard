@@ -148,8 +148,9 @@ export function bandTrendSpec(rows: Row[]): Plot.PlotOptions {
   });
 }
 
-/** One city's (or region's) warming stripes: one cell per year, coloured by
- * its own diverging bucket. `rows` must already carry a `fill` field (see
+/** One city's (or region's) anomaly series: one BAR per year whose height is
+ * the year's signed anomaly against the 1981-2010 normal, coloured by its own
+ * diverging bucket. `rows` must already carry a `fill` field (see
  * queries/climate.ts's `withStripeFill`) -- a `var(--div-N)` string, which
  * Plot recognises as a literal CSS colour (its `isColor` check matches
  * `var(...)`) and therefore renders directly rather than running it through
@@ -157,11 +158,29 @@ export function bandTrendSpec(rows: Row[]): Plot.PlotOptions {
  * grid below resolve to the SAME diverging ramp `theme.ts` exports, without
  * this file importing a single hex value itself.
  *
- * Plot's `cell` mark renders `<rect>` elements (it extends the same
- * `AbstractBar` bar/cell renders as `barX`/`barY`), which is what
+ * Deliberately the SAME encoding as Reflex's `stripe_chart`
+ * (italy_dashboard/components.py): a bar per year on `data_key="anomaly"`, so
+ * the two apps must read the same way. `height` defaults to 140 to mirror
+ * that chart's own default, and the across-cities grid below passes a smaller
+ * one to match `small_multiples`' default (90).
+ *
+ * One deliberate deviation from Reflex: its Recharts chart has no y-axis rule
+ * and its YAxis domain is `[0, 'auto']`, so a year BELOW the normal is drawn
+ * below the frame and silently vanishes -- the cool half of the record drops
+ * out of the picture. Here `Plot.ruleY([0])` keeps zero IN the domain (a zero
+ * rule does not just draw a line, it forces 0 into the y-scale), so
+ * below-normal years render as bars hanging below the centre line, which is
+ * exactly what the cool half of the diverging ramp is there to say.
+ *
+ * NOT the classic uniform-height warming stripe (Plot's `cell`): a
+ * uniform-height stripe claims every year is the same magnitude, which this
+ * chart -- whose whole frame is the magnitude -- would be lying even by. The
+ * `cell` mark survives in `monthHeatmapSpec`, where the grid squares ARE the
+ * point. Both `cell` and `barY` render `<rect>` elements (they extend the
+ * same `AbstractBar` base), which is what
  * `test_the_stripes_resolve_to_distinct_diverging_colours` selects on.
  */
-export function stripesSpec(rows: Row[]): Plot.PlotOptions {
+export function stripesSpec(rows: Row[], height = 140): Plot.PlotOptions {
   // The axis fix this chart is named for in the bug report: it rendered EVERY
   // year as its own tick label, ~75 of them in a ~1000px card, printed on top
   // of one another into an illegible smear -- and with Plot's default numeric
@@ -173,36 +192,54 @@ export function stripesSpec(rows: Row[]): Plot.PlotOptions {
   // 1. `tickFormat` -- drop the thousands separator. Same bug and same fix as
   //    `bandTrendSpec`/`thresholdSpec`/`monthHeatmapSpec`; this spec was the
   //    one that never got it.
-  // 2. `ticks` -- thin the tick VALUES by hand. `Plot.cell` hardcodes its x
-  //    scale to a BAND scale (see the note below on `x: year`), and band
-  //    scales are precisely where Plot's automatic tick thinning does not
-  //    apply: with no `interval` set, Plot falls through to `data = domain`,
-  //    i.e. one tick per category, and `ticks: 10`/`tickSpacing` have no
-  //    effect at all. `thinTicks` (plotTheme.ts) picks evenly-spaced years
-  //    and keeps the last, so the axis still states the range it covers.
+  // 2. `ticks` -- thin the tick VALUES by hand. Both `cell` and `barY`
+  //    hardcode their x scale to a BAND scale (see the note below on
+  //    `x: year`), and band scales are precisely where Plot's automatic tick
+  //    thinning does not apply: with no `interval` set, Plot falls through to
+  //    `data = domain`, i.e. one tick per category, and `ticks: 10` /
+  //    `tickSpacing` have no effect at all. `thinTicks` (plotTheme.ts) picks
+  //    evenly-spaced years and keeps the last, so the axis still states the
+  //    range it covers.
   const years = [...new Set(rows.map(year))].sort((a, b) => a - b);
   return themed({
+    height,
     x: {
       label: null,
       ticks: thinTicks(years, 6),
       tickFormat: (y: number) => String(y),
     },
-    // `grid: false` overrides `themed()`'s y-grid default: this chart's y axis
-    // is a single unlabelled band (`axis: null`), so a horizontal gridline
-    // would be a line drawn across the stripes for no reason.
+    // `axis: null` mirrors Reflex's axis-free stripe_chart: bar height is the
+    // magnitude and the diverging colour the direction, so a °C scale on the
+    // side would be chartjunk (the exact degrees come back from the tip
+    // below). `grid: false` overrides `themed()`'s y-grid default -- a
+    // horizontal gridline would cross the bars where they already tell the
+    // story, and the one reference line this chart needs is the zero rule
+    // drawn as a mark just below, not a grid.
     y: { axis: null, grid: false },
-    // `x: year` (the numeric accessor above), not `x: "period"`: Plot's
-    // `Cell` mark hardcodes its x scale `type` to "band" regardless of the
-    // channel's underlying value type, so this changes nothing about the
-    // banding -- it only stops Plot's own heuristic from seeing numeric-
-    // looking strings on an ordinal scale and logging "some data ... are
-    // strings that appear to be numbers" to the console on every render.
+    // `x: year` (the numeric accessor above), not `x: "period"`: `barY`
+    // hardcodes its x scale `type` to "band" exactly like `cell` does,
+    // regardless of the channel's underlying value type, so this changes
+    // nothing about the banding -- it only stops Plot's own heuristic from
+    // seeing numeric-looking strings on an ordinal scale and logging "some
+    // data ... are strings that appear to be numbers" to the console on
+    // every render.
     marks: [
-      Plot.cell(rows, { x: year, fill: "fill", inset: 0.5 }),
-      // Without a tip this chart is unreadable by design: a stripe encodes its
-      // anomaly ONLY as a colour bucket, so there is no way to recover the
-      // year or the value from the picture. `pointerX` matches the one-cell-
-      // per-year geometry -- the stripe is full-height, so x-distance is the
+      // The 1981-2010 normal. A zero rule is a DOMAIN decision, not
+      // decoration: forcing 0 into the y-domain is what keeps negative
+      // anomalies drawn as bars BELOW the line (visible, coloured by the cool
+      // half of the ramp) instead of clipped below the frame the way Reflex's
+      // `[0, 'auto']` domain lets the negatives vanish.
+      Plot.ruleY([0], { stroke: gridline() }),
+      // `barY` rooted at zero (its default y1), one per year: the height IS
+      // the anomaly, so warm years grow up from the normal line and cool
+      // years hang below it -- Reflex's bar encoding, with neither half of
+      // the record lost. `inset: 0` mirrors Reflex's `bar_category_gap=0`:
+      // contiguous bars, no hairline gaps, a solid colour field.
+      Plot.barY(rows, { x: year, y: "anomaly", fill: "fill", inset: 0 }),
+      // Without a tip this chart is unreadable by design: a bar encodes its
+      // anomaly as BOTH a height and a colour bucket, but neither recovers
+      // the year or the degrees from the picture. `pointerX` matches the
+      // one-bar-per-year geometry -- the bar is banded, so x-distance is the
       // only meaningful measure of "nearest".
       Plot.tip(
         rows,
@@ -223,7 +260,7 @@ export function stripesSpec(rows: Row[]): Plot.PlotOptions {
 // Plot's default `width` (640) was sized for a single, unfaceted chart; split
 // across twelve `fx` facets of 76 year-bands each, that default gives every
 // band ~0.64px before `inset` even runs, which is what produced F1 (every
-// cell at width="0"). Measured directly against a real render (12 facets,
+// bar at width="0"). Measured directly against a real render (12 facets,
 // 76 bands): the fx/x band scales' combined default padding (paddingInner
 // 0.1 on both, paddingOuter 0.1 on the inner x scale) leaves each band at
 // ~0.81 * MIN_BAND_PX once margins are subtracted, so 5 lands comfortably
@@ -290,23 +327,28 @@ export function facetedStripesSpec(
     // line/bar charts that want it, and an axis-less cell grid does not.
     y: { axis: null, grid: false },
     marks: [
-      // inset: 0 (not stripesSpec's 0.5) -- at this many bands per facet,
-      // shaving even a single pixel off each side is the other half of what
-      // produced F1's zero-width cells; the faceted grid does not need the
-      // single-chart variant's inset because adjacent cells are already
-      // visually separated by the gap the diverging fills create.
-      Plot.cell(rows, { x: year, fill: "fill", fx: "city", inset: 0 }),
+      // The shared normal, one zero line drawn in EVERY facet at the same
+      // place on the SHARED y scale -- the reading "which years were (not)
+      // at or above the 1981-2010 normal" is the grid's whole question.
+      Plot.ruleY([0], { stroke: gridline(), fx: "city" }),
+      // Same bar-for-anomaly encoding as stripesSpec (Reflex's stripe_chart),
+      // so this grid is the same chart as the single-scope one, split across
+      // facets. `inset: 0` -- at this many bands per facet, shaving even a
+      // single pixel off each side is the other half of what produced F1's
+      // zero-width cells; and it is also the `bar_category_gap=0` contiguous
+      // Reflex look.
+      Plot.barY(rows, { x: year, y: "anomaly", fill: "fill", fx: "city", inset: 0 }),
       ...(highlight
         ? [Plot.frame({ fx: highlight, stroke: inkPrimary(), strokeWidth: 3 })]
         : []),
       // LAST in the mark list, not first: Plot renders marks in array order, so
-      // a tip declared before the `cell` mark is painted underneath every
-      // stripe and is invisible wherever it overlaps the data -- which, in a
-      // chart that is nothing but stripes, is everywhere.
+      // a tip declared before the `barY` mark is painted underneath every
+      // bar and is invisible wherever it overlaps the data -- which, in a
+      // chart that is nothing but bars, is everywhere.
       //
       // The x axis is deliberately absent from this grid (no room for year
       // labels in a 76-band facet), which makes this tip the ONLY way to find
-      // out which year a stripe is: the small-multiples grid was otherwise a
+      // out which year a bar is: the small-multiples grid was otherwise a
       // pure texture with no readable value anywhere in it.
       Plot.tip(
         rows,
