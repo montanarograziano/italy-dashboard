@@ -1,4 +1,5 @@
 import * as Plot from "@observablehq/plot";
+import { axis } from "../theme";
 import { themed, tipOptions } from "./plotTheme";
 
 type Row = Record<string, unknown>;
@@ -36,6 +37,17 @@ export interface ScatterOptions {
   xDecimals?: number;
   /** Decimals for the y value shown in the tip. */
   yDecimals?: number;
+  /** Draw a full-width zero line on each axis, beneath the dots. Mirrors
+   * Reflex's `scatter_chart(..., zero_lines=True)` -- its
+   * `rx.recharts.reference_line(x=0)` / `(y=0)` pair, stroked in the axis
+   * ink so the cross reads distinctly from the gridlines. Reflex turns this
+   * on for ONLY the climate-crime PANEL scatter (climate_crime.py), whose
+   * both axes are de-meaned residuals and therefore genuinely cross zero;
+   * the raw scatter does not pass it. A `Plot.ruleX`/`Plot.ruleY` on `[0]`
+   * is also a domain decision, the same way climate.tsx's `ruleY([0])`
+   * works: it keeps 0 inside the scale even when no point sits exactly on
+   * it. */
+  zeroLines?: boolean;
 }
 
 /** A two-(or-more)-group scatter, one coloured dot series per group sharing
@@ -70,6 +82,22 @@ export function scatterSpec(series: ScatterSeriesDef[], opts: ScatterOptions): P
       range: series.map((s) => s.color),
     },
     marks: [
+      // A zero line is a DOMAIN decision disguised as a rule, and it must be
+      // drawn BENEATH the data (marks render in array order) to read as a
+      // backing gridline rather than a line crossing the points -- Reflex's
+      // reference lines sit below the scatter mark the same way. Deliberately
+      // stroke the AXIS ink at 1.5 (up from the grid's 1), mirroring Reflex's
+      // `stroke=theme.axis()` reference lines: the exact same hue but a
+      // heavier weight, so the "no effect" cross reads a step up from the
+      // ordinary gridlines it otherwise disappears into (this grid already
+      // draws in axis ink -- see plotTheme.ts). The heavier strokeWidth is
+      // what the browser test keys on (`getComputedStyle(e).strokeWidth`).
+      ...(opts.zeroLines
+        ? [
+            Plot.ruleX([0], { stroke: axis(), strokeWidth: 1.5 }),
+            Plot.ruleY([0], { stroke: axis(), strokeWidth: 1.5 }),
+          ]
+        : []),
       Plot.dot(long, {
         x: opts.xKey,
         y: opts.yKey,

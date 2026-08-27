@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { PlotFigure } from "../charts/plot";
-import { lineSeriesSpec } from "../charts/series";
+import { vBarSpec } from "../charts/bar";
 import { inflationSeries } from "../queries/static";
 import { inkMuted, inkPrimary, series, type Mode } from "../theme";
 import { Card, EmptyNote } from "../ui";
@@ -40,19 +40,24 @@ export default function Economy({ mode }: { mode: Mode }) {
   // Memoised on `mode` too, not just `inflation` -- theme.ts's `series()` is
   // read at spec-build time, so a colour-mode toggle that changes neither
   // `inflation` nor anything else this page owns would otherwise never
-  // rebuild the spec, leaving the line's colour stuck on whichever mode was
+  // rebuild the spec, leaving the bars' colour stuck on whichever mode was
   // active on first render (see App.tsx's docstring on the same bug, fixed
   // once already on the climate page).
   const inflationSpec = useMemo(
     () =>
-      lineSeriesSpec(inflation, {
-        series: [{ key: "value", label: "Change (%)", color: series(1) }],
+      vBarSpec(inflation, {
         yLabel: "Change (%)",
+        color: series(1),
         valueDecimals: 1,
         valueSuffix: "%",
         // Zero baseline kept (the default), and it matters more here than
         // anywhere else in the app: inflation goes NEGATIVE, so the zero line
-        // is the difference between prices rising and prices falling.
+        // is the difference between prices rising and prices falling. The bar
+        // encoding now mirrors Reflex's economy `bar_chart` (components.py)
+        // -- a change this task is about -- and the zero rule keeps the
+        // negative years visible BELOW the baseline, where Reflex's
+        // `[0, auto]` domain would drop them off-frame (same fix as the
+        // climate stripes).
       }),
     [inflation, mode],
   );

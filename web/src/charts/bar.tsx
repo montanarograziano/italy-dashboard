@@ -17,6 +17,64 @@ export interface HBarOptions {
   valueDecimals?: number;
 }
 
+export interface VBarOptions {
+  xLabel?: string;
+  yLabel?: string;
+  color: string;
+  /** Decimal places for the value in the hover tip. Defaults to 1: the one
+   * caller (inflation, a percentage-point change) reads at one decimal. */
+  valueDecimals?: number;
+  /** Suffix appended to the tip's value, e.g. "%". */
+  valueSuffix?: string;
+  /** Whether zero is a meaningful baseline. `true` by default: the sole
+   * caller here is inflation, which goes NEGATIVE, so the zero line is the
+   * difference between prices rising and falling (see Economy.tsx and the
+   * same flag in series.tsx's `lineSeriesSpec`). */
+  zeroBaseline?: boolean;
+}
+
+/** Vertical bar chart over a shared period axis: the other half of the
+ * bar.tsx pair to `hBarSpec`, and the Reflex economy page's `bar_chart`
+ * (components.py) -- a category axis of years, one bar per period whose
+ * height is the value, single fixed colour.
+ *
+ * With `period` on a band axis this is strictly a time series, so the
+ * interaction mirrors `lineSeriesSpec`'s: `Plot.pointerX` selects the
+ * nearest bar by x-distance alone, which is the right transform for one
+ * mark per year. No value labels are drawn at the bar tops (unlike
+ * `hBarSpec`): a vertical bar reads against its own y-axis, so the numbers
+ * are recovered from the axis and the tip rather than cluttering every bar.
+ *
+ * Recharts' rounded bar tops (`radius=[4,4,0,0]`) are deliberately not
+ * chased -- this file's charts do not imitate Recharts pixel styling (see
+ * Climate.tsx's header comment on why).
+ */
+export function vBarSpec(rows: Row[], opts: VBarOptions): Plot.PlotOptions {
+  const decimals = opts.valueDecimals ?? 1;
+  const suffix = opts.valueSuffix ?? "";
+  const zeroBaseline = opts.zeroBaseline ?? true;
+  return themed({
+    x: { label: opts.xLabel },
+    y: { label: opts.yLabel },
+    marks: [
+      ...(zeroBaseline ? [Plot.ruleY([0], { stroke: gridline() })] : []),
+      Plot.barY(rows, { x: "period", y: "value", fill: opts.color }),
+      Plot.tip(
+        rows,
+        Plot.pointerX({
+          x: "period",
+          y: "value",
+          title: (d: Row) => {
+            const v = Number(d.value);
+            return `${String(d.period)}\n${v > 0 ? "+" : ""}${v.toFixed(decimals)}${suffix}`;
+          },
+          ...tipOptions(),
+        }),
+      ),
+    ],
+  });
+}
+
 /** Horizontal ranking/breakdown bar chart: one bar per row, in whatever order
  * `rows` already arrives in. Every mart query this feeds (`martBreakdown`,
  * `regionRateRanking`) returns rows pre-sorted by value DESC in SQL, so this

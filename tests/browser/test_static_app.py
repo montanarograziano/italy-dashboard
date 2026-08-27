@@ -217,18 +217,21 @@ def test_year_axes_render_without_a_thousands_separator(page, static_app):
     on the climate page, multiplied across every chart this plan added that
     shares `lineSeriesSpec`'s x-axis or climate.tsx's own year-axis builders.
     Checks one chart from each of the two fixed spec builders
-    (`lineSeriesSpec` via economy, `bandTrendSpec` via climate) rather than
-    every affected chart, since the fix is the same one-line `tickFormat` in
-    both places and a regression would show up on either sample alike.
+    (`lineSeriesSpec` via labor's unemployment, `bandTrendSpec` via climate)
+    rather than every affected chart, since the fix is the same one-line
+    `tickFormat` in both places and a regression would show up on either
+    sample alike. (Economy's inflation -- the old first sample -- moved off
+    `lineSeriesSpec` onto `vBarSpec`, whose band year axis has no formatter
+    grouping to regress, so unemployment carries that leg now.)
     """
-    page.goto(f"{static_app}/#/economy")
-    page.wait_for_selector("[data-testid='inflation'] path", timeout=30_000)
-    economy_ticks = page.eval_on_selector_all(
-        "[data-testid='inflation'] [aria-label='x-axis tick label'] text",
+    page.goto(f"{static_app}/#/labor")
+    page.wait_for_selector("[data-testid='unemployment'] path", timeout=30_000)
+    labor_ticks = page.eval_on_selector_all(
+        "[data-testid='unemployment'] [aria-label='x-axis tick label'] text",
         "els => els.map(e => e.textContent)",
     )
-    assert economy_ticks, "no x-axis ticks found on the inflation chart"
-    assert not any("," in t for t in economy_ticks), economy_ticks
+    assert labor_ticks, "no x-axis ticks found on the unemployment chart"
+    assert not any("," in t for t in labor_ticks), labor_ticks
 
     page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-annual'] path", timeout=30_000)
@@ -418,18 +421,26 @@ def test_the_climate_coverage_note_renders_as_a_prominent_callout_not_plain_text
 
 
 @pytest.mark.parametrize(
-    ("slug", "testid"),
-    [("economy", "inflation"), ("labor", "unemployment"), ("population", "resident")],
+    ("slug", "testid", "mark"),
+    [
+        # Economy's inflation is now a VERTICAL BAR chart (`vBarSpec`, after
+        # the bar-parity task moved it off the line spec), so its marks are
+        # `<rect>`s, not `<path>`s -- matched separately from the two charts
+        # that are still lines. See vBarSpec's docstring.
+        ("economy", "inflation", "rect"),
+        ("labor", "unemployment", "path"),
+        ("population", "resident", "path"),
+    ],
 )
-def test_each_simple_page_renders_marks_not_an_empty_chart(page, static_app, slug, testid):
+def test_each_simple_page_renders_marks_not_an_empty_chart(page, static_app, slug, testid, mark):
     """A page that loaded but drew nothing is what a wrong region string looks like.
 
     These queries return [] for an unrecognised region name rather than raising,
     so asserting the page merely rendered would pass with every chart empty.
     """
     page.goto(f"{static_app}/#/{slug}")
-    page.wait_for_selector(f"[data-testid='{testid}'] path", timeout=30_000)
-    count = page.eval_on_selector_all(f"[data-testid='{testid}'] path", "els => els.length")
+    page.wait_for_selector(f"[data-testid='{testid}'] {mark}", timeout=30_000)
+    count = page.eval_on_selector_all(f"[data-testid='{testid}'] {mark}", "els => els.length")
     assert count > 0, (slug, testid)
 
 
@@ -543,6 +554,37 @@ def test_the_climate_crime_caveat_is_present_and_above_the_charts(page, static_a
     assert precedes, "the caveat must appear before the charts, not after them"
 
 
+def test_the_cc_panel_has_zero_lines_but_the_raw_scatter_does_not(page, static_app):
+    """Mirrors tests/unit/test_components.py's
+    `test_climate_crime_panel_scatter_has_zero_lines_but_raw_scatter_does_not`
+    on the STATIC side, which was missing the cross-hairs entirely until the
+    zero-lines parity task: `scatterSpec` got an opt-in `zeroLines` so the
+    demeaned panel can draw them.
+
+    The two zero rules (`Plot.ruleX([0])` / `Plot.ruleY([0])`) are stroked
+    at 1.5px -- a step up from the 1px grid and gridlines, both of which
+    otherwise share the axis ink (see scatterSpec's own comment on why) --
+    so they are the addressable stand-ins for Reflex's two
+    `RechartsReferenceLine`s: exactly two heavier lines on the panel, exactly
+    zero on the raw scatter. `cc-raw` is waited on to prove it RENDERED (a
+    missing chart tops out at "0 heavier lines" too), so a broken raw data
+    path cannot pass by absence.
+    """
+    page.goto(f"{static_app}/#/climate-crime")
+    page.wait_for_selector("[data-testid='cc-panel'] circle", timeout=30_000)
+    page.wait_for_selector("[data-testid='cc-raw'] circle", timeout=30_000)
+    panel_zero = page.eval_on_selector_all(
+        "[data-testid='cc-panel'] line",
+        "els => els.filter(e => getComputedStyle(e).strokeWidth === '1.5px').length",
+    )
+    raw_zero = page.eval_on_selector_all(
+        "[data-testid='cc-raw'] line",
+        "els => els.filter(e => getComputedStyle(e).strokeWidth === '1.5px').length",
+    )
+    assert panel_zero == 2, (panel_zero, raw_zero)
+    assert raw_zero == 0, (panel_zero, raw_zero)
+
+
 def test_every_nav_link_reaches_a_page_that_renders(page, static_app):
     """Nav must not promise pages that do not exist.
 
@@ -604,7 +646,7 @@ def test_a_route_missing_its_switch_case_still_renders_nothing(page, static_app)
 # would all show up here as a bad response somewhere in this walk.
 _ROUTE_READY_SELECTORS = {
     "home": "main h1",  # no chart by design (four KPI tiles only); the heading is the whole signal
-    "economy": "[data-testid='inflation'] path",
+    "economy": "[data-testid='inflation'] rect",  # bars since the vBarSpec task
     "education": "[data-testid='dsu-ranking'] rect",
     "labor": "[data-testid='unemployment'] path",
     "population": "[data-testid='resident'] path",

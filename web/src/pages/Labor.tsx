@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { PlotFigure } from "../charts/plot";
 import { lineSeriesSpec } from "../charts/series";
-import { NATIONAL, regionNames, unemploymentSeries } from "../queries/economy";
+import { NATIONAL, naspiSeries, regionNames, unemploymentSeries } from "../queries/economy";
 import { inkMuted, inkPrimary, inkSecondary, series, type Mode } from "../theme";
 import { Card, EmptyNote, Select } from "../ui";
 
-// The static frontend's labor page. italy_dashboard/pages/labor.py (38
-// lines, one chart) is the reference for WHAT is shown, not for styling.
+// The static frontend's labor page. italy_dashboard/pages/labor.py (58
+// lines, TWO charts -- unemployment AND the NASPI recipients card) is the
+// reference for WHAT is shown, not for styling.
 // `LaborState.region` defaults to `q.NATIONAL` ("Italia (totale)", NOT the
 // bare "Italia" ClimateState/queries.ITALIA use for a different mart family
 // -- see queries/economy.ts's own NATIONAL comment), and the region options
@@ -14,6 +15,13 @@ import { Card, EmptyNote, Select } from "../ui";
 // list PopulationState's selector reads (both go through
 // `italy_dashboard.components.region_select`, which always reads
 // `AppState.regions`).
+//
+// NASPI mirrors Reflex's state.py gate exactly: the query's INTERNAL guard
+// returns [] when mart_naspi.parquet is absent, and `naspi_ready`/the
+// reflexive `rx.cond` holds the card until rows exist -- so a snapshot whose
+// labor mart predates NASPI shows no card at all rather than an "empty"
+// one. The unemployment card renders regardless; here `naspiLoading` then
+// `naspi.length` reproduces that gating.
 
 type Row = Record<string, unknown>;
 
@@ -31,6 +39,8 @@ export default function Labor({ mode }: { mode: Mode }) {
   const [region, setRegion] = useState<string>(NATIONAL);
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
+  const [naspiLoading, setNaspiLoading] = useState(true);
+  const [naspi, setNaspi] = useState<Row[]>([]);
 
   // Region list: fetched once, independent of the selected region itself.
   useEffect(() => {
@@ -61,6 +71,21 @@ export default function Labor({ mode }: { mode: Mode }) {
     };
   }, [region]);
 
+  // Same region-driven refresh for the NASPI card, sharing the `cancelled`
+  // counter-race pattern: only the latest region's result may be applied.
+  useEffect(() => {
+    let cancelled = false;
+    setNaspiLoading(true);
+    void naspiSeries(region).then((r) => {
+      if (cancelled) return;
+      setNaspi(r);
+      setNaspiLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [region]);
+
   // `mode` is a dependency for the same reason as Economy.tsx/Climate.tsx:
   // theme.ts's `series()` is read at spec-build time, not render time.
   const unemploymentSpec = useMemo(
@@ -77,6 +102,25 @@ export default function Labor({ mode }: { mode: Mode }) {
         // floor and the selected-vs-national gap reads against it.
       }),
     [rows, mode],
+  );
+
+  // NASPI recipients: selected region vs the national total, summed over both
+  // sex rows. Counts, not rates -- so whole numbers without a unit, and the
+  // zero baseline stays (a headcount's floor is 0). Chart legend labels
+  // mirror Reflex's line_chart call (selected_region / national_avg); the
+  // collapsible table's column headings use the shorter selected_count/
+  // national_count forms ("Selected"/"National").
+  const naspiSpec = useMemo(
+    () =>
+      lineSeriesSpec(naspi, {
+        series: [
+          { key: "selected", label: "Selected region", color: series(1) },
+          { key: "national", label: "National average", color: series(2) },
+        ],
+        yLabel: "Recipients",
+        valueDecimals: 0,
+      }),
+    [naspi, mode],
   );
 
   return (
@@ -110,6 +154,16 @@ export default function Labor({ mode }: { mode: Mode }) {
           )}
         </div>
       </Card>
+
+      {/* Gated on rows, like Reflex's `rx.cond(LaborState.naspi_ready, ...)`:
+       * a labor snapshot that predates the NASPI mart simply shows no card. */}
+      {naspiLoading ? null : naspi.length === 0 ? null : (
+        <Card title="NASPI benefit recipients" subtitle="Unemployment-benefit claimants, selected region vs national total (INPS)">
+          <div data-testid="naspi">
+            <PlotFigure spec={naspiSpec} />
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

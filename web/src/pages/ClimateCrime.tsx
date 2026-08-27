@@ -199,6 +199,13 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
         // Rounding to 0-1 places would collapse most of the cloud to one value.
         xDecimals: 2,
         yDecimals: 3,
+        // Zero lines on the PANEL scatter only, exactly where Reflex draws
+        // them (`scatter_chart(..., zero_lines=True)` on climate_crime.py's
+        // panel and nowhere else): the residuals are centred on 0, so the two
+        // reference lines are where the "no effect" cross sits -- both the x
+        // mean and the y mean in the same view. The raw scatter below gets
+        // none, because raw levels do not cross zero by construction.
+        zeroLines: true,
       }),
     [panelPoints, mode],
   );
