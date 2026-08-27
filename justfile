@@ -167,6 +167,20 @@ generate-shared:
     uv run python scripts/generate_palette.py
     uv run python scripts/generate_conformance_expected.py
 
+# Serve the static frontend locally (the GitHub Pages deploy target) with Vite's
+# dev server and hot reload. `predev` stages data/ into web/public automatically.
+# Opens on http://localhost:5173 — hash-routed, e.g. /#/climate.
+serve-web:
+    cd web && npm run dev
+
+# Serve a production-mode build of the static frontend: `vite build` (via `npm run
+# build`, whose `prebuild` also stages data/) then `vite preview` -- the closest
+# local stand-in for the exact artifacts GitHub Pages serves. http://localhost:4173
+# by default.
+preview-web:
+    cd web && npm run build
+    cd web && npm run preview
+
 # Type-check the static frontend (Vite/esbuild strips types without checking them)
 typecheck-web:
     cd web && npm run typecheck
