@@ -65,6 +65,15 @@ refresh-weather-cds *years:
     uv run python -m ingestion.cds refresh {{years}}
     just transform
 
+# FAST full backfill via the Copernicus ARCO point time-series dataset
+# (reanalysis-era5-land-timeseries). One lightweight request per capital, so a
+# 106-city backfill finishes in minutes rather than days. Same prerequisites as
+# the CDS bulk path above (`uv sync --extra cds` + CDS account + licence).
+# `just refresh-weather-cds-timeseries 1950 1979` backfills one year range.
+refresh-weather-cds-timeseries *years:
+    uv run python -m ingestion.cds refresh-timeseries {{years}}
+    just transform
+
 # Re-normalize existing raw CSVs (no download), e.g. after a mapping fix
 normalize *dataset:
     uv run python -m ingestion.fetch normalize {{dataset}}

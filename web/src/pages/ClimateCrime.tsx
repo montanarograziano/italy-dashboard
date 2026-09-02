@@ -271,9 +271,16 @@ export default function ClimateCrime({ mode }: { mode: Mode }) {
               coverage,
             )}
           </p>
-          <div style={{ margin: "0 0 1rem" }}>
-            <Callout>{tr(CC_COVERAGE_NOTE)}</Callout>
-          </div>
+          {Number(coverage.capitals) > 0 &&
+          Number(coverage.capitals) < Number(coverage.capitals_total) ? (
+            // The confound-caveat only applies while coverage is partial. Once
+            // the backfill completes, "partial, mostly-northern coverage" is
+            // false, and leaving it up would imply the sex-in-the-raw-view
+            // confound is untestable because the data is incomplete when it is not.
+            <div style={{ margin: "0 0 1rem" }}>
+              <Callout>{tr(CC_COVERAGE_NOTE)}</Callout>
+            </div>
+          ) : null}
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
             <StatTile label={CC_STAT_PANEL} value={stats.panel} note={CC_Y_PANEL} testId="cc-stat-panel" />

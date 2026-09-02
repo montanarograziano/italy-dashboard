@@ -332,6 +332,14 @@ export default function Climate({ mode }: { mode: Mode }) {
 
   const isCityScope = city !== "All";
   const isNationalScope = region === "Italia" && !isCityScope;
+  // The Italia composition caveat only makes sense while coverage is partial.
+  // With a complete backfill (capitals === capitals_total) the default view
+  // would otherwise keep warning "much of the South is still missing" about a
+  // country that is fully covered.
+  const isPartialNationalScope =
+    isNationalScope &&
+    Number(coverage.capitals) > 0 &&
+    Number(coverage.capitals) < Number(coverage.capitals_total);
   const scopeName = isCityScope ? city : region;
   // "" (never a real city name) disables the outline in rankingSpec; region
   // and Italia scope select many cities at once, so nothing is singled out
@@ -452,15 +460,20 @@ export default function Climate({ mode }: { mode: Mode }) {
           )}
         </p>
 
-        {isNationalScope || isPartialRegionScope ? (
+        {isPartialNationalScope || isPartialRegionScope ? (
           // A data-quality caveat about the aggregate above (a northern-weighted
           // "Italia" mean, or a region whose covered capitals are a fraction of
           // the whole) -- Reflex's counterpart is an amber `rx.callout` with a
           // warning icon (climate.py), which is exactly what `Callout` (ui.tsx)
           // restores here; this used to be a plain bordered `<div>`, visually
           // identical to a neutral "no data" message, and easy to miss.
+          //
+          // Only shown while coverage is genuinely PARTIAL. Once the backfill
+          // completes (capitals === capitals_total), the note's claim that
+          // "much of the South is still missing" is false, and leaving it up
+          // would tell a visitor the picture is incomplete when it is not.
           <Callout testId="climate-scope-note">
-            {isNationalScope
+            {isPartialNationalScope
               ? tr(CLIMATE_COVERAGE_NOTE)
               : regionCompositionNote(region, regionCapitalCovered, regionCapitalTotal)}
           </Callout>

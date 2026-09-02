@@ -60,3 +60,6 @@ _to_delete/
 !data/marts/
 data/marts/*
 !data/marts/*.parquet
+
+# Copernicus CDS API credentials (never commit)
+.cdsapirc

@@ -23,11 +23,19 @@ def climate_crime_page() -> rx.Component:
                 # Coverage first, before either scatter: the raw view's whole
                 # argument is a north-south confound, and partial, mostly-
                 # northern coverage can hide it and look like a null result
-                # instead. This is the honest mitigation, not a footnote.
+                # instead. This is the honest mitigation, not a footnote. The
+                # caveat is only shown while coverage is genuinely partial
+                # (has_partial_coverage): once the backfill completes it is
+                # false, and leaving it up would imply the raw confound is
+                # untestable because the data is incomplete when it is not.
                 rx.callout(
                     rx.vstack(
                         rx.text(ClimateCrimeState.coverage_text, font_weight="700"),
-                        rx.text(t("cc_coverage_note"), font_size="0.9em"),
+                        rx.cond(
+                            ClimateCrimeState.has_partial_coverage,
+                            rx.text(t("cc_coverage_note"), font_size="0.9em"),
+                            rx.fragment(),
+                        ),
                         spacing="1",
                         align="start",
                     ),

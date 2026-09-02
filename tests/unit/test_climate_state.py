@@ -154,6 +154,31 @@ def test_is_national_scope_is_true_only_for_the_italia_aggregate(climate_db):
     assert state.is_national_scope is True
 
 
+def test_partial_national_scope_is_false_once_coverage_is_complete(climate_db):
+    """The composition caveat must disappear once the backfill completes.
+
+    `is_national_scope` stays true for Italia, but `is_partial_national_scope`
+    must become false when every capital is covered — otherwise the default
+    view keeps claiming "much of the South is still missing" about a fully
+    covered country. This is the behavioural half of the gate the page's
+    `rx.cond` uses (test_the_climate_page_carries_the_national_coverage_note
+    asserts the wiring; this asserts the state logic).
+    """
+    state = _fresh()
+    state.load()
+    assert state.capitals_included == "20"  # the synthetic climate_db covers 20 of 106
+    assert state.is_partial_national_scope is True
+
+    # Simulate a complete backfill: every capital present.
+    state.capitals_included = state.capitals_total
+    assert state.is_partial_national_scope is False
+
+    # A partial region or city scope is never the national note's concern.
+    state.capitals_included = "20"
+    state.set_region("Piemonte")
+    assert state.is_partial_national_scope is False
+
+
 def test_the_climate_page_carries_the_national_coverage_note():
     """The state var is only half of it: the note has to reach the page, in
     both languages, gated on that var. Asserted on the rendered tree rather
@@ -175,7 +200,10 @@ def test_the_climate_page_carries_the_national_coverage_note():
     rendered = str(climate_page().render())
     assert en_marker in rendered
     assert it_marker in rendered
-    assert "is_national_scope" in rendered
+    # Gated on the PARTIAL-coverage flag, not the bare national-scope flag:
+    # once the backfill completes, the note's "much of the South is still
+    # missing" is false and must not be rendered about a fully-covered Italy.
+    assert "is_partial_national_scope" in rendered
 
 
 # --------------------------------------------------------- highlighted_city

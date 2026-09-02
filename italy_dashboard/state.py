@@ -632,14 +632,26 @@ class ClimateState(AppState):
 
     @rx.var
     def is_national_scope(self) -> bool:
-        """Whether the cards below are showing the Italia aggregate.
-
-        The one scope whose composition needs a caveat: it is an unweighted
-        mean of whichever capitals the backfill has reached, and the backfill
-        goes in province-code order, i.e. from the north. See
-        `climate_coverage_note` in translations.py.
-        """
+        """Whether the cards below are showing the Italia aggregate."""
         return self.region == q.ITALIA and not self.is_city_scope
+
+    @rx.var
+    def is_partial_national_scope(self) -> bool:
+        """Whether the Italia aggregate is only PARTIALLY covered.
+
+        `is_national_scope` alone is not enough to gate the composition
+        caveat: once the backfill completes (capitals_included ==
+        capitals_total) the caveat's claim that "much of the South is still
+        missing" is false, and showing it about a fully-covered country would
+        tell the visitor the picture is incomplete when it is not. This is
+        false for a national scope that is fully covered, and also for any
+        region or city scope (which never shows the national note).
+        """
+        return (
+            self.is_national_scope
+            and int(self.capitals_included) > 0
+            and int(self.capitals_included) < int(self.capitals_total)
+        )
 
     @rx.var
     def highlighted_city(self) -> str:
@@ -793,6 +805,21 @@ class ClimateCrimeState(AppState):
             self.regions_total,
             self.year_start,
             self.year_end,
+        )
+
+    @rx.var
+    def has_partial_coverage(self) -> bool:
+        """Whether any capitals are still missing, for the confound caveat.
+
+        The crime page's `cc_coverage_note` warns about partial, mostly-
+        northern coverage hiding the raw view's north-south confound. Once the
+        backfill completes (capitals_included == capitals_total) that premise
+        is false, and showing the warning about a fully-covered country would
+        understate the confound is visible.
+        """
+        return (
+            int(self.capitals_included) > 0
+            and int(self.capitals_included) < int(self.capitals_total)
         )
 
     @rx.event

@@ -95,20 +95,21 @@ Open-Meteo's default "best match" switches models across a long series and
 would inject discontinuities indistinguishable from real climate signal.
 
 Fetch with `just refresh-weather`, or `just refresh-weather ITC45` for one city.
-As of this writing no full backfill has completed in any development
-environment — only a single-city check against the real API, used to
-cross-validate the CDS path (Torino; the two sources agree within 0.07 C).
-Development environments still carry synthetic sample data (see
-`ingestion/sample_data.py`), so no chart or number driven by this dataset
-should be read as an observed climate result yet.
+The Copernicus ARCO time-series path (`just refresh-weather-cds-timeseries`)
+has now been run successfully against the real API: the development snapshot
+contains all 106 capitals, from 1950-01-02 through 2026-08-26, with daily
+temperature and precipitation values. The snapshot is real ERA5-Land
+reanalysis data, not station observations; interpret it as a consistent
+gridded climate estimate rather than as local thermometer measurements.
 
-### A full backfill takes several days, on purpose
+### Open-Meteo backfill takes several days, on purpose
 
-The first backfill is **106 cities × 8 decade chunks = 848 requests**, each one
-asking for roughly 3,650 days × 3 daily variables. Open-Meteo's free tier
-allows about **10,000 weighted calls per day**, and it weights a call by how
-much data it returns, so those 848 requests are worth far more than 848 against
-that budget. **One run will not finish it.** The expected workflow is:
+The original Open-Meteo backfill is **106 cities × 8 decade chunks = 848
+requests**, each one asking for roughly 3,650 days × 3 daily variables.
+Open-Meteo's free tier allows about **10,000 weighted calls per day**, and it
+weights a call by how much data it returns, so those 848 requests are worth far
+more than 848 against that budget. **One run will not finish it.** The expected
+workflow is:
 
 1. Run `just refresh-weather`.
 2. It stops with `HTTP 429` and logs how many cities it got through.
@@ -177,14 +178,52 @@ that names its last day (`2026_daily_mean_through_20260731.nc`), so a rerun
 next month downloads a longer chunk instead of replaying a truncated year, and
 a rerun this month costs no queued requests at all.
 
-**Status.** The request shape and the point extraction **have** been validated
-against a real CDS response (one data variable `t2m`, dims
-`(valid_time, latitude, longitude)`, Kelvin) and cross-checked against the
-Open-Meteo path for Torino, where the two agree within 0.07 C. A **full
-backfill has not completed yet**, so the queueing, timeout and resume
-behaviour of a 228-chunk run is still unexercised at scale. Every test in
-`tests/unit/test_cds.py` is offline, against synthetic NetCDF fixtures and a
-fake client; no test makes a real request.
+**Status.** The ARCO request shape, ZIP response handling, point extraction,
+and hourly-to-daily aggregation have been validated against real CDS
+responses. A full 106-city backfill completed successfully after switching to
+serial requests to respect the dataset's queued-job limit. Eleven coastal
+capitals initially mapped to ocean cells; each was re-probed against a real
+0.1° area response and its seed coordinate was moved to the nearest valid land
+cell. The final snapshot passed the null gate and was published with 106
+capitals, 1950-01-02 through 2026-08-26 coverage, and non-null daily
+precipitation. The live run also showed intermittent object-store connection
+resets, which the provider client retried successfully.
+
+### FAST backfill via the Copernicus ARCO time-series dataset
+
+`ingestion/cds.py`'s `refresh-timeseries` subcommand is the **fast** way to
+bring the whole 106-city history in, because it uses a different underlying
+CDS dataset that Copernicus launched in 2025 specifically for this use case:
+
+> **`reanalysis-era5-land-timeseries`** — *ERA5 Land hourly time-series data
+> from 1950 to present*. Stored in an **Analysis-Ready, Cloud-Optimised (ARCO)**
+> format *"specifically designed for retrieving long time-series for individual
+> points"* — a direct quote from the dataset's own description. Same 0.1°
+> grid as the other fetchers; **nearest grid point auto-selected**; updated
+> daily; **CC-BY licence**, free for any use, **no per-day quota**.
+
+This is the key difference from the bulk path: instead of downloading a whole
+year × whole-Italy grid and extracting 106 points locally, each request asks
+for **one coordinate over a date range** and gets hourly values at the nearest
+cell back. A full backfill is therefore **106 lightweight point queries**
+rather than **228 queued year-grid downloads** (or **848 quota-limited decade
+chunks** against Open-Meteo), so it completes in **minutes rather than days** —
+and because there is no free-tier quota, modest concurrency genuinely helps.
+
+Fetch with `just refresh-weather-cds-timeseries` (1950 → now) or
+`just refresh-weather-cds-timeseries 1950 1979` for one year range. Same
+prerequisites as the bulk path (CDS account, ERA5-Land licence, `uv sync
+--extra cds`). Requests are cached per city, per coordinate, per decade under
+`data/raw/cds_timeseries/`, so an aborted run resumes rather than re-downloading
+everything. Hourly `2m_temperature` and `total_precipitation` are aggregated to
+daily `t_min`/`t_mean`/`t_max`/`precip_sum` locally (precip converted from
+metres to millimetres) and written through the same shared `write_snapshot()`
+contract, so every downstream dbt model is agnostic to which fetcher populated
+the snapshot.
+
+**Once a full backfill is running, use Open-Meteo for the day-to-day
+incremental top-up** (no account needed for non-commercial use) and this ARCO
+path for any re-sync of history. The bulk `refresh` path remains as a fallback.
 
 ### Why not ISTAT
 
