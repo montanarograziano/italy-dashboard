@@ -254,7 +254,7 @@ def normalize_raw_csv(name: str, cfg: DatasetConfig, raw_csv: Path) -> Path:
         # legitimate in SDMX/CKAN extracts (an institution row without this
         # intervention type, a suppressed cell): EXCLUDED, not fatal. Any
         # other non-numeric value stays fatal — schema drift, validated below.
-        clauses.append(f'NULLIF(trim("{value_col}"), \'\') IS NOT NULL')
+        clauses.append(f"NULLIF(trim(\"{value_col}\"), '') IS NOT NULL")
         if cfg.value_na_codes:
             na = ", ".join("'" + c.replace("'", "''") + "'" for c in cfg.value_na_codes)
             clauses.append(f'trim("{value_col}") NOT IN ({na})')

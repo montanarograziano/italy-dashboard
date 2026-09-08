@@ -1173,7 +1173,7 @@ def test_main_dispatches_refresh_timeseries_with_two_years(monkeypatch):
 
 
 def test_main_dispatches_refresh_timeseries_with_no_args(monkeypatch):
-    calls: list[tuple] = []
+    calls: list[dict] = []
 
     def fake_cmd_refresh_timeseries(**kwargs):
         calls.append(kwargs)
