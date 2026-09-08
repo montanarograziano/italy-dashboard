@@ -7,7 +7,7 @@ Tooling: **uv** (packaging + venv), **just** (tasks), **ruff** (lint + format),
 ## Command reference
 
 | Command | Purpose |
-|---|---|
+| --- | --- |
 | `just setup` | Install/sync all dependencies |
 | `just run` | Run the dashboard locally |
 | `just sample` | Synthetic data + marts (offline dev) |

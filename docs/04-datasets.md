@@ -239,7 +239,7 @@ provider keeps its own terms, verified against their current published pages
 rather than assumed:
 
 | Provider | Data license | Free-API usage |
-|---|---|---|
+| --- | --- | --- |
 | [ISTAT](https://www.istat.it/it/note-legali) | CC BY 4.0 ("Licenza CC-by Creative Commons 4.0", per ISTAT's own legal notice) | SDMX REST API, free and keyless |
 | [MUR/USTAT](https://dati-ustat.mur.gov.it) | Italian Open Data License (IODL) 2.0, attributed to "MUR - Servizio Statistico" (per the CKAN dataset's own `license_id`) | CKAN API, free and keyless |
 | INPS | Not documented for the StatKit hub endpoint this project reads — flagged, not guessed, by `scripts/generate_provenance_manifest.py`; verify with INPS before external redistribution | Free and keyless |

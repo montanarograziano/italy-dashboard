@@ -118,10 +118,10 @@ curated, clearly-labeled seed — kept visually separate from ISTAT-sourced char
 observations. It is right for trends, anomalies and cross-city comparison, and
 wrong for "the record high in Palermo". Do not present it as a station record.
 
-**Point sampling, not area means.** One 0.1° cell at each province capital.
-That is not the province's mean temperature and it carries urban heat island
-bias. ISTAT samples the same way, so results stay comparable to the official
-series.
+**Point sampling, not area means.** One 0.1° cell near each province capital.
+That is neither the province's mean temperature nor an urban weather-station
+measurement. Grid-cell elevation, coastal sampling and unresolved urban effects
+can affect comparison with station-based ISTAT climate series.
 
 **Region rollups are unweighted.** The plain mean of member province capitals.
 `mart_population` covers only 2019 onwards, so population weights do not exist
@@ -137,9 +137,8 @@ the usual error.
 computes both a 1971-2000 and a 1981-2010 baseline per province, and gates each
 one on at least 25 years of coverage inside its window; below that, the
 baseline and every anomaly built from it are NULL rather than a confident-looking
-number quietly built from a handful of years. The threshold is 25, not 30,
-because a genuine climate normal tolerates a few missing years, and a single
-upstream gap should not void the whole normal.
+number quietly built from a handful of years. The 25-year threshold is this dashboard's completeness rule, not a claim of
+certification against every official climate-normal quality criterion.
 
 **The running year is not plotted.** The fetch always ends at today minus 7
 days, so the current year is incomplete for eleven months out of twelve, and a
@@ -183,26 +182,13 @@ Open-Meteo's paid tier first; see
 [Datasets](04-datasets.md#weather_daily-temperature-non-istat) and
 [Licensing](04-datasets.md#licensing).
 
-**No full backfill has completed yet.** Development environments still carry
-synthetic sample temperatures (`ingestion/sample_data.py`), and no number in
-this section or the next describes an observed result — only what the pipeline
-computes once a real backfill lands. Both fetchers have, however, now been
-exercised against their real APIs at single-point scale: the bulk Copernicus
-CDS path (`ingestion/cds.py`, see
-[Datasets](04-datasets.md#bulk-backfill-via-copernicus-cds)) has been validated
-against a real ERA5-Land response — Roma's nearest grid cell lands 0.0184
-degrees from the seed coordinate, and its 2020-07-01 maximum is 30.24 C — and
-cross-checked against the per-point Open-Meteo path (`ingestion/weather.py`)
-for Torino, where the two agree within 0.07 C. That is a check on the request
-shape, the unit conversion and the cell selection, not evidence about any
-published trend. Both write the
-same `data/weather_daily.parquet` snapshot through the same null-rate gate, so
-neither is more or less trustworthy once real data lands; the CDS path adds
-one more check the Open-Meteo path does not need, since it samples a bulk grid
-rather than one point per request: the distance between each capital's
-coordinate and its nearest ERA5-Land cell is logged and gated at 0.15 degrees,
-so a wrong bounding box or a bad seed coordinate fails the run instead of
-silently sampling the wrong place.
+**Backfill status is snapshot-specific.** The September 2026 climate snapshot
+covers 106 capitals from January 1950 through part of August 2026 using
+Copernicus ERA5-Land. Annual charts exclude incomplete years. See the released
+coverage metadata rather than treating the latest partial year as complete.
+Synthetic development snapshots remain a separate mode and must not be
+presented as official data. Authentic climate input alone does not validate
+a climate–crime comparison: its crime input must also pass release checks.
 
 ## Crime and temperature
 

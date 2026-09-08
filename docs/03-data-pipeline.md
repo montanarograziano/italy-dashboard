@@ -11,7 +11,7 @@ aren't registry-shaped datasets — see [Datasets](04-datasets.md).
 ## Commands
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `just refresh [dataset]` | Download → normalize → rebuild dbt marts. All datasets or one. |
 | `just normalize [dataset]` | Re-run normalization from raw CSVs already on disk — no download. Use after a mapping fix. |
 | `just transform` | dbt build only (staging → marts → tests). |
