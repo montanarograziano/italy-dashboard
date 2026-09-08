@@ -46,64 +46,64 @@
  * 0), so there is one rounding implementation in the app, not two.
  */
 export function pythonRound(n: number, decimals: number): number {
-  if (!Number.isFinite(n) || n === 0) return n;
-  const sign = n < 0 ? -1 : 1;
+ if (!Number.isFinite(n) || n === 0) return n;
+ const sign = n < 0 ? -1 : 1;
 
-  // Decompose |n|'s IEEE754 binary64 bit pattern into mantissa * 2 ** exp,
-  // exactly -- no arithmetic on `n` itself yet, so no rounding has happened.
-  const view = new DataView(new ArrayBuffer(8));
-  view.setFloat64(0, Math.abs(n));
-  const hi = view.getUint32(0);
-  const lo = view.getUint32(4);
-  let exp = (hi >>> 20) & 0x7ff;
-  let mantissa = (BigInt(hi & 0xfffff) << 32n) | BigInt(lo);
-  if (exp === 0) {
-    exp = -1074; // subnormal: no implicit leading bit
-  } else {
-    mantissa |= 1n << 52n; // implicit leading 1
-    exp -= 1075; // unbias (1023) and account for the 52 mantissa bits
-  }
+ // Decompose |n|'s IEEE754 binary64 bit pattern into mantissa * 2 ** exp,
+ // exactly -- no arithmetic on `n` itself yet, so no rounding has happened.
+ const view = new DataView(new ArrayBuffer(8));
+ view.setFloat64(0, Math.abs(n));
+ const hi = view.getUint32(0);
+ const lo = view.getUint32(4);
+ let exp = (hi >>> 20) & 0x7ff;
+ let mantissa = (BigInt(hi & 0xfffff) << 32n) | BigInt(lo);
+ if (exp === 0) {
+  exp = -1074; // subnormal: no implicit leading bit
+ } else {
+  mantissa |= 1n << 52n; // implicit leading 1
+  exp -= 1075; // unbias (1023) and account for the 52 mantissa bits
+ }
 
-  // |n| * 10 ** decimals == scaledMantissa * 2 ** scaledExp, still exactly:
-  // 10 ** decimals == 2 ** decimals * 5 ** decimals, and the 5 ** decimals
-  // factor folds into the (integer) mantissa while the 2 ** decimals factor
-  // folds into the (integer) exponent.
-  const scaledMantissa = mantissa * 5n ** BigInt(decimals);
-  const scaledExp = exp + decimals;
+ // |n| * 10 ** decimals == scaledMantissa * 2 ** scaledExp, still exactly:
+ // 10 ** decimals == 2 ** decimals * 5 ** decimals, and the 5 ** decimals
+ // factor folds into the (integer) mantissa while the 2 ** decimals factor
+ // folds into the (integer) exponent.
+ const scaledMantissa = mantissa * 5n ** BigInt(decimals);
+ const scaledExp = exp + decimals;
 
-  let result: bigint;
-  if (scaledExp >= 0) {
-    result = scaledMantissa << BigInt(scaledExp); // already an exact integer
-  } else {
-    const k = BigInt(-scaledExp);
-    const whole = scaledMantissa >> k; // floor, exact (BigInt shift truncates toward zero on a non-negative value)
-    const remainder = scaledMantissa - (whole << k); // exact fractional numerator over 2 ** k
-    const half = 1n << (k - 1n);
-    if (remainder < half) result = whole;
-    else if (remainder > half) result = whole + 1n;
-    else result = whole % 2n === 0n ? whole : whole + 1n; // a genuine, exact tie: to even
-  }
+ let result: bigint;
+ if (scaledExp >= 0) {
+  result = scaledMantissa << BigInt(scaledExp); // already an exact integer
+ } else {
+  const k = BigInt(-scaledExp);
+  const whole = scaledMantissa >> k; // floor, exact (BigInt shift truncates toward zero on a non-negative value)
+  const remainder = scaledMantissa - (whole << k); // exact fractional numerator over 2 ** k
+  const half = 1n << (k - 1n);
+  if (remainder < half) result = whole;
+  else if (remainder > half) result = whole + 1n;
+  else result = whole % 2n === 0n ? whole : whole + 1n; // a genuine, exact tie: to even
+ }
 
-  return (sign * Number(result)) / 10 ** decimals;
+ return (sign * Number(result)) / 10 ** decimals;
 }
 
 /** `n:+.Nf` the way Python's str.format does: a `-` for any negative value
  * (including one that rounds to zero, e.g. -0.001 at 2 decimals -> "-0.00")
  * and a `+` otherwise. */
 export function signedFixed(n: number, decimals: number): string {
-  const negative = n < 0 || Object.is(n, -0);
-  const fixed = pythonRound(Math.abs(n), decimals).toFixed(decimals);
-  return negative ? `-${fixed}` : `+${fixed}`;
+ const negative = n < 0 || Object.is(n, -0);
+ const fixed = pythonRound(Math.abs(n), decimals).toFixed(decimals);
+ return negative ? `-${fixed}` : `+${fixed}`;
 }
 
 /** `n:,.Nf` the way Python's str.format does: a comma thousands separator on
  * the integer part, exactly `decimals` digits after a literal `.`, and a
  * leading `-` for negative values -- regardless of locale. */
 export function commaFixed(n: number, decimals: number): string {
-  const negative = n < 0 || Object.is(n, -0);
-  const fixed = pythonRound(Math.abs(n), decimals).toFixed(decimals);
-  const [intPart, decPart] = fixed.split(".");
-  const grouped = intPart!.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  const out = decPart !== undefined ? `${grouped}.${decPart}` : grouped;
-  return negative ? `-${out}` : out;
+ const negative = n < 0 || Object.is(n, -0);
+ const fixed = pythonRound(Math.abs(n), decimals).toFixed(decimals);
+ const [intPart, decPart] = fixed.split(".");
+ const grouped = intPart!.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+ const out = decPart !== undefined ? `${grouped}.${decPart}` : grouped;
+ return negative ? `-${out}` : out;
 }

@@ -83,7 +83,10 @@ export async function registerParquetViews(
   // hardcoded leading slash) -- it only breaks under a subpath, which is
   // exactly the deploy shape this build previously had no coverage for
   // (see tests/browser/test_pages_subpath.py).
-  const url = new URL(`${import.meta.env.BASE_URL}${path}.parquet`, window.location.origin).href;
+  const url = new URL(
+   `${import.meta.env.BASE_URL}${path}.parquet`,
+   window.location.origin,
+  ).href;
   try {
    // biome-ignore lint: DuckDB-WASM requires raw SQL with interpolated
    // identifiers (table/view names cannot be parameterized); view names come from

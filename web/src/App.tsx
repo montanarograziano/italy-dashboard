@@ -185,46 +185,48 @@ function Shell() {
         >
           Italy Dashboard
         </span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: "1rem" }}>
+        <span
+          style={{ display: "inline-flex", alignItems: "center", gap: "1rem" }}
+        >
           <LangToggle />
           <button
-          type="button"
-          className="mode-toggle"
-          onClick={cycle}
-          // The VISIBLE label was shortened (see the comment on the text
-          // below), which would otherwise have changed this button's accessible
-          // name -- the thing assistive tech and
-          // `get_by_role("button", name="Colour mode")` both read. A bare
-          // "Dark" is also worse a11y than it looks: it names a state without
-          // saying what pressing it does.
-          //
-          // `aria-label` keeps the full, unambiguous name (identical to the old
-          // visible text) for screen readers while the sighted label stays a
-          // compact chip. Do not drop the "Colour mode" prefix: it is what
-          // tests/browser/test_static_app.py's mode-toggle test locates this
-          // button by, and shortening the visible text without this attribute
-          // is exactly what broke it once already.
-          aria-label={`Colour mode: ${choice} (currently ${mode})`}
-          style={{
-            color: inkSecondary(),
-            border: `1px solid ${border()}`,
-            background: "transparent",
-            borderRadius: "6px",
-            padding: "0.4rem 0.7rem",
-            fontSize: "0.8rem",
-            cursor: "pointer",
-          }}
-        >
-          {/* Shortened from "Colour mode: system (currently light)": the old
+            type="button"
+            className="mode-toggle"
+            onClick={cycle}
+            // The VISIBLE label was shortened (see the comment on the text
+            // below), which would otherwise have changed this button's accessible
+            // name -- the thing assistive tech and
+            // `get_by_role("button", name="Colour mode")` both read. A bare
+            // "Dark" is also worse a11y than it looks: it names a state without
+            // saying what pressing it does.
+            //
+            // `aria-label` keeps the full, unambiguous name (identical to the old
+            // visible text) for screen readers while the sighted label stays a
+            // compact chip. Do not drop the "Colour mode" prefix: it is what
+            // tests/browser/test_static_app.py's mode-toggle test locates this
+            // button by, and shortening the visible text without this attribute
+            // is exactly what broke it once already.
+            aria-label={`Colour mode: ${choice} (currently ${mode})`}
+            style={{
+              color: inkSecondary(),
+              border: `1px solid ${border()}`,
+              background: "transparent",
+              borderRadius: "6px",
+              padding: "0.4rem 0.7rem",
+              fontSize: "0.8rem",
+              cursor: "pointer",
+            }}
+          >
+            {/* Shortened from "Colour mode: system (currently light)": the old
               label restated the resolved mode in prose in the page's top-right
               corner, where it was the widest piece of chrome on the page and
               drew more attention than the page title. */}
-          {choice === "system"
-            ? `Auto (${mode})`
-            : mode === "dark"
-              ? "Dark"
-              : "Light"}
-        </button>
+            {choice === "system"
+              ? `Auto (${mode})`
+              : mode === "dark"
+                ? "Dark"
+                : "Light"}
+          </button>
         </span>
       </div>
       <nav
