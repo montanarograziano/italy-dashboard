@@ -35,10 +35,12 @@ latest as (
 
 )
 
+-- Keep duplicate latest rows visible. They indicate an unpinned source
+-- dimension (unit, price, adjustment, etc.); averaging them can manufacture
+-- a plausible-looking income total.
 select
     region_code,
-    any_value(region_name) as region_name,
+    region_name,
     year,
-    avg(value) as income_mln
+    value as income_mln
 from latest
-group by region_code, year
