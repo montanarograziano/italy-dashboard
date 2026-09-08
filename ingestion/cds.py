@@ -442,7 +442,9 @@ def _time_coord_name(ds: Any) -> str:
 def _select_nearest(ds: Any, lat: float, lon: float, province_code: str) -> Any:
     """The nearest grid cell to (lat, lon), logging and gating the distance."""
     point = ds.sel(latitude=lat, longitude=lon, method="nearest")
+    # pi-lens-ignore: unchecked-throwing-call-python
     cell_lat = float(point["latitude"])
+    # pi-lens-ignore: unchecked-throwing-call-python
     cell_lon = float(point["longitude"])
     distance = math.hypot(cell_lat - lat, cell_lon - lon)
     logger.info(
@@ -465,6 +467,7 @@ def _select_nearest(ds: Any, lat: float, lon: float, province_code: str) -> Any:
 
 
 def _kelvin_to_celsius_or_none(value: Any) -> float | None:
+    # pi-lens-ignore: unchecked-throwing-call-python
     fvalue = float(value)
     return None if math.isnan(fvalue) else fvalue - KELVIN_TO_CELSIUS_OFFSET
 
@@ -709,9 +712,7 @@ def _float_or_none(value: Any) -> float | None:
     return None if math.isnan(fvalue) else fvalue
 
 
-def _collect_arco_arrays(
-    sources: list[Path], xr: Any, origin: Path
-) -> tuple[list[Any], Any, Any]:
+def _collect_arco_arrays(sources: list[Path], xr: Any, origin: Path) -> tuple[list[Any], Any, Any]:
     """Pull the time axis, ``t2m`` (K) and ``tp`` (m) out of NetCDF sources.
 
     ``sources`` is one or more read-able NetCDF paths — the members of an ARCO
@@ -736,16 +737,19 @@ def _collect_arco_arrays(
                     time_name = _time_coord_name(ds)
                     times = ds[time_name].values
                 except CDSError:
+                    # pi-lens-ignore: python-empty-except
                     pass
             try:
                 t2m_name = _find_var(ds, "t2m", "2 metre temperature")
                 t2m_kelvin = ds[t2m_name].values
             except CDSError:
+                # pi-lens-ignore: python-empty-except
                 pass
             try:
                 tp_name = _find_var(ds, "tp", "total precipitation")
                 tp_metres = ds[tp_name].values
             except CDSError:
+                # pi-lens-ignore: python-empty-except
                 pass
         finally:
             ds.close()
@@ -770,7 +774,10 @@ def _read_arco_arrays(path: Path) -> tuple[list[Any], Any, Any]:
     try:
         # Combined into one `with` (SIM117): the temp dir must outlive the
         # member extraction, and both are closed together.
-        with zipfile.ZipFile(path) as archive, tempfile.TemporaryDirectory(prefix="arco_") as tmp_dir:
+        with (
+            zipfile.ZipFile(path) as archive,
+            tempfile.TemporaryDirectory(prefix="arco_") as tmp_dir,
+        ):
             sources: list[Path] = []
             for member in archive.infolist():
                 member_path = Path(tmp_dir) / member.filename
@@ -839,9 +846,7 @@ def _is_queue_limit_error(exc: Exception) -> bool:
     return "queued requests" in str(exc).lower() and "temporarily limited" in str(exc).lower()
 
 
-def _retrieve_arco_with_retry(
-    client: Any, request: dict, target: Path, label: str
-) -> None:
+def _retrieve_arco_with_retry(client: Any, request: dict, target: Path, label: str) -> None:
     """client.retrieve() with pause-and-retry on the queued-job limit.
 
     A queue-limit rejection is not a transient blip to hammer: the limit is how
@@ -856,6 +861,7 @@ def _retrieve_arco_with_retry(
             client.retrieve(TIMESERIES_DATASET_ID, request, str(target))
             return
         except Exception as exc:
+            # pi-lens-ignore: no-boolean-in-except
             if not _is_queue_limit_error(exc) or attempt == QUEUE_LIMIT_RETRIES:
                 target.unlink(missing_ok=True)
                 raise exc

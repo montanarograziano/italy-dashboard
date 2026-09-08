@@ -29,7 +29,7 @@ datasets:
       value: OBS_VALUE
     # Keep only the headline series: annual frequency, unemployment rate,
     # totals for every breakdown. Codes verified against the raw CSV; if a
-    # total code is wrong the fetch log reports 0 rows + the real columns.
+    # total code is wrong normalization fails closed.
     filters:
       FREQ: A
       DATA_TYPE: UNEM_R
@@ -178,15 +178,13 @@ datasets:
       period: TIME_PERIOD
       value: OBS_VALUE
     # Keep only per-territory totals: any hidden breakdown (sex, age, marital
-    # status) would silently inflate sums. Unmatched filters are skipped.
+    # status) would silently inflate sums. Filter keys use semantic aliases;
+    # SEX or SEXISTAT1 (and equivalent age/marital IDs) is sufficient.
     filters:
       FREQ: A
       SEX: ["9", TOTAL, _T]
-      SEXISTAT1: ["9", TOTAL, _T]
       AGE: [TOTAL, _T, TOT, Y_TOT]
-      ETA1: [TOTAL, _T, TOT]
-      MARITAL_STATUS: [TOTAL, _T, "99"]
-      STATCIV2: ["99", TOTAL, _T]
+      MARITAL_STATUS: ["99", TOTAL, _T]
 
   labor_naspi_beneficiaries:
     domain: labor
@@ -230,3 +228,5 @@ datasets:
       category_name: DESCRIZIONE_INTERVENTO
       period: ANNO_ACCADEMICO
       value: INTERVENTI_LAUREA
+    # USTAT publishes 'N' for not-available cells; excluded, never fatal.
+    value_na_codes: ["N"]

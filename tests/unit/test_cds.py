@@ -866,9 +866,7 @@ class FakeTimeseriesClient:
             cursor += timedelta(days=1)
         lat = request["location"]["latitude"]
         lon = request["location"]["longitude"]
-        write_synthetic_point_chunk(
-            Path(target), dates, lat, lon, self.kelvin, self.precip_metres
-        )
+        write_synthetic_point_chunk(Path(target), dates, lat, lon, self.kelvin, self.precip_metres)
 
 
 def patch_timeseries_seed_and_client(monkeypatch, tmp_path: Path, client) -> None:
@@ -882,7 +880,9 @@ def patch_timeseries_seed_and_client(monkeypatch, tmp_path: Path, client) -> Non
 def test_timeseries_request_uses_location_point_not_area():
     """The whole point of the ARCO path: one coordinate per request, so the
     server returns a single grid cell instead of a whole area grid."""
-    request = cds._timeseries_request(MILANO, date(2020, 1, 1), date(2020, 12, 31), ("2m_temperature",))
+    request = cds._timeseries_request(
+        MILANO, date(2020, 1, 1), date(2020, 12, 31), ("2m_temperature",)
+    )
     assert request["location"] == {"longitude": 9.19, "latitude": 45.4642}
     assert "area" not in request  # must NOT be the bulk area form
     assert request["date"] == ["2020-01-01/2020-12-31"]
@@ -1012,7 +1012,9 @@ def test_timeseries_cache_skips_a_cached_decade(tmp_path):
     cache = cds._timeseries_cache_path(raw_dir, MILANO, date(2020, 1, 1))
     write_synthetic_point_chunk(cache, ["2020-01-01"], 45.4642, 9.19, 283.15, 0.001)
 
-    rows = cds._fetch_capital_timeseries(client, MILANO, date(2020, 1, 1), date(2020, 1, 1), raw_dir)
+    rows = cds._fetch_capital_timeseries(
+        client, MILANO, date(2020, 1, 1), date(2020, 1, 1), raw_dir
+    )
 
     assert client.calls == []  # never hit the network for a cached decade
     assert rows[0]["province_code"] == "ITC45"
@@ -1134,6 +1136,7 @@ def test_retrieve_arco_does_not_retry_a_non_queue_error(tmp_path):
     """A 403 (licence not accepted) is a genuine bad request, not a queue
     squeeze: retrying it is guaranteed to fail the same way, so it must raise
     immediately rather than burn the retry budget."""
+
     class LicenceClient:
         def retrieve(self, name: str, request: dict, target: str) -> None:
             raise RuntimeError("403 Client Error: required licences not accepted")
@@ -1145,9 +1148,12 @@ def test_retrieve_arco_does_not_retry_a_non_queue_error(tmp_path):
 
 
 def test_is_queue_limit_error_matches_only_the_specific_phrase():
-    assert cds._is_queue_limit_error(
-        RuntimeError("Number queued requests for this dataset is temporarily limited")
-    ) is True
+    assert (
+        cds._is_queue_limit_error(
+            RuntimeError("Number queued requests for this dataset is temporarily limited")
+        )
+        is True
+    )
     assert cds._is_queue_limit_error(RuntimeError("403 required licences")) is False
     assert cds._is_queue_limit_error(RuntimeError("something else")) is False
 

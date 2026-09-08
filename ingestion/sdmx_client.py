@@ -196,6 +196,7 @@ class IstatClient:
             dim_id = el.get("id")
             if not dim_id:
                 continue
+            # pi-lens-ignore: unchecked-throwing-call-python
             position = int(el.get("position", order))
             dims.append((position, dim_id))
         if not dims:

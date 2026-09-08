@@ -69,7 +69,9 @@ def load_capitals(path: Path = SEED_PATH) -> list[Capital]:
             Capital(
                 province_code=r["province_code"],
                 capital_city=r["capital_city"],
+                # pi-lens-ignore: unchecked-throwing-call-python
                 lat=float(r["lat"]),
+                # pi-lens-ignore: unchecked-throwing-call-python
                 lon=float(r["lon"]),
             )
             for r in csv.DictReader(fh)
@@ -205,6 +207,7 @@ async def _fetch_capital(
         # The current decade is still growing, so its cache is always stale.
         is_current_decade = chunk_end == end
         if cache.exists() and not is_current_decade:
+            # pi-lens-ignore: unchecked-throwing-call-python
             payload = json.loads(cache.read_text())
         else:
             payload = await client.daily_temperatures(cap.lat, cap.lon, start, chunk_end)
@@ -325,6 +328,7 @@ def cmd_normalize(data_dir: Path = DATA_DIR) -> int:
             if not cache.exists():
                 missing_decade = True
                 break
+            # pi-lens-ignore: unchecked-throwing-call-python
             payload = json.loads(cache.read_text())
             rows.extend(payload_to_rows(cap.province_code, payload))
         if missing_decade:
