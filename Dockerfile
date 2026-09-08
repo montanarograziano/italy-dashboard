@@ -41,6 +41,7 @@ COPY dbt ./dbt
 # time. tests/unit/test_deployment_paths.py derives the required set from the
 # code's own Path constants and fails if any of them stops being copied.
 COPY shared ./shared
+COPY scripts/validate_snapshot.py ./scripts/validate_snapshot.py
 COPY rxconfig.py ./
 # Reflex's frontend-side lockfile (pinned bun.lock/package.json versions), so
 # the frontend build reuses the pins from `reflex init`/`reflex export` runs
@@ -65,14 +66,8 @@ RUN uv sync --frozen --no-dev
 # without changing what the dashboard serves.
 COPY data/marts ./data/marts
 COPY data/*.parquet ./data/
-RUN find data/marts -maxdepth 1 -name '*.parquet' -print -quit | grep -q . || { \
-      echo "ERROR: data/marts has no parquet files." >&2; \
-      echo "This image bakes in the data snapshot at build time; it does not fetch" >&2; \
-      echo "or generate data on its own. Build from a checkout where 'just refresh'" >&2; \
-      echo "(real ISTAT/Open-Meteo data) or 'just sample' (synthetic dev data) has" >&2; \
-      echo "already been run, so data/marts/*.parquet exists, then retry the build." >&2; \
-      exit 1; \
-    }
+COPY data/release-manifest.json ./data/release-manifest.json
+RUN python scripts/validate_snapshot.py
 
 # The frontend's websocket/API base URL is baked into the exported static JS
 # at THIS build step (Reflex writes it to .web/env.json, which Vite inlines

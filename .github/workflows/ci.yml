@@ -65,8 +65,8 @@ jobs:
       - run: uv sync --all-groups
       - name: Lint + typecheck + tests
         run: just check
-      - name: Published-data provenance manifest
-        run: just provenance
+      - name: Strict release integrity gate
+        run: just release-gate
 
   web:
     name: Web typecheck + build
@@ -80,8 +80,11 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - name: Verify sealed release snapshot
+        run: python3 scripts/validate_snapshot.py
       - run: npm ci
         working-directory: web
+      - run: python3 scripts/stage_web_data.py --strict
       - run: npm run typecheck
         working-directory: web
       # Builds against the git-tracked data/marts snapshot (committed for

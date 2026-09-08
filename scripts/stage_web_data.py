@@ -31,9 +31,15 @@ therefore `just test-conformance`, which drives the dev server) and
 
 from __future__ import annotations
 
+import argparse
+import json
 import re
 import shutil
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from validate_snapshot import validate_manifest  # type: ignore[import-not-found]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = REPO_ROOT / "data"
@@ -63,15 +69,21 @@ def _registered_paths() -> set[str]:
 STAGED: set[str] = _registered_paths() - EXCLUDED_FROM_STATIC_BUILD
 
 
-def stage() -> list[str]:
-    """(Re)create STAGING_DIR with exactly STAGED's parquet files.
+def stage(*, strict: bool = False) -> list[str]:
+    """(Re)create staging directory; strict mode gates production first.
 
-    Returns the paths that were requested but not found on disk (a fresh
-    clone that hasn't run `just sample`/`just refresh` yet, for instance):
-    reported, not raised, since the build should still produce a small,
-    correct dist for whatever data IS present -- the same "skip and record"
-    tolerance `registerParquetViews` applies at query time.
+    Returns missing paths in development mode. Strict mode fails before any
+    copy, so production cannot publish a partial static snapshot.
     """
+    if strict:
+        manifest_path = DATA_DIR / "release-manifest.json"
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            errors = validate_manifest(manifest)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"release gate refused: {exc}") from exc
+        if errors:
+            raise RuntimeError("release gate refused: " + "; ".join(errors))
     if STAGING_DIR.exists():
         shutil.rmtree(STAGING_DIR)
     STAGING_DIR.mkdir(parents=True)
@@ -88,13 +100,22 @@ def stage() -> list[str]:
     return missing
 
 
-def main() -> int:
-    missing = stage()
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--strict", action="store_true", help="require sealed production manifest")
+    args = parser.parse_args(argv)
+    try:
+        missing = stage(strict=args.strict)
+    except RuntimeError as exc:
+        print(f"stage_web_data: {exc}", file=sys.stderr)
+        return 1
     print(
         f"stage_web_data: staged {len(STAGED) - len(missing)}/{len(STAGED)} dataset(s) into {STAGING_DIR}"
     )
     if missing:
         print(f"stage_web_data: not present in this checkout, skipped: {sorted(missing)}")
+        if args.strict:
+            return 1
     return 0
 
 
