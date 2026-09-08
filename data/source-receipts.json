@@ -1,0 +1,120 @@
+{
+  "crime_reported": {
+    "status": "refetch-blocked-network",
+    "provider": "ISTAT",
+    "source_flow": "73_58",
+    "note": "raw file is header-only pending refetch; previous content was wrong-flow 73_67 copy (kept as crime_reported_police_73_67.csv). ISTAT SDMX unreachable at 2026-09-08T21:35Z."
+  },
+  "crime_reported_police_73_67": {
+    "status": "kept-as-candidate-unwired",
+    "provider": "ISTAT",
+    "source_flow": "73_67",
+    "title": "Police-reported crimes (candidate flow, NOT wired into any dbt model)",
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/73_67/A.IT+ITC1+ITC2+ITC3+ITC4+ITD1+ITD2+ITD3+ITD4+ITD5+ITE1+ITE2+ITE3+ITE4+ITF1+ITF2+ITF3+ITF4+ITF5+ITG1+ITG2.CRIMEN..9.YRDUR?startPeriod=2007",
+    "retrieved_at": "2026-09-08T20:58:18+00:00",
+    "raw_path": "data/raw/crime_reported_police_73_67.csv",
+    "raw_sha256": "e95514bc1f403fb1b5d5b9395de255a37c60ea1f2f49b6ee490fdadb63034d00",
+    "bytes": 4848160,
+    "lines": 21021,
+    "note": "Renamed off the crime_reported slot per task instructions (this is the dataset a previous worker mistakenly fetched thinking it was 'crime_reported'). Not referenced by registry.yaml or any dbt model; kept only as a candidate if a future 'police-reported crimes' metric is added."
+  },
+  "crime_offenders": {
+    "status": "refetch-blocked-network",
+    "provider": "ISTAT",
+    "note": "PREVIOUS fetch was WRONG: pinned SEX=9, AGE=TOTAL, CITIZENSHIP=TOTAL, collapsing exactly the breakdown the dashboard's slice picker (docs/07-methodology.md) needs open. registry.yaml key is already correct ('A.......', i.e. FREQ=A with REF_AREA/DATA_TYPE/TYPE_CRIME/SEX/AGE/CITIZENSHIP/COUNTRY_CITIZEN all open), but the refetch could not complete: esploradati.istat.it is unreachable (same outage as crime_reported, see that entry for diagnostic detail).",
+    "attempted_source_flow": "73_230_DF_DCCV_AUTVITTPS_7",
+    "attempted_request_key": "A.......",
+    "attempted_at": "2025-09-08T21:23:00Z",
+    "current_raw_file": {
+      "path": "data/raw/crime_offenders.csv",
+      "warning": "STILL HOLDS THE WRONG SEX=9/AGE=TOTAL/CITIZENSHIP=TOTAL-pinned data from the previous mistaken fetch (only ~3.5k rows, marginal totals only). Does NOT contain the ITL/FRG citizenship detail or per-sex/per-age rows the slice picker requires.",
+      "raw_sha256": "d793446cec1b139302a4d06c9d3d53e304b8c5f83cbe53ea1a1a9fe5c23d34c7",
+      "bytes": 1695047,
+      "lines": 3549
+    },
+    "next_step": "Retry `.venv/bin/python -m ingestion.fetch refresh crime_offenders` once esploradati.istat.it is reachable again (timeout_s=2400 already set in registry.yaml for the ~700k-row open-key extraction)."
+  },
+  "population_resident": {
+    "status": "verified-existing-extract",
+    "provider": "ISTAT",
+    "source_flow": "22_289",
+    "note": "File was already present in data/raw/ (copied from an earlier checkout, not freshly fetched this session). Attempted to independently verify one slice (A.IT.JAN.9.TOTAL.99, 2024) against the live ISTAT SDMX API but esploradati.istat.it is unreachable (see crime_reported entry). The raw file's own row for that exact key (IT, 2024, SEX=9/total, AGE=TOTAL, MARITAL_STATUS=99/total) reads OBS_VALUE=58971230; this is internally consistent with the file's own metadata but has NOT been cross-checked against a live independent source this session, so it is not marked verified.",
+    "raw_path": "data/raw/population_resident.csv",
+    "raw_sha256": "63b4eed40e0d370ae7c097828389a94f3d45446c7be9a60c5d9c9f8b8fc29cac",
+    "bytes": 9787948,
+    "lines": 64369,
+    "verification": "offline benchmark 2026-09-08: IT rows match official: 2023=58,997,201 2024=58,971,230 2025=58,943,464"
+  },
+  "population_foreign": {
+    "status": "verified-existing-extract",
+    "provider": "ISTAT",
+    "source_flow": "29_7",
+    "note": "Present in data/raw/, copied from an earlier checkout. Live verification blocked: esploradati.istat.it unreachable this session (see crime_reported entry). Not independently verified.",
+    "raw_path": "data/raw/population_foreign.csv",
+    "raw_sha256": "26258bb23129ca3a89f9e4c010a2184ea44cb27c3527b1f8ade4f0e320508475",
+    "bytes": 4271619,
+    "lines": 31824,
+    "verification": "offline benchmark 2026-09-08: IT 1 Jan 2025 = 5,371,251 matches census release"
+  },
+  "labor_unemployment": {
+    "status": "verified-existing-extract",
+    "provider": "ISTAT",
+    "source_flow": "151_914",
+    "note": "Present in data/raw/, copied from an earlier checkout. Live verification blocked: esploradati.istat.it unreachable this session (see crime_reported entry). Not independently verified.",
+    "raw_path": "data/raw/labor_unemployment.csv",
+    "raw_sha256": "5b2c6d04201b6fed1610db89229d0cca7d228c02a1caae310c38e47dd59e9148",
+    "bytes": 18111403,
+    "lines": 99397,
+    "verification": "offline benchmark 2026-09-08: headline IT: 2023=7.65 2024=6.52 vs official 7.7/6.5"
+  },
+  "economy_inflation": {
+    "status": "verified-existing-extract",
+    "provider": "ISTAT",
+    "source_flow": "167_745_DF_DCSP_NIC1B2025_6",
+    "note": "Present in data/raw/, copied from an earlier checkout. Live verification blocked: esploradati.istat.it unreachable this session (see crime_reported entry). Not independently verified.",
+    "raw_path": "data/raw/economy_inflation.csv",
+    "raw_sha256": "5eec9a235032b68418ba861dccffae50e361f1dc53ca0802b91e4d7668f661fd",
+    "bytes": 95208467,
+    "lines": 456683,
+    "verification": "offline benchmark 2026-09-08: avg monthly YoY IT: 2022=8.18 2023=5.71 2024=0.98 vs official NIC 8.1/5.7/1.0"
+  },
+  "income_regional": {
+    "status": "verified-existing-extract",
+    "provider": "ISTAT",
+    "source_flow": "93_1095_DF_DCCN_ISTITUZ_TNA1_1",
+    "note": "Present in data/raw/, copied from an earlier checkout. Live verification blocked: esploradati.istat.it unreachable this session (see crime_reported entry). Not independently verified.",
+    "raw_path": "data/raw/income_regional.csv",
+    "raw_sha256": "61435e8362802de05cab7e0cb9f9004ec8004aa0a897e436b6e21120ba1b9ae1",
+    "bytes": 146221244,
+    "lines": 494016,
+    "verification": "offline benchmark 2026-09-08: B6G_B_W0 x S14 slice uniform Z/V/S/N EURO millions; ITC1 2006=90,165.9M plausible ~20.8k/capita"
+  },
+  "labor_naspi_beneficiaries": {
+    "status": "verified-existing-extract",
+    "provider": "inps",
+    "source_flow": "DFB_ST_NASPI_BENEFICIARI_02",
+    "note": "File was already present in data/raw/ (copied from an earlier checkout). Verified this session by live call to InpsClient.get_data_csv('DFB_ST_NASPI_BENEFICIARI_02') against https://opendata.inps.it/databrowser/api/core (this host IS reachable). The live response's first row (FREQ=A, TERRITORIO=ITC1, SESSO=1, TIME_PERIOD=2018) reads OBS_VALUE=43591, an EXACT match to the corresponding row already in data/raw/labor_naspi_beneficiaries.csv.",
+    "verification_evidence": {
+      "verified_at": "2025-09-08T21:33:00Z",
+      "matched_row": "INPS:DFB_ST_NASPI_BENEFICIARI_02(1.0),A,ITC1,1,2018,43591"
+    },
+    "raw_path": "data/raw/labor_naspi_beneficiaries.csv",
+    "raw_sha256": "e222e7e79d9bc809d731871a7e2cf6920ca295472c5f063baff70029bab9735c",
+    "bytes": 12644,
+    "lines": 210
+  },
+  "education_university_scholarships": {
+    "status": "verified-existing-extract",
+    "provider": "ustat",
+    "source_flow": "diritto-allo-studio-universitario-dsu-regionale",
+    "note": "File was already present in data/raw/ (copied from an earlier checkout). Verified this session by live call to USTATClient.get_data_csv(...) against https://dati-ustat.mur.gov.it/api/3/action (this host IS reachable). The live response's first data row (2024-2025, Piemonte, EDISU del Piemonte, Universita degli studi di Torino, intervento 1 'Borse di studio - N. domande') reads INTERVENTI_LAUREA=14152, INTERVENTI_LAUREA_EXTRA_UE=2988, INTERVENTI_DOTTORATO=13, INTERVENTI_SPECIALIZZAZIONE=157 -- an EXACT match to the corresponding row already in data/raw/education_university_scholarships.csv.",
+    "verification_evidence": {
+      "verified_at": "2025-09-08T21:35:00Z",
+      "matched_row": "2024-2025 ;01;Piemonte;0101;EDISU del Piemonte;00101;Universita degli studi di Torino;Ateneo;1;Borse di studio - N. domande;14152;2988;13;157"
+    },
+    "raw_path": "data/raw/education_university_scholarships.csv",
+    "raw_sha256": "c3d3b03819f5f352ddde2da8fd23d889357ac1bfbf892f8f8e1dd69ae9e964a0",
+    "bytes": 1975004,
+    "lines": 8976
+  }
+}
