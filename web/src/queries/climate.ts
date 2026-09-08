@@ -45,7 +45,9 @@ function divergingBucket(anomaly: number): number {
 // light/dark mode, so it cannot be a build-time hex constant). Exported so
 // climateScope.ts's climateRegionStripes can reuse it rather than duplicate
 // the diverging-colour logic a second time.
-export function withStripeFill(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+export function withStripeFill(
+  rows: Record<string, unknown>[],
+): Record<string, unknown>[] {
   for (const r of rows) {
     r.fill = `var(--div-${divergingBucket(Number(r.anomaly))})`;
   }
@@ -94,7 +96,8 @@ export async function climateThresholdDays(city: string) {
 export async function climateMonthHeatmap(city: string) {
   const months = Array.from(
     { length: 12 },
-    (_, i) => `ROUND(MAX(CASE WHEN month = ${i + 1} THEN anomaly_1981_2010 END), 2) AS m${i + 1}`,
+    (_, i) =>
+      `ROUND(MAX(CASE WHEN month = ${i + 1} THEN anomaly_1981_2010 END), 2) AS m${i + 1}`,
   ).join(", ");
   return runSql(
     `SELECT year AS period, ${months}
@@ -165,21 +168,35 @@ export async function climateCoverage(): Promise<Record<string, string>> {
     regions_total: String(totals.regions),
     year_start: "—",
     year_end: "—",
+    partial_endpoint: "—",
   };
   if (!(await climateReady())) return out;
   const rows = await runSql(
-    `SELECT count(DISTINCT province_code) AS capitals,
-            count(DISTINCT region_code) AS regions,
-            MIN(CAST(year AS INTEGER)) AS year_start,
-            MAX(CAST(year AS INTEGER)) AS year_end
-     FROM mart_climate_annual`,
+    `WITH years AS (
+       SELECT province_code, region_code, year, MIN(days_observed) AS min_days
+       FROM mart_climate_annual
+       GROUP BY province_code, region_code, year
+     ), summary AS (
+       SELECT COUNT(DISTINCT province_code) AS capitals,
+              COUNT(DISTINCT region_code) AS regions,
+              MIN(year) FILTER (WHERE min_days >= ${MIN_DAYS_FOR_A_FULL_YEAR}) AS year_start,
+              MAX(year) FILTER (WHERE min_days >= ${MIN_DAYS_FOR_A_FULL_YEAR}) AS year_end,
+              MAX(year) FILTER (WHERE min_days < ${MIN_DAYS_FOR_A_FULL_YEAR}) AS partial_year
+       FROM years
+     )
+     SELECT summary.*,
+            (SELECT MIN(min_days) FROM years WHERE year = summary.partial_year) AS endpoint_days
+     FROM summary`,
   );
   if (rows.length > 0 && rows[0]!.capitals) {
     const r = rows[0]!;
     out.capitals = String(r.capitals);
     out.regions = String(r.regions);
-    out.year_start = String(r.year_start);
-    out.year_end = String(r.year_end);
+    if (r.year_start !== null) out.year_start = String(r.year_start);
+    if (r.year_end !== null) out.year_end = String(r.year_end);
+    if (r.partial_year !== null) {
+      out.partial_endpoint = `${r.partial_year} (${r.endpoint_days} days)`;
+    }
   }
   return out;
 }

@@ -212,6 +212,17 @@ def climate_page() -> rx.Component:
                 # the note's "much of the South is still missing" is false, so
                 # it is suppressed rather than shown about a fully-covered Italy.
                 rx.cond(
+                    ClimateState.has_partial_endpoint,
+                    rx.callout(
+                        ClimateState.partial_endpoint_note,
+                        icon="triangle_alert",
+                        color_scheme="amber",
+                        width="100%",
+                        size="1",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
                     ClimateState.is_partial_national_scope,
                     rx.callout(
                         t("climate_coverage_note"),

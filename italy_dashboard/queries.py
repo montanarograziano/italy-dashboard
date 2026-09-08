@@ -552,10 +552,13 @@ def foreign_share_timeseries(region: str) -> list[Row]:
 
 
 def unemployment_series(region: str) -> list[Row]:
-    """Selected region vs the NATIONAL rate (the IT row, not an unweighted
-    average of regions — small regions must not weigh like Lombardia)."""
+    """Selected region vs official national IT observations.
+
+    No regional fallback: an unweighted regional mean is not a national rate.
+    LEFT JOIN keeps selected-region years visible when national observation is
+    missing, with ``national = NULL``.
+    """
     cond, params = _region_filter(region, "labor_unemployment")
-    nat_cond, nat_params = _region_filter(NATIONAL, "labor_unemployment")
     return _query(
         f"""
         WITH sel AS (
@@ -565,14 +568,15 @@ def unemployment_series(region: str) -> list[Row]:
         ),
         nat AS (
             SELECT period, ROUND(AVG(value), 1) AS national
-            FROM labor_unemployment WHERE value IS NOT NULL {nat_cond}
+            FROM labor_unemployment
+            WHERE value IS NOT NULL AND territory = 'IT'
             GROUP BY period
         )
         SELECT sel.period, sel.selected, nat.national
-        FROM sel JOIN nat USING (period)
+        FROM sel LEFT JOIN nat USING (period)
         ORDER BY sel.period
         """,
-        params + nat_params,
+        params,
     )
 
 
@@ -639,13 +643,10 @@ def dsu_ranking(limit: int = 20) -> list[Row]:
 
 
 def inflation_series() -> list[Row]:
-    """Annual inflation (%): average of ISTAT's monthly year-over-year changes.
+    """Mean monthly year-over-year change, complete calendar years only.
 
-    The snapshot holds MEASURE 7 of the all-bases NIC dataflow — ISTAT's own
-    "percentage change on the same period of the previous year". Unlike raw
-    index levels, this series is continuous ACROSS index rebasings (verified:
-    2011-01, 2016-01 and 2026-01 all have values), so no base chaining is
-    needed. The last point may average a partial year.
+    Partial endpoint years are excluded; output is not an annual-index
+    inflation measure.
     """
     return _query(load_sql("inflation_series"))
 
@@ -667,7 +668,7 @@ def kpis() -> dict[str, str]:
         out["population"] = f"{pop[-1]['value']:,.1f}M"
 
     unemp = unemployment_series(NATIONAL)
-    if unemp:
+    if unemp and unemp[-1]["national"] is not None:
         out["unemployment"] = f"{unemp[-1]['national']:.1f}%"
 
     infl = inflation_series()
@@ -952,6 +953,7 @@ def climate_coverage() -> dict[str, str]:
         "regions_total": "0",
         "year_start": "—",
         "year_end": "—",
+        "partial_endpoint": "—",
     }
     con = duckdb.connect()
     try:
@@ -968,19 +970,34 @@ def climate_coverage() -> dict[str, str]:
         return out
     rows = _query(
         f"""
-        SELECT count(DISTINCT province_code) AS capitals,
-               count(DISTINCT region_code) AS regions,
-               MIN(CAST(year AS INTEGER)) AS year_start,
-               MAX(CAST(year AS INTEGER)) AS year_end
-        FROM {CLIMATE_ANNUAL}
+        WITH years AS (
+            SELECT province_code, region_code, year, MIN(days_observed) AS min_days
+            FROM {CLIMATE_ANNUAL}
+            GROUP BY province_code, region_code, year
+        ), summary AS (
+            SELECT count(DISTINCT province_code) AS capitals,
+                   count(DISTINCT region_code) AS regions,
+                   MIN(year) FILTER (WHERE min_days >= {MIN_DAYS_FOR_A_FULL_YEAR}) AS year_start,
+                   MAX(year) FILTER (WHERE min_days >= {MIN_DAYS_FOR_A_FULL_YEAR}) AS year_end,
+                   MAX(year) FILTER (WHERE min_days < {MIN_DAYS_FOR_A_FULL_YEAR}) AS partial_year
+            FROM years
+        )
+        SELECT summary.*,
+               (SELECT MIN(min_days) FROM years
+                WHERE year = summary.partial_year) AS endpoint_days
+        FROM summary
         """
     )
     if rows and rows[0]["capitals"]:
         r = rows[0]
         out["capitals"] = str(r["capitals"])
         out["regions"] = str(r["regions"])
-        out["year_start"] = str(r["year_start"])
-        out["year_end"] = str(r["year_end"])
+        if r["year_start"] is not None:
+            out["year_start"] = str(r["year_start"])
+        if r["year_end"] is not None:
+            out["year_end"] = str(r["year_end"])
+        if r["partial_year"] is not None:
+            out["partial_endpoint"] = f"{r['partial_year']} ({r['endpoint_days']} days)"
     return out
 
 

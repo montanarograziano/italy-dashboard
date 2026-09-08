@@ -40,7 +40,11 @@ export async function martTrend(
      GROUP BY year, ${splitBy}_name ORDER BY year, ${splitBy}_name`,
     params,
   );
-  return rows.map((r) => ({ period: r.period, series: r.series, value: Number(r.value) }));
+  return rows.map((r) => ({
+    period: r.period,
+    series: r.series,
+    value: Number(r.value),
+  }));
 }
 
 // Matches italy_dashboard.queries.mart_trend_pivot: chart-ready rows. Split
@@ -67,7 +71,8 @@ export async function martTrendPivot(
   );
   const latest: Record<string, number> = {};
   for (const r of rows) {
-    if (String(r.period) === lastPeriod) latest[String(r.series)] = Number(r.value);
+    if (String(r.period) === lastPeriod)
+      latest[String(r.series)] = Number(r.value);
   }
   // Object.keys preserves insertion order, which is the SQL's own
   // `ORDER BY year, {split_by}_name` -- i.e. series names already sorted
@@ -148,8 +153,9 @@ export async function kpis(): Promise<Record<string, string>> {
   }
 
   const unemp = await unemploymentSeries(NATIONAL);
-  if (unemp.length > 0) {
-    out.unemployment = `${pythonRound(Number(unemp[unemp.length - 1]!.national), 1).toFixed(1)}%`;
+  const lastNational = unemp.length > 0 ? unemp[unemp.length - 1]!.national : undefined;
+  if (lastNational !== null && lastNational !== undefined) {
+    out.unemployment = `${pythonRound(Number(lastNational), 1).toFixed(1)}%`;
   }
 
   const infl = await inflationSeries();
@@ -200,7 +206,11 @@ export async function offenderRates(
   region: string,
   crime: string,
 ): Promise<Record<string, unknown>[]> {
-  const clauses = ["NOT citizenship_is_total", "NOT crime_is_total", "rate_per_1000 IS NOT NULL"];
+  const clauses = [
+    "NOT citizenship_is_total",
+    "NOT crime_is_total",
+    "rate_per_1000 IS NOT NULL",
+  ];
   const params: unknown[] = [];
   if (region === ALL) {
     clauses.push("region_code = 'IT'");
@@ -236,7 +246,9 @@ export async function offenderRates(
     params,
   );
   const allNull = rows.every(
-    (r) => (r.s1 === null || r.s1 === undefined) && (r.s2 === null || r.s2 === undefined),
+    (r) =>
+      (r.s1 === null || r.s1 === undefined) &&
+      (r.s2 === null || r.s2 === undefined),
   );
   if (allNull) return [];
   return rows;
@@ -292,7 +304,12 @@ export async function regionRateRanking(
 export async function offendersKpis(
   selections: Record<string, string>,
 ): Promise<Record<string, string>> {
-  const out: Record<string, string> = { total: "—", share: "—", yoy: "—", rate_ratio: "—" };
+  const out: Record<string, string> = {
+    total: "—",
+    share: "—",
+    yoy: "—",
+    rate_ratio: "—",
+  };
 
   const trend = await martTrend(OFFENDERS_MART, selections);
   if (trend.length > 0) {
@@ -310,7 +327,10 @@ export async function offendersKpis(
     out.share = `${pythonRound(Number(share[share.length - 1]!.value), 1).toFixed(1)}%`;
   }
 
-  const rates = await offenderRates(selections["region"] ?? ALL, selections["crime"] ?? ALL);
+  const rates = await offenderRates(
+    selections["region"] ?? ALL,
+    selections["crime"] ?? ALL,
+  );
   const lastRate = rates.length > 0 ? rates[rates.length - 1] : undefined;
   if (lastRate && lastRate.s1) {
     const s2 = Number(lastRate.s2);

@@ -86,8 +86,9 @@ EN: dict[str, str] = {
     "offence_type": "Offence type",
     "rates_title": "Offenders per 1,000 residents, by citizenship",
     "rates_sub": (
-        "Each group divided by its own population — the honest comparison. "
-        "Foreign-resident denominators are available from 2019."
+        "Rates divide reported-offender counts by resident-population estimates. "
+        "The numerator may include nonresidents, so this is not an individual's "
+        "likelihood of offending; foreign-resident denominators are available from 2019."
     ),
     "italians": "Italians",
     "foreigners": "Foreigners",
@@ -101,12 +102,13 @@ EN: dict[str, str] = {
     "kpi_foreign_share": "Foreign share",
     "kpi_foreign_share_note": "of offenders, latest year",
     "kpi_rate_ratio": "Rate ratio",
-    "kpi_rate_ratio_note": "foreign vs italian per-capita rate",
+    "kpi_rate_ratio_note": "reported-count rate ratio; not individual likelihood",
     "method_note": (
         "Counts, not rates, unless stated: compare groups only against their "
         "population denominators. Citizenship distinguishes Italian vs foreign "
         "nationals; residence status (regular/irregular) is not part of ISTAT "
-        "statistics. Cross-crime totals count a person once per crime type."
+        "statistics. Cross-offence sums are not unique-person counts. "
+        "Reported numerators may include nonresidents, while denominators are residents."
     ),
     # population / labor / economy pages
     "income_title": "Income vs offender rate (regions)",
@@ -139,7 +141,7 @@ EN: dict[str, str] = {
     "dsu_ranking_sub": "Latest academic year, regional DSU grants (USTAT/MUR)",
     "scholarships_granted": "Scholarships granted",
     "unemployment_title": "Unemployment rate",
-    "unemployment_sub": "Selected region vs national average (%)",
+    "unemployment_sub": "Selected region vs official national IT series (%)",
     "selected_region": "Selected region",
     "national_avg": "National average",
     "selected_pct": "Selected (%)",
@@ -149,7 +151,7 @@ EN: dict[str, str] = {
     "selected_count": "Selected",
     "national_count": "National",
     "inflation_title": "Inflation (consumer prices)",
-    "inflation_sub": "Annual average change of the general index (%)",
+    "inflation_sub": "Mean monthly year-over-year change; complete years only (%)",
     "change_pct": "Change (%)",
     # climate page
     "city": "City",
@@ -211,7 +213,8 @@ EN: dict[str, str] = {
     # are substituted in ClimateState.coverage_text and ClimateCrimeState.coverage_text.
     "climate_coverage": (
         "Coverage: {capitals} of {capitals_total} capitals, {regions} of "
-        "{regions_total} regions, {year_start}-{year_end}"
+        "{regions_total} regions; complete years {year_start}-{year_end}; "
+        "partial endpoint {partial_endpoint}"
     ),
     # Shown at Italia scope only (ClimateState.is_national_scope). The coverage
     # line above gives the counts; this says what the counts do not — WHICH half
@@ -223,6 +226,10 @@ EN: dict[str, str] = {
         "north: much of the South is still missing and the absolute level reads "
         "colder than Italy's. The anomaly chart is far more robust to this, "
         "because it measures each year against the same cities' own baseline."
+    ),
+    "climate_partial_endpoint_note": (
+        "Latest endpoint {partial_endpoint} is incomplete; climate charts use "
+        "complete years through {year_end}."
     ),
     "nav_climate_crime": "Climate × Crime",  # noqa: RUF001
     "climate_crime_title": "Summer heat and violent crime",
@@ -259,7 +266,8 @@ EN: dict[str, str] = {
         "from 2022. The outcome is offender counts, not rates, because population "
         "denominators start in 2019; region fixed effects absorb the population "
         "level but not differential regional growth. No p-values or confidence "
-        "intervals are shown: with 21 clusters they would overstate precision."
+        "intervals are shown: with {clusters} observed region clusters they "
+        "would overstate precision."
     ),
     "no_climate_crime": (
         "The crime-climate panel needs both the offenders mart and temperature "
@@ -348,8 +356,10 @@ IT: dict[str, str] = {
     "offence_type": "Tipo di delitto",
     "rates_title": "Denunciati ogni 1.000 residenti, per cittadinanza",
     "rates_sub": (
-        "Ogni gruppo diviso per la propria popolazione — il confronto onesto. "
-        "I denominatori sugli stranieri residenti sono disponibili dal 2019."
+        "I tassi dividono i conteggi degli autori denunciati per stime della "
+        "popolazione residente. Il numeratore può includere non residenti, quindi "
+        "non è la probabilità individuale di commettere reati; i denominatori "
+        "sugli stranieri residenti sono disponibili dal 2019."
     ),
     "italians": "Italiani",
     "foreigners": "Stranieri",
@@ -363,13 +373,14 @@ IT: dict[str, str] = {
     "kpi_foreign_share": "Quota straniera",
     "kpi_foreign_share_note": "dei denunciati, ultimo anno",
     "kpi_rate_ratio": "Rapporto tassi",
-    "kpi_rate_ratio_note": "tasso pro capite stranieri vs italiani",
+    "kpi_rate_ratio_note": "rapporto tra conteggi, non probabilità individuale",
     "method_note": (
         "Conteggi, non tassi, salvo indicazione: confronta i gruppi solo con i "
         "rispettivi denominatori di popolazione. La cittadinanza distingue "
         "italiani e stranieri; lo status di soggiorno (regolare/irregolare) "
-        "non fa parte delle statistiche ISTAT. I totali tra reati contano una "
-        "persona una volta per tipo di reato."
+        "non fa parte delle statistiche ISTAT. Le somme tra delitti non contano "
+        "persone uniche. I numeratori possono includere non residenti, mentre i "
+        "denominatori sono residenti."
     ),
     "income_title": "Reddito vs tasso di denunciati (regioni)",
     "income_sub": (
@@ -401,7 +412,7 @@ IT: dict[str, str] = {
     "dsu_ranking_sub": "Ultimo anno accademico, borse DSU regionali (USTAT/MUR)",
     "scholarships_granted": "Borse concesse",
     "unemployment_title": "Tasso di disoccupazione",
-    "unemployment_sub": "Regione selezionata vs media nazionale (%)",
+    "unemployment_sub": "Regione selezionata vs serie nazionale ufficiale IT (%)",
     "selected_region": "Regione selezionata",
     "national_avg": "Media nazionale",
     "selected_pct": "Selezionata (%)",
@@ -411,7 +422,7 @@ IT: dict[str, str] = {
     "selected_count": "Selezionata",
     "national_count": "Nazionale",
     "inflation_title": "Inflazione (prezzi al consumo)",
-    "inflation_sub": "Variazione media annua dell'indice generale (%)",
+    "inflation_sub": "Media mensile della variazione annua; solo anni completi (%)",
     "change_pct": "Variazione (%)",
     "city": "Città",
     # Vedi il commento nella tabella EN: {name} è un valore a runtime.
@@ -465,7 +476,8 @@ IT: dict[str, str] = {
     ),
     "climate_coverage": (
         "Copertura: {capitals} di {capitals_total} capoluoghi, {regions} di "
-        "{regions_total} regioni, {year_start}-{year_end}"
+        "{regions_total} regioni; anni completi {year_start}-{year_end}; "
+        "endpoint parziale {partial_endpoint}"
     ),
     "climate_coverage_note": (
         "Italia è una media non ponderata dei capoluoghi finora coperti, e il "
@@ -473,6 +485,10 @@ IT: dict[str, str] = {
         "quindi da nord: gran parte del Sud manca ancora e il livello assoluto "
         "risulta più freddo di quello italiano. Il grafico delle anomalie è molto "
         "più robusto: misura ogni anno rispetto alla baseline delle stesse città."
+    ),
+    "climate_partial_endpoint_note": (
+        "L'ultimo endpoint {partial_endpoint} è incompleto; i grafici climatici "
+        "usano anni completi fino a {year_end}."
     ),
     "nav_climate_crime": "Clima × Criminalità",  # noqa: RUF001
     "climate_crime_title": "Caldo estivo e criminalità violenta",
@@ -512,7 +528,8 @@ IT: dict[str, str] = {
         "perché i denominatori di popolazione partono dal 2019; gli effetti "
         "fissi di regione assorbono il livello della popolazione ma non la "
         "crescita differenziale. Non sono mostrati p-value né intervalli di "
-        "confidenza: con 21 cluster sovrastimerebbero la precisione."
+        "confidenza: con {clusters} cluster regionali osservati sovrastimerebbero "
+        "la precisione."
     ),
     "no_climate_crime": (
         "Il panel clima-criminalità richiede sia il mart degli autori sia i dati "
