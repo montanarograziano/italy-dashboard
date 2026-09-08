@@ -109,17 +109,19 @@ from ingestion import sample_data as s
 rng = random.Random(42)
 s._rows_crime(rng)  # preserve generate_all RNG order
 steps = [
-    ('population_resident', lambda: s._rows_population(rng, False)),
-    ('population_foreign', lambda: s._rows_population(rng, True)),
-    ('labor_unemployment', lambda: s._rows_unemployment(rng)),
-    ('labor_naspi_beneficiaries', lambda: s._rows_naspi(rng)),
-    ('education_university_scholarships', lambda: s._rows_education(rng)),
-    ('economy_inflation', lambda: s._rows_inflation(rng)),
+    ("population_resident", lambda: s._rows_population(rng, False)),
+    ("population_foreign", lambda: s._rows_population(rng, True)),
+    ("labor_unemployment", lambda: s._rows_unemployment(rng)),
+    ("labor_naspi_beneficiaries", lambda: s._rows_naspi(rng)),
+    ("education_university_scholarships", lambda: s._rows_education(rng)),
+    ("economy_inflation", lambda: s._rows_inflation(rng)),
 ]
-cols = ['territory', 'category', 'period', 'value']
+cols = ["territory", "category", "period", "value"]
 for name, generate in steps:
-    expected = pl.DataFrame(generate()).select(cols).cast({'value': pl.Float64}).sort(cols)
-    actual = pl.read_parquet(f'data/{name}.parquet').select(cols).cast({'value': pl.Float64}).sort(cols)
+    expected = pl.DataFrame(generate()).select(cols).cast({"value": pl.Float64}).sort(cols)
+    actual = (
+        pl.read_parquet(f"data/{name}.parquet").select(cols).cast({"value": pl.Float64}).sort(cols)
+    )
     print(name, actual.equals(expected))
 ```
 
