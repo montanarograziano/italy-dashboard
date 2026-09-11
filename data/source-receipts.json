@@ -32,7 +32,16 @@
       "bytes": 1695047,
       "lines": 3549
     },
-    "next_step": "Retry `.venv/bin/python -m ingestion.fetch refresh crime_offenders` once esploradati.istat.it is reachable again (timeout_s=2400 already set in registry.yaml for the ~700k-row open-key extraction)."
+    "next_step": "Retry `.venv/bin/python -m ingestion.fetch refresh crime_offenders` once esploradati.istat.it is reachable again (timeout_s=2400 already set in registry.yaml for the ~700k-row open-key extraction).",
+    "interim_raw": {
+      "path": "data/raw/crime_offenders.csv",
+      "raw_sha256": "d793446cec1b139302a4d06c9d3d53e304b8c5f83cbe53ea1a1a9fe5c23d34c7",
+      "bytes": 1695047,
+      "source_flow": "73_230_DF_DCCV_AUTVITTPS_7",
+      "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/73_230_DF_DCCV_AUTVITTPS_7/A.IT+ITC1+ITC2+ITC3+ITC4+ITD1+ITD2+ITD3+ITD4+ITD5+ITE1+ITE2+ITE3+ITE4+ITF1+ITF2+ITF3+ITF4+ITF5+ITG1+ITG2.OFFEND..9.TOTAL.TOTAL.WORLD?startPeriod=2007",
+      "retrieved_at": "2026-09-08T20:58:18+00:00",
+      "limitation": "genuine ISTAT extract but sex/age/citizenship pinned to totals; feeds mart_offenders (3,549 rows) as an interim, insufficient for citizenship rates and the crime-climate panel"
+    }
   },
   "population_resident": {
     "status": "verified-existing-extract",
@@ -116,5 +125,14 @@
     "raw_sha256": "c3d3b03819f5f352ddde2da8fd23d889357ac1bfbf892f8f8e1dd69ae9e964a0",
     "bytes": 1975004,
     "lines": 8976
+  },
+  "weather_daily": {
+    "status": "verified-existing-extract-partial",
+    "provider": "Copernicus C3S ERA5-Land (CDS ARCO time-series via ingestion/cds.py)",
+    "path": "data/weather_daily.parquet",
+    "sha256": "b2202134bf404b3cc9b09dd11f1566d8553384b0481ae45bb014fb87681dade8",
+    "bytes": 17991782,
+    "verification": "offline 2026-09-08: carried over from the pre-branch checkout; ACTUAL coverage 80 of 106 capitals, 1950-01-02..2026-08-12 -- docs/04-datasets.md's '106 capitals through 2026-08-26' claim does NOT match this snapshot; partial backfill, UI reports coverage dynamically",
+    "note": "untracked dbt input; its tracked verified products are the climate marts"
   }
 }

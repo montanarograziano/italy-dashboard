@@ -96,9 +96,10 @@ would inject discontinuities indistinguishable from real climate signal.
 
 Fetch with `just refresh-weather`, or `just refresh-weather ITC45` for one city.
 The Copernicus ARCO time-series path (`just refresh-weather-cds-timeseries`)
-has now been run successfully against the real API: the development snapshot
-contains all 106 capitals, from 1950-01-02 through 2026-08-26, with daily
-temperature and precipitation values. The snapshot is real ERA5-Land
+has been run successfully against the real API. Do not quote a fixed coverage
+from this page: the snapshot in a given checkout can be partial (the current
+one carries 80 of 106 capitals, 1950-01-02 through 2026-08-12), and both UIs
+report the actual coverage dynamically. The snapshot is real ERA5-Land
 reanalysis data, not station observations; interpret it as a consistent
 gridded climate estimate rather than as local thermometer measurements.
 
@@ -184,9 +185,10 @@ responses. A full 106-city backfill completed successfully after switching to
 serial requests to respect the dataset's queued-job limit. Eleven coastal
 capitals initially mapped to ocean cells; each was re-probed against a real
 0.1° area response and its seed coordinate was moved to the nearest valid land
-cell. The final snapshot passed the null gate and was published with 106
-capitals, 1950-01-02 through 2026-08-26 coverage, and non-null daily
-precipitation. The live run also showed intermittent object-store connection
+cell. That run's snapshot passed the null gate with non-null daily
+precipitation; the snapshot actually present in a checkout can differ (see
+the coverage note above and `data/source-receipts.json`), so read coverage
+from the data, not from this paragraph. The live run also showed intermittent object-store connection
 resets, which the provider client retried successfully.
 
 ### FAST backfill via the Copernicus ARCO time-series dataset
