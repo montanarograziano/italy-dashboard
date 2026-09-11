@@ -189,6 +189,9 @@ class USTATClient:
 
     def __init__(self) -> None:
         self._client: httpx2.AsyncClient | None = None
+        # The exact URL of the last get_data_csv() download, for source
+        # receipts (ingestion/fetch.py).
+        self.last_request_url: str | None = None
 
     async def __aenter__(self) -> USTATClient:
         self._client = httpx2.AsyncClient()
@@ -217,6 +220,7 @@ class USTATClient:
         if dataflow_id != DATASET_ID:
             raise ValueError(f"Unknown USTAT dataset: {dataflow_id!r}")
         csv_url, version = await get_latest_interventi_csv_url(self._client)
+        self.last_request_url = csv_url
         logger.info(f"Fetching USTAT DSU v{version} from {csv_url}")
         csv_bytes = await download_interventi_csv(csv_url, self._client)
         return _decode_csv(csv_bytes.getvalue()).encode("utf-8")

@@ -65,3 +65,6 @@ data/marts/*
 
 # Copernicus CDS API credentials (never commit)
 .cdsapirc
+
+# transient flock sidecar for receipt upserts
+data/source-receipts.json.lock

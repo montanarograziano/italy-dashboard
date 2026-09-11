@@ -69,6 +69,9 @@ class IstatClient:
         self._timeout = timeout
         self._transport = transport  # injectable for tests (httpx2.MockTransport)
         self._client: httpx2.AsyncClient | None = None
+        # The exact URL of the last get_data_csv() request, for source
+        # receipts (ingestion/fetch.py) — real request, not a reconstruction.
+        self.last_request_url: str | None = None
 
     async def __aenter__(self) -> IstatClient:
         self._client = httpx2.AsyncClient(
@@ -229,7 +232,10 @@ class IstatClient:
             params["startPeriod"] = start_period
         if end_period:
             params["endPeriod"] = end_period
-        raw = await self._get(f"data/{flow_id}/{key}", accept=CSV_ACCEPT, params=params)
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        path = f"data/{flow_id}/{key}"
+        self.last_request_url = f"{self.base_url}/{path}" + (f"?{query}" if query else "")
+        raw = await self._get(path, accept=CSV_ACCEPT, params=params)
         head = raw[:200].lstrip()
         if head.startswith(b"<"):
             raise SdmxError(

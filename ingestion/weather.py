@@ -31,7 +31,8 @@ from pathlib import Path
 import polars as pl
 
 from ingestion.capitals import SEED_PATH
-from ingestion.openmeteo import REQUEST_DELAY_S, OpenMeteoClient, OpenMeteoError
+from ingestion.openmeteo import ARCHIVE_URL, REQUEST_DELAY_S, OpenMeteoClient, OpenMeteoError
+from ingestion.receipts import upsert_fetch_receipt
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("ingestion.weather")
@@ -289,7 +290,17 @@ async def cmd_refresh(only: str | None = None, data_dir: Path = DATA_DIR) -> int
             kept = pl.read_parquet(existing).filter(pl.col("province_code") != only)
             all_rows = kept.to_dicts() + all_rows
 
-    write_snapshot(all_rows, data_dir)
+    snapshot_path = write_snapshot(all_rows, data_dir)
+    upsert_fetch_receipt(
+        data_dir / "source-receipts.json",
+        "weather",
+        provider="Open-Meteo",
+        source_flow=None,
+        request_url=ARCHIVE_URL,
+        raw_path=f"data/raw/weather (cache: {raw_dir.relative_to(data_dir)})",
+        raw_bytes=snapshot_path.read_bytes(),
+        count_lines=False,
+    )
     return 0
 
 

@@ -34,6 +34,7 @@ import yaml
 from pydantic import BaseModel, Field  # type: ignore[import-not-found]
 
 from ingestion.inps_client import InpsClient, InpsError
+from ingestion.receipts import PROVIDER_DISPLAY, upsert_fetch_receipt
 from ingestion.sdmx_client import IstatClient, SdmxError
 from ingestion.ustat_client import USTATClient
 
@@ -322,6 +323,18 @@ async def fetch_dataset(client: AnyClient, name: str, cfg: DatasetConfig) -> Non
     finally:
         tmp_raw.unlink(missing_ok=True)
     logger.info("[%s] saved raw CSV (%.1f MB)", name, len(raw) / 1e6)
+    # Only a successful fetch + normalize reaches here; a normalize-only
+    # re-run (cmd_normalize) never calls fetch_dataset, so this is the one
+    # place a receipt's retrieved_at/raw_sha256 are ever refreshed.
+    upsert_fetch_receipt(
+        DATA_DIR / "source-receipts.json",
+        name,
+        provider=PROVIDER_DISPLAY[cfg.provider],
+        source_flow=cfg.dataflow_id,
+        request_url=getattr(client, "last_request_url", None),
+        raw_path=f"data/raw/{name}.csv",
+        raw_bytes=raw,
+    )
 
 
 async def cmd_refresh(only: str | None = None) -> int:

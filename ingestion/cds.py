@@ -75,6 +75,7 @@ from typing import Any
 
 import polars as pl
 
+from ingestion.receipts import upsert_fetch_receipt
 from ingestion.weather import (
     DATA_DIR,
     MAX_NULL_RATE,
@@ -1008,7 +1009,17 @@ def cmd_refresh_timeseries(
             )
             all_rows = kept.to_dicts() + all_rows
 
-    write_snapshot(all_rows, data_dir)
+    snapshot_path = write_snapshot(all_rows, data_dir)
+    upsert_fetch_receipt(
+        data_dir / "source-receipts.json",
+        "weather",
+        provider="Copernicus C3S ERA5-Land",
+        source_flow=TIMESERIES_DATASET_ID,
+        request_url=f"https://cds.climate.copernicus.eu/datasets/{TIMESERIES_DATASET_ID}",
+        raw_path=f"data/raw/{raw_dir.relative_to(data_dir)}",
+        raw_bytes=snapshot_path.read_bytes(),
+        count_lines=False,
+    )
     return 0
 
 
@@ -1132,7 +1143,17 @@ def cmd_refresh(
             )
             all_rows = kept.to_dicts() + all_rows
 
-    write_snapshot(all_rows, data_dir)
+    snapshot_path = write_snapshot(all_rows, data_dir)
+    upsert_fetch_receipt(
+        data_dir / "source-receipts.json",
+        "weather",
+        provider="Copernicus C3S ERA5-Land",
+        source_flow=CDS_DATASET_ID,
+        request_url=f"https://cds.climate.copernicus.eu/datasets/{CDS_DATASET_ID}",
+        raw_path=f"data/raw/{raw_dir.relative_to(data_dir)}",
+        raw_bytes=snapshot_path.read_bytes(),
+        count_lines=False,
+    )
     return 0
 
 
