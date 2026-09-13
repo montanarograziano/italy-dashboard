@@ -1,9 +1,14 @@
 {
   "crime_reported": {
-    "status": "refetch-blocked-network",
+    "status": "fetched",
     "provider": "ISTAT",
     "source_flow": "73_58",
-    "note": "raw file is header-only pending refetch; previous content was wrong-flow 73_67 copy (kept as crime_reported_police_73_67.csv). ISTAT SDMX unreachable at 2026-09-08T21:35Z."
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/73_58/A..FELONYFJ..ALL.ALL.TOTAL.ALL.ALL.99.ALL..TOTAL.?startPeriod=1970",
+    "retrieved_at": "2026-09-11T13:57:59+00:00",
+    "raw_sha256": "e5a740e060c689b082fa3c3f52c3fc5c7e7b8e5e8e839eecec5c4010a7716733",
+    "bytes": 165189585,
+    "lines": 473941,
+    "raw_path": "data/raw/crime_reported.csv"
   },
   "crime_reported_police_73_67": {
     "status": "kept-as-candidate-unwired",
@@ -19,20 +24,8 @@
     "note": "Renamed off the crime_reported slot per task instructions (this is the dataset a previous worker mistakenly fetched thinking it was 'crime_reported'). Not referenced by registry.yaml or any dbt model; kept only as a candidate if a future 'police-reported crimes' metric is added."
   },
   "crime_offenders": {
-    "status": "refetch-blocked-network",
+    "status": "fetched",
     "provider": "ISTAT",
-    "note": "PREVIOUS fetch was WRONG: pinned SEX=9, AGE=TOTAL, CITIZENSHIP=TOTAL, collapsing exactly the breakdown the dashboard's slice picker (docs/07-methodology.md) needs open. registry.yaml key is already correct ('A.......', i.e. FREQ=A with REF_AREA/DATA_TYPE/TYPE_CRIME/SEX/AGE/CITIZENSHIP/COUNTRY_CITIZEN all open), but the refetch could not complete: esploradati.istat.it is unreachable (same outage as crime_reported, see that entry for diagnostic detail).",
-    "attempted_source_flow": "73_230_DF_DCCV_AUTVITTPS_7",
-    "attempted_request_key": "A.......",
-    "attempted_at": "2025-09-08T21:23:00Z",
-    "current_raw_file": {
-      "path": "data/raw/crime_offenders.csv",
-      "warning": "STILL HOLDS THE WRONG SEX=9/AGE=TOTAL/CITIZENSHIP=TOTAL-pinned data from the previous mistaken fetch (only ~3.5k rows, marginal totals only). Does NOT contain the ITL/FRG citizenship detail or per-sex/per-age rows the slice picker requires.",
-      "raw_sha256": "d793446cec1b139302a4d06c9d3d53e304b8c5f83cbe53ea1a1a9fe5c23d34c7",
-      "bytes": 1695047,
-      "lines": 3549
-    },
-    "next_step": "Retry `.venv/bin/python -m ingestion.fetch refresh crime_offenders` once esploradati.istat.it is reachable again (timeout_s=2400 already set in registry.yaml for the ~700k-row open-key extraction).",
     "interim_raw": {
       "path": "data/raw/crime_offenders.csv",
       "raw_sha256": "d793446cec1b139302a4d06c9d3d53e304b8c5f83cbe53ea1a1a9fe5c23d34c7",
@@ -41,7 +34,14 @@
       "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/73_230_DF_DCCV_AUTVITTPS_7/A.IT+ITC1+ITC2+ITC3+ITC4+ITD1+ITD2+ITD3+ITD4+ITD5+ITE1+ITE2+ITE3+ITE4+ITF1+ITF2+ITF3+ITF4+ITF5+ITG1+ITG2.OFFEND..9.TOTAL.TOTAL.WORLD?startPeriod=2007",
       "retrieved_at": "2026-09-08T20:58:18+00:00",
       "limitation": "genuine ISTAT extract but sex/age/citizenship pinned to totals; feeds mart_offenders (3,549 rows) as an interim, insufficient for citizenship rates and the crime-climate panel"
-    }
+    },
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/73_230_DF_DCCV_AUTVITTPS_7/A.......?startPeriod=1970",
+    "retrieved_at": "2026-09-11T14:07:51+00:00",
+    "raw_sha256": "782f682f6d79970e48bd742f5bd59a3c50b8d9a32dc38e46eca45a523920d2a6",
+    "bytes": 349821339,
+    "lines": 702275,
+    "source_flow": "73_230_DF_DCCV_AUTVITTPS_7",
+    "raw_path": "data/raw/crime_offenders.csv"
   },
   "population_resident": {
     "status": "verified-existing-extract",
