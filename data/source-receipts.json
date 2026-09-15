@@ -134,5 +134,15 @@
     "bytes": 17991782,
     "verification": "offline 2026-09-08: carried over from the pre-branch checkout; ACTUAL coverage 80 of 106 capitals, 1950-01-02..2026-08-12 -- docs/04-datasets.md's '106 capitals through 2026-08-26' claim does NOT match this snapshot; partial backfill, UI reports coverage dynamically",
     "note": "untracked dbt input; its tracked verified products are the climate marts"
+  },
+  "weather": {
+    "status": "fetched",
+    "provider": "Copernicus C3S ERA5-Land",
+    "request_url": "https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land-timeseries",
+    "retrieved_at": "2026-09-14T13:54:12+00:00",
+    "raw_sha256": "fd8de6bfab7ba1c10f70962bed2683a572e4205ac16ce2c185c08c394fbede86",
+    "bytes": 57386990,
+    "source_flow": "reanalysis-era5-land-timeseries",
+    "raw_path": "data/raw/raw/cds_timeseries"
   }
 }
