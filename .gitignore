@@ -54,8 +54,8 @@ _to_delete/
 # verified from a clean clone; raw inputs and caches remain ignored.
 !data/.gitkeep
 !data/*.parquet
-# dbt input only (17 MB); the tracked climate marts are its verified product.
-data/weather_daily.parquet
+# Required release input; clean clones and deploys must carry this verified snapshot.
+!data/weather_daily.parquet
 !data/marts/
 data/marts/*
 !data/marts/*.parquet

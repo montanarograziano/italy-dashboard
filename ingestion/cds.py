@@ -698,7 +698,7 @@ def _find_var(ds: Any, short_name: str, long_name_fragment: str) -> str:
 
 def _datetime64_to_date(value: Any) -> date:
     """numpy.datetime64 -> datetime.date, for grouping hourly values by day."""
-    import numpy as np  # part of the `cds` extra
+    import numpy as np  # pyrefly: ignore[missing-import]  # optional extra
 
     ts = np.datetime64(value, "s").item()
     return ts.date() if hasattr(ts, "date") else date.fromisoformat(str(value)[:10])
