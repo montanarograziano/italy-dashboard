@@ -132,6 +132,9 @@ class InpsClient:
         self._client: httpx2.AsyncClient | None = None
         # df_id -> (node, version), built lazily by list_dataflows().
         self._index: dict[str, tuple[int, str]] = {}
+        # The exact URL of the last get_data_csv() request, for source
+        # receipts (ingestion/fetch.py).
+        self.last_request_url: str | None = None
 
     async def __aenter__(self) -> InpsClient:
         self._client = httpx2.AsyncClient(
@@ -325,6 +328,7 @@ class InpsClient:
         node, version = await self._resolve(flow_id)
         ds_id = _dataset_id(flow_id, version)
         url = f"{self.base_url}/nodes/{node}/datasets/{ds_id}/download/csv"
+        self.last_request_url = url
         last_error: Exception | None = None
         for attempt in range(1, MAX_RETRIES + 1):
             try:

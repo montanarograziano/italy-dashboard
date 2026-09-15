@@ -23,6 +23,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,6 +34,7 @@ import yaml
 from pydantic import BaseModel, Field  # type: ignore[import-not-found]
 
 from ingestion.inps_client import InpsClient, InpsError
+from ingestion.receipts import PROVIDER_DISPLAY, upsert_fetch_receipt
 from ingestion.sdmx_client import IstatClient, SdmxError
 from ingestion.ustat_client import USTATClient
 
@@ -42,9 +44,9 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 logger = logging.getLogger("ingestion.fetch")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = Path(os.environ.get("ITALY_DATA_DIR", str(PROJECT_ROOT / "data")))
 RAW_DIR = DATA_DIR / "raw"
-MARTS_DIR = DATA_DIR / "marts"  # dbt writes marts here; dbt won't mkdir itself
+MARTS_DIR = DATA_DIR / "marts"  # compatibility for callers; paths derive from DATA_DIR
 REGISTRY_PATH = Path(__file__).resolve().parent / "registry.yaml"
 
 NORMALIZED_COLUMNS = [
@@ -69,6 +71,7 @@ class ColumnMap(BaseModel):
     category_name: Candidates | None = None  # derived from combined labels if absent
     period: Candidates = "TIME_PERIOD"
     value: Candidates = "OBS_VALUE"
+    observation_status: Candidates | None = None  # optional OBS_STATUS-like field
 
 
 class DatasetConfig(BaseModel):
@@ -89,6 +92,10 @@ class DatasetConfig(BaseModel):
     # Keep only rows whose component code is in the list, e.g. {FREQ: A}.
     # Keys are component IDs (candidates ok), values one code or a list.
     filters: dict[str, Candidates] = Field(default_factory=dict)
+    # Provider-specific "value not available" markers (e.g. USTAT's 'N').
+    # Rows carrying one are excluded like blank cells, never published as
+    # numbers and never fatal. Anything else non-numeric stays fatal.
+    value_na_codes: list[str] = Field(default_factory=list)
 
 
 class Registry(BaseModel):
@@ -122,6 +129,22 @@ def _resolve_column(available: set[str], spec: Candidates | None) -> str | None:
             if col.lower().startswith(prefix):
                 return col
     return None
+
+
+# Same concept, different SDMX component IDs across dataflows. A filter
+# names one semantic dimension; one available spelling is sufficient.
+_SEMANTIC_ALIASES = {
+    "sex": ("SEX", "SEXISTAT1"),
+    "sexistat1": ("SEX", "SEXISTAT1"),
+    "age": ("AGE", "ETA1"),
+    "eta1": ("AGE", "ETA1"),
+    "marital_status": ("MARITAL_STATUS", "STATCIV2"),
+    "statciv2": ("MARITAL_STATUS", "STATCIV2"),
+}
+
+
+def _semantic_candidates(component: str) -> list[str]:
+    return list(_SEMANTIC_ALIASES.get(component.lower(), (component,)))
 
 
 def _code_expr(col: str) -> str:
@@ -158,28 +181,24 @@ def normalize_raw_csv(name: str, cfg: DatasetConfig, raw_csv: Path) -> Path:
             ).fetchall()
         }
         cols = cfg.columns
-
-        def missing(spec: Candidates | None, target: str) -> None:
-            logger.warning(
-                "[%s] no column matches %r — writing NULL %s; fix `columns` in "
-                "registry.yaml. Raw CSV columns: %s",
-                name,
-                spec,
-                target,
-                ", ".join(sorted(available)),
-            )
+        for spec, target in (
+            (cols.territory, "territory"),
+            (cols.category, "category"),
+            (cols.period, "period"),
+            (cols.value, "value"),
+        ):
+            if _resolve_column(available, spec) is None:
+                raise ValueError(
+                    f"[{name}] required mapping {target!r} absent for {spec!r}; "
+                    f"available columns: {', '.join(sorted(available))}"
+                )
 
         def dim_exprs(
             code_spec: Candidates, name_spec: Candidates | None, code_target: str, name_target: str
         ) -> list[str]:
             """SELECT expressions for a dimension: code column + label column."""
             code_col = _resolve_column(available, code_spec)
-            if code_col is None:
-                missing(code_spec, code_target)
-                return [
-                    f"CAST(NULL AS VARCHAR) AS {code_target}",
-                    f"CAST(NULL AS VARCHAR) AS {name_target}",
-                ]
+            assert code_col is not None
             name_col = _resolve_column(available, name_spec)
             if name_col is not None and name_col != code_col:
                 name_expr = f'CAST("{name_col}" AS VARCHAR)'
@@ -198,36 +217,59 @@ def normalize_raw_csv(name: str, cfg: DatasetConfig, raw_csv: Path) -> Path:
         select_parts += dim_exprs(cols.category, cols.category_name, "category", "category_name")
 
         period_col = _resolve_column(available, cols.period)
-        if period_col is None:
-            missing(cols.period, "period")
-            select_parts.append("CAST(NULL AS VARCHAR) AS period")
-        else:
-            select_parts.append(f"{_code_expr(period_col)} AS period")
-
         value_col = _resolve_column(available, cols.value)
-        clauses: list[str] = []
-        if value_col is None:
-            missing(cols.value, "value")
-            select_parts.append("CAST(NULL AS DOUBLE) AS value")
-        else:
-            select_parts.append(f'TRY_CAST("{value_col}" AS DOUBLE) AS value')
-            clauses.append(f'TRY_CAST("{value_col}" AS DOUBLE) IS NOT NULL')
+        assert period_col is not None and value_col is not None
+        select_parts += [
+            f"{_code_expr(period_col)} AS period",
+            # Italian extracts (USTAT) may carry decimal commas ('9,335' ≈ 9.34
+            # €/hour). The fallback only fires when the plain cast fails AND
+            # the cell is exactly digits-comma-digits, so dot-decimal SDMX
+            # values can never be reinterpreted.
+            f"""COALESCE(
+                TRY_CAST("{value_col}" AS DOUBLE),
+                CASE WHEN regexp_matches(trim("{value_col}"), '^[0-9]+,[0-9]+$')
+                     THEN TRY_CAST(replace(trim("{value_col}"), ',', '.') AS DOUBLE)
+                END
+            ) AS value""",
+        ]
 
+        clauses: list[str] = []
         for component, allowed in cfg.filters.items():
-            col = _resolve_column(available, component)
+            col = next(
+                (
+                    resolved
+                    for candidate in _semantic_candidates(component)
+                    if (resolved := _resolve_column(available, candidate)) is not None
+                ),
+                None,
+            )
             if col is None:
-                logger.warning(
-                    "[%s] filter component %r not found in raw CSV — filter skipped (columns: %s)",
-                    name,
-                    component,
-                    ", ".join(sorted(available)),
+                raise ValueError(
+                    f"[{name}] required filter dimension {component!r} absent; "
+                    f"available columns: {', '.join(sorted(available))}"
                 )
-                continue
             codes = ", ".join("'" + c.replace("'", "''") + "'" for c in _candidates(allowed))
             clauses.append(f"{_code_expr(col)} IN ({codes})")
 
+        # Empty observation cells and declared not-available markers are
+        # legitimate in SDMX/CKAN extracts (an institution row without this
+        # intervention type, a suppressed cell): EXCLUDED, not fatal. Any
+        # other non-numeric value stays fatal — schema drift, validated below.
+        clauses.append(f"NULLIF(trim(\"{value_col}\"), '') IS NOT NULL")
+        if cfg.value_na_codes:
+            na = ", ".join("'" + c.replace("'", "''") + "'" for c in cfg.value_na_codes)
+            clauses.append(f'trim("{value_col}") NOT IN ({na})')
+
+        status_col = _resolve_column(
+            available,
+            cols.observation_status or ["OBS_STATUS", "OBS_STATUS_DESCR", "OBS_STATUS_LABEL"],
+        )
+        if status_col is not None:
+            select_parts.append(f'CAST("{status_col}" AS VARCHAR) AS observation_status')
         where = " AND ".join(clauses) if clauses else "TRUE"
 
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        tmp_path.unlink(missing_ok=True)
         select = ",\n            ".join(select_parts)
         con.execute(
             f"""
@@ -240,20 +282,29 @@ def normalize_raw_csv(name: str, cfg: DatasetConfig, raw_csv: Path) -> Path:
             [str(raw_csv)],
         )
         count_row = con.execute(f"SELECT count(*) FROM read_parquet('{tmp_path}')").fetchone()
+        invalid_row = con.execute(
+            f"""
+            SELECT count(*) FROM read_parquet('{tmp_path}')
+            WHERE value IS NULL
+               OR NULLIF(trim(CAST(territory AS VARCHAR)), '') IS NULL
+               OR NULLIF(trim(CAST(category AS VARCHAR)), '') IS NULL
+               OR NULLIF(trim(CAST(period AS VARCHAR)), '') IS NULL
+            """
+        ).fetchone()
         rows = int(count_row[0]) if count_row is not None else 0
+        invalid = int(invalid_row[0]) if invalid_row is not None else 0
+        if rows == 0:
+            raise ValueError(f"[{name}] normalization produced no rows")
+        if invalid:
+            raise ValueError(f"[{name}] normalization produced {invalid} invalid key/value rows")
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
     finally:
         con.close()
-    # Atomic swap: a crash mid-write leaves the previous snapshot intact
-    # instead of a corrupt/truncated parquet that later runs would consume.
+    # Atomic swap: failed validation leaves previous snapshot untouched.
     tmp_path.replace(out_path)
-    if rows == 0:
-        logger.warning(
-            "[%s] wrote %s with 0 rows — filters may be too strict or mappings wrong",
-            name,
-            out_path,
-        )
-    else:
-        logger.info("[%s] wrote %s (%d rows)", name, out_path, rows)
+    logger.info("[%s] wrote %s (%d rows)", name, out_path, rows)
     return out_path
 
 
@@ -264,9 +315,26 @@ async def fetch_dataset(client: AnyClient, name: str, cfg: DatasetConfig) -> Non
     raw_path = RAW_DIR / f"{name}.csv"
     tmp_raw = raw_path.with_name(raw_path.name + ".tmp")
     tmp_raw.write_bytes(raw)
-    tmp_raw.replace(raw_path)  # atomic: no truncated raw CSVs on interrupt
+    try:
+        # Normalize staged bytes first; failed validation preserves raw and
+        # normalized snapshots from previous successful refreshes.
+        normalize_raw_csv(name, cfg, tmp_raw)
+        tmp_raw.replace(raw_path)
+    finally:
+        tmp_raw.unlink(missing_ok=True)
     logger.info("[%s] saved raw CSV (%.1f MB)", name, len(raw) / 1e6)
-    normalize_raw_csv(name, cfg, raw_path)
+    # Only a successful fetch + normalize reaches here; a normalize-only
+    # re-run (cmd_normalize) never calls fetch_dataset, so this is the one
+    # place a receipt's retrieved_at/raw_sha256 are ever refreshed.
+    upsert_fetch_receipt(
+        DATA_DIR / "source-receipts.json",
+        name,
+        provider=PROVIDER_DISPLAY[cfg.provider],
+        source_flow=cfg.dataflow_id,
+        request_url=getattr(client, "last_request_url", None),
+        raw_path=f"data/raw/{name}.csv",
+        raw_bytes=raw,
+    )
 
 
 async def cmd_refresh(only: str | None = None) -> int:
@@ -303,6 +371,7 @@ async def cmd_refresh(only: str | None = None) -> int:
                     cfg.dataflow_id,
                     cfg.search_hint,
                 )
+                failures.append(name)
                 continue
             client = clients[cfg.provider]
             try:
@@ -323,12 +392,10 @@ async def cmd_refresh(only: str | None = None) -> int:
                 logger.error("[%s] FAILED: %s", name, exc)
                 continue
             logger.info("[%s] snapshot updated — dashboard can use it now", name)
-    ensure_placeholder_snapshots(registry)
-
     from ingestion.weather import ensure_weather_placeholder
 
     ensure_weather_placeholder(DATA_DIR)
-    _write_provenance_marker("live")
+    _write_provenance_marker("partial" if failures else "live", failures)
     if failures:
         logger.error("Refresh finished with failures: %s", ", ".join(failures))
         return 1
@@ -362,7 +429,11 @@ async def cmd_discover(keyword: str, provider: str = "istat") -> int:
 PROVENANCE_MARKER = DATA_DIR / ".provenance.json"
 
 
-def _write_provenance_marker(mode: Literal["sample", "live"]) -> None:
+def _write_provenance_marker(
+    mode: Literal["sample", "live", "partial"],
+    failed_datasets: list[str] | None = None,
+    data_dir: Path | None = None,
+) -> None:
     """Record how the data/ snapshot now on disk was produced.
 
     `scripts/generate_provenance_manifest.py` reads this to report a
@@ -380,9 +451,15 @@ def _write_provenance_marker(mode: Literal["sample", "live"]) -> None:
     has none — the manifest reports that honestly as "unknown" rather than
     assuming either mode.
     """
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    payload = {"mode": mode, "generated_at": datetime.now(UTC).isoformat(timespec="seconds")}
-    PROVENANCE_MARKER.write_text(json.dumps(payload, indent=2) + "\n")
+    target = data_dir or DATA_DIR
+    target.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, object] = {
+        "mode": mode,
+        "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
+    if failed_datasets:
+        payload["failed_datasets"] = failed_datasets
+    (target / ".provenance.json").write_text(json.dumps(payload, indent=2) + "\n")
 
 
 def ensure_placeholder_snapshots(registry: Registry) -> None:
@@ -391,25 +468,9 @@ def ensure_placeholder_snapshots(registry: Registry) -> None:
     instead of failing the whole build)."""
     con = duckdb.connect()
     try:
-        for name in registry.datasets:
-            out = DATA_DIR / f"{name}.parquet"
-            if out.exists():
-                continue
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
-            con.execute(
-                f"""
-                COPY (
-                    SELECT CAST(NULL AS VARCHAR) AS territory,
-                           CAST(NULL AS VARCHAR) AS territory_name,
-                           CAST(NULL AS VARCHAR) AS category,
-                           CAST(NULL AS VARCHAR) AS category_name,
-                           CAST(NULL AS VARCHAR) AS period,
-                           CAST(NULL AS DOUBLE) AS value
-                    WHERE FALSE
-                ) TO '{out}' (FORMAT PARQUET)
-                """
-            )
-            logger.info("[%s] no snapshot yet — wrote empty placeholder %s", name, out.name)
+        # Missing snapshots stay missing. Empty files make failed refreshes look
+        # successful and let downstream builds publish incomplete data.
+        return
     finally:
         con.close()
 
@@ -425,14 +486,21 @@ def cmd_normalize(only: str | None = None) -> int:
         targets = {only: targets[only]}
 
     done = 0
+    failures: list[str] = []
     for name, cfg in targets.items():
         raw_path = RAW_DIR / f"{name}.csv"
         if not raw_path.exists():
             logger.info("[%s] no raw CSV at %s — skipped", name, raw_path)
             continue
-        normalize_raw_csv(name, cfg, raw_path)
-        done += 1
-    ensure_placeholder_snapshots(registry)
+        try:
+            normalize_raw_csv(name, cfg, raw_path)
+            done += 1
+        except Exception as exc:
+            failures.append(name)
+            logger.error("[%s] FAILED: %s", name, exc)
+    if failures:
+        logger.error("Normalization finished with failures: %s", ", ".join(failures))
+        return 1
     if done == 0:
         logger.error("Nothing to normalize — run `refresh` first.")
         return 1
@@ -472,18 +540,23 @@ async def cmd_dims(dataset_or_flow: str, provider: str | None = None) -> int:
     return 0
 
 
-def cmd_sample() -> int:
+def cmd_sample(output_dir: str | Path | None = None) -> int:
+    """Generate synthetic data outside production snapshot by default."""
+    target = Path(output_dir) if output_dir is not None else DATA_DIR / "sample"
+    if target.resolve() == (PROJECT_ROOT / "data").resolve():
+        logger.error("Refusing to write synthetic data to production data/; choose isolated path")
+        return 2
+
     from ingestion.sample_data import generate_all
 
-    generate_all(DATA_DIR)
-    MARTS_DIR.mkdir(parents=True, exist_ok=True)
-    ensure_placeholder_snapshots(load_registry())
+    generate_all(target)
+    (target / "marts").mkdir(parents=True, exist_ok=True)
 
     from ingestion.weather import ensure_weather_placeholder
 
-    ensure_weather_placeholder(DATA_DIR)
-    _write_provenance_marker("sample")
-    logger.info("Sample data generated. NOTE: this is SYNTHETIC data for dev only.")
+    ensure_weather_placeholder(target)
+    _write_provenance_marker("sample", data_dir=target)
+    logger.info("Sample data generated at %s. NOTE: SYNTHETIC data for dev only.", target)
     return 0
 
 
@@ -507,7 +580,10 @@ def main(argv: list[str]) -> int:
             return 2
         return asyncio.run(cmd_dims(rest[0], rest[1] if len(rest) > 1 else None))
     if command == "sample":
-        return cmd_sample()
+        if len(rest) > 1:
+            print("usage: python -m ingestion.fetch sample [isolated-data-dir]")
+            return 2
+        return cmd_sample(rest[0] if rest else None)
     print(__doc__)
     return 2
 

@@ -22,8 +22,20 @@ import {
   type Mart,
 } from "../queries/martEngine";
 import { martReady } from "../queries/ready";
-import { incomeCorrelations, incomeScatter, incomeYears } from "../queries/static";
-import { gridline, inkMuted, inkPrimary, inkSecondary, series, surface, type Mode } from "../theme";
+import {
+  incomeCorrelations,
+  incomeScatter,
+  incomeYears,
+} from "../queries/static";
+import {
+  gridline,
+  inkMuted,
+  inkPrimary,
+  inkSecondary,
+  series,
+  surface,
+  type Mode,
+} from "../theme";
 import { Card, DataTable, EmptyNote, Select } from "../ui";
 
 // The static frontend's crime page. italy_dashboard/pages/crime.py (397
@@ -94,7 +106,8 @@ const METHOD_NOTE_TEXT =
   "Counts, not rates, unless stated: compare groups only against their " +
   "population denominators. Citizenship distinguishes Italian vs foreign " +
   "nationals; residence status (regular/irregular) is not part of ISTAT " +
-  "statistics. Cross-crime totals count a person once per crime type.";
+  "statistics. Cross-offence sums are not unique-person counts. Reported " +
+  "numerators may include nonresidents, while denominators are residents.";
 
 // `value: null` means "no split" (the trend chart's plain single total).
 // Every other value is a mart dimension name, passed straight through to
@@ -125,7 +138,11 @@ const CRIME_SPLIT_OPTIONS: SplitOption[] = [
 
 function Loading() {
   return (
-    <p className="loading-row" style={{ color: inkMuted(), margin: 0 }} aria-live="polite">
+    <p
+      className="loading-row"
+      style={{ color: inkMuted(), margin: 0 }}
+      aria-live="polite"
+    >
       <span className="spinner" aria-hidden="true" />
       {tr("Loading data…")}
     </p>
@@ -159,7 +176,12 @@ function LabeledSelect({
       }}
     >
       {tr(label)}
-      <Select data-testid={testId} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      <Select
+        data-testid={testId}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      >
         {options.map((o) => (
           <option key={o} value={o}>
             {o}
@@ -196,7 +218,9 @@ function SplitBySelect({
       <Select
         data-testid={testId}
         value={value ?? "none"}
-        onChange={(e) => onChange(e.target.value === "none" ? null : e.target.value)}
+        onChange={(e) =>
+          onChange(e.target.value === "none" ? null : e.target.value)
+        }
       >
         {options.map((opt) => (
           <option key={opt.value ?? "none"} value={opt.value ?? "none"}>
@@ -208,7 +232,17 @@ function SplitBySelect({
   );
 }
 
-function KpiTile({ label, value, note, testId }: { label: string; value: string; note: string; testId: string }) {
+function KpiTile({
+  label,
+  value,
+  note,
+  testId,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  testId: string;
+}) {
   useLang();
   return (
     <div
@@ -221,16 +255,36 @@ function KpiTile({ label, value, note, testId }: { label: string; value: string;
         minWidth: "180px",
       }}
     >
-      <p style={{ color: inkSecondary(), fontSize: "0.8em", margin: "0 0 0.3rem" }}>{tr(label)}</p>
+      <p
+        style={{
+          color: inkSecondary(),
+          fontSize: "0.8em",
+          margin: "0 0 0.3rem",
+        }}
+      >
+        {tr(label)}
+      </p>
       {/* `value` comes straight from offendersKpis() (queries/crime.ts), already
        * formatted with Python's comma thousands separator -- rendered
        * VERBATIM, never through `Number(...).toLocaleString(...)`, which
        * would silently swap in a dot and produce a string Python never
        * emits. */}
-      <p data-testid={testId} style={{ color: inkPrimary(), fontSize: "1.5em", fontWeight: 700, margin: 0 }}>
+      <p
+        data-testid={testId}
+        style={{
+          color: inkPrimary(),
+          fontSize: "1.5em",
+          fontWeight: 700,
+          margin: 0,
+        }}
+      >
         {value}
       </p>
-      <p style={{ color: inkMuted(), fontSize: "0.72em", margin: "0.3rem 0 0" }}>{tr(note)}</p>
+      <p
+        style={{ color: inkMuted(), fontSize: "0.72em", margin: "0.3rem 0 0" }}
+      >
+        {tr(note)}
+      </p>
     </div>
   );
 }
@@ -262,7 +316,9 @@ const EMPTY_OFFENDERS_KPIS: Record<string, string> = {
 
 function OffendersTab({ mode }: { mode: Mode }) {
   const { lang } = useLang();
-  const [options, setOptions] = useState<OffendersOptions>(EMPTY_OFFENDERS_OPTIONS);
+  const [options, setOptions] = useState<OffendersOptions>(
+    EMPTY_OFFENDERS_OPTIONS,
+  );
   const [provinceOptions, setProvinceOptions] = useState<string[]>([ALL]);
   const [years, setYears] = useState<string[]>([]);
   const [latestYear, setLatestYear] = useState("—");
@@ -339,7 +395,8 @@ function OffendersTab({ mode }: { mode: Mode }) {
       setYears(yrs);
       setLatestYear(latest);
       if (yrs.length > 0) setBreakdownYear(yrs[0]!);
-      if (opts.indicator && opts.indicator.length > 2) setIndicator(opts.indicator[1]!);
+      if (opts.indicator && opts.indicator.length > 2)
+        setIndicator(opts.indicator[1]!);
     })();
     return () => {
       cancelled = true;
@@ -393,7 +450,13 @@ function OffendersTab({ mode }: { mode: Mode }) {
     void (async () => {
       const trend = await martTrendPivot(OFFENDERS_MART, selections, splitBy);
       if (cancelled) return;
-      const crimeBreakdown = await martBreakdown(OFFENDERS_MART, "crime", selections, 10, breakdownYear || null);
+      const crimeBreakdown = await martBreakdown(
+        OFFENDERS_MART,
+        "crime",
+        selections,
+        10,
+        breakdownYear || null,
+      );
       if (cancelled) return;
       // Rates and the region ranking use resident-population denominators,
       // which exist per REGION only (not per province), and the raw
@@ -402,7 +465,11 @@ function OffendersTab({ mode }: { mode: Mode }) {
       // `selections` object above.
       const ratesRows = await offenderRates(region, crime);
       if (cancelled) return;
-      const rankingRows = await regionRateRanking(breakdownYear || null, citizenship, crime);
+      const rankingRows = await regionRateRanking(
+        breakdownYear || null,
+        citizenship,
+        crime,
+      );
       if (cancelled) return;
       const shareRows = await offenderForeignShare(selections);
       if (cancelled) return;
@@ -421,7 +488,18 @@ function OffendersTab({ mode }: { mode: Mode }) {
     return () => {
       cancelled = true;
     };
-  }, [region, province, indicator, crime, sex, age, citizenship, splitBy, breakdownYear, martOk]);
+  }, [
+    region,
+    province,
+    indicator,
+    crime,
+    sex,
+    age,
+    citizenship,
+    splitBy,
+    breakdownYear,
+    martOk,
+  ]);
 
   // `mode` is a dependency of every memo below: theme.ts's accessors
   // (series/gridline) are read at spec-build time, not render time -- see
@@ -430,9 +508,17 @@ function OffendersTab({ mode }: { mode: Mode }) {
     const seriesDefs =
       trendLabels.length === 0
         ? [{ key: "value", label: tr("Offenders"), color: series(1) }]
-        : trendLabels.map((label, i) => ({ key: `s${i + 1}`, label, color: series(i + 1) }));
+        : trendLabels.map((label, i) => ({
+            key: `s${i + 1}`,
+            label,
+            color: series(i + 1),
+          }));
     // Offenders are a headcount: no decimals, zero is a real floor.
-    return lineSeriesSpec(trendRows, { series: seriesDefs, yLabel: tr("Offenders"), valueDecimals: 0 });
+    return lineSeriesSpec(trendRows, {
+      series: seriesDefs,
+      yLabel: tr("Offenders"),
+      valueDecimals: 0,
+    });
   }, [trendRows, trendLabels, mode, lang]);
 
   const ratesSpec = useMemo(
@@ -455,14 +541,21 @@ function OffendersTab({ mode }: { mode: Mode }) {
     // Same unit as `ratesSpec`, so the same precision: hBarSpec defaults to 0
     // decimals for the count breakdowns, which would round every region in
     // this ranking to the same handful of integers.
-    () => hBarSpec(ranking, { xLabel: tr("Offenders per 1,000"), color: series(2), valueDecimals: 2 }),
+    () =>
+      hBarSpec(ranking, {
+        xLabel: tr("Offenders per 1,000"),
+        color: series(2),
+        valueDecimals: 2,
+      }),
     [ranking, mode, lang],
   );
 
   const shareSpec = useMemo(
     () =>
       lineSeriesSpec(share, {
-        series: [{ key: "value", label: tr("Foreign share (%)"), color: series(2) }],
+        series: [
+          { key: "value", label: tr("Foreign share (%)"), color: series(2) },
+        ],
         yLabel: tr("Foreign share (%)"),
         valueDecimals: 1,
         valueSuffix: "%",
@@ -499,11 +592,23 @@ function OffendersTab({ mode }: { mode: Mode }) {
   return (
     <div>
       <p style={{ color: inkMuted(), fontSize: "0.85em", margin: "0 0 1rem" }}>
-        {trt("Alleged offenders reported by the police. Data through {year}.", { year: latestYear })}
+        {trt("Alleged offenders reported by the police. Data through {year}.", {
+          year: latestYear,
+        })}
       </p>
 
-      <Card title={tr("Explore")} subtitle={tr("Filter, or split by one dimension (top 3 groups shown)")}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "1em", alignItems: "flex-end" }}>
+      <Card
+        title={tr("Explore")}
+        subtitle={tr("Filter, or split by one dimension (top 3 groups shown)")}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "1em",
+            alignItems: "flex-end",
+          }}
+        >
           <LabeledSelect
             label="Region"
             testId="crime-offenders-region-select"
@@ -594,7 +699,12 @@ function OffendersTab({ mode }: { mode: Mode }) {
               note="latest year, current filters"
               testId="crime-kpi-total"
             />
-            <KpiTile label="Year-over-year" value={kpi.yoy!} note="change vs previous year" testId="crime-kpi-yoy" />
+            <KpiTile
+              label="Year-over-year"
+              value={kpi.yoy!}
+              note="change vs previous year"
+              testId="crime-kpi-yoy"
+            />
             <KpiTile
               label="Foreign share"
               value={kpi.share!}
@@ -604,14 +714,17 @@ function OffendersTab({ mode }: { mode: Mode }) {
             <KpiTile
               label="Rate ratio"
               value={kpi.rate_ratio!}
-              note="foreign vs italian per-capita rate"
+              note="reported-count rate ratio; not individual likelihood"
               testId="crime-kpi-rate-ratio"
             />
           </div>
         )}
       </div>
 
-      <Card title={tr("Offenders over time")} subtitle={tr("Annual totals for the current filters")}>
+      <Card
+        title={tr("Offenders over time")}
+        subtitle={tr("Annual totals for the current filters")}
+      >
         <div data-testid="crime-offenders-trend">
           {loading ? (
             <Loading />
@@ -642,7 +755,9 @@ function OffendersTab({ mode }: { mode: Mode }) {
 
       <Card
         title={tr("Offenders per 1,000 residents, by citizenship")}
-        subtitle={tr("Each group divided by its own population -- the honest comparison. Foreign-resident denominators are available from 2019.")}
+        subtitle={tr(
+          "Rates divide reported-offender counts by resident-population estimates. The numerator may include nonresidents, so this is not an individual's likelihood of offending; foreign-resident denominators are available from 2019.",
+        )}
       >
         <div data-testid="crime-offenders-rates">
           {loading ? (
@@ -668,7 +783,9 @@ function OffendersTab({ mode }: { mode: Mode }) {
 
       <Card
         title={tr("Regions compared (per 1,000)")}
-        subtitle={tr("All regions, offenders per 1,000 residents of the selected group, selected year. Population-normalized -- denominators exist from 2019.")}
+        subtitle={tr(
+          "All regions, offenders per 1,000 residents of the selected group, selected year. Population-normalized -- denominators exist from 2019.",
+        )}
       >
         <LabeledSelect
           label="Year"
@@ -677,12 +794,17 @@ function OffendersTab({ mode }: { mode: Mode }) {
           value={breakdownYear}
           onChange={setBreakdownYear}
         />
-        <div data-testid="crime-offenders-ranking" style={{ marginTop: "0.75rem" }}>
+        <div
+          data-testid="crime-offenders-ranking"
+          style={{ marginTop: "0.75rem" }}
+        >
           {loading ? (
             <Loading />
           ) : ranking.length === 0 ? (
             <EmptyNote>
-              {trt("No ranking data for {year}.", { year: breakdownYear || tr("this year") })}
+              {trt("No ranking data for {year}.", {
+                year: breakdownYear || tr("this year"),
+              })}
             </EmptyNote>
           ) : (
             <PlotFigure spec={rankingSpec} />
@@ -700,7 +822,10 @@ function OffendersTab({ mode }: { mode: Mode }) {
         )}
       </Card>
 
-      <Card title={tr("Foreign share of offenders")} subtitle={tr("% of alleged offenders who are foreign nationals")}>
+      <Card
+        title={tr("Foreign share of offenders")}
+        subtitle={tr("% of alleged offenders who are foreign nationals")}
+      >
         <div data-testid="crime-offenders-share">
           {loading ? (
             <Loading />
@@ -722,13 +847,20 @@ function OffendersTab({ mode }: { mode: Mode }) {
         )}
       </Card>
 
-      <Card title={tr("By type of crime")} subtitle={tr("Selected year, current filters -- top 10 (same year as above)")}>
+      <Card
+        title={tr("By type of crime")}
+        subtitle={tr(
+          "Selected year, current filters -- top 10 (same year as above)",
+        )}
+      >
         <div data-testid="crime-offenders-by-crime">
           {loading ? (
             <Loading />
           ) : byCrime.length === 0 ? (
             <EmptyNote>
-              {trt("No breakdown data for {year}.", { year: breakdownYear || tr("this year") })}
+              {trt("No breakdown data for {year}.", {
+                year: breakdownYear || tr("this year"),
+              })}
             </EmptyNote>
           ) : (
             <PlotFigure spec={byCrimeSpec} />
@@ -748,7 +880,10 @@ function OffendersTab({ mode }: { mode: Mode }) {
 
       <IncomeCard mode={mode} />
 
-      <p data-testid="crime-method-note" style={{ color: inkMuted(), fontSize: "0.8em" }}>
+      <p
+        data-testid="crime-method-note"
+        style={{ color: inkMuted(), fontSize: "0.8em" }}
+      >
         {tr(METHOD_NOTE_TEXT)}
       </p>
     </div>
@@ -851,71 +986,95 @@ function IncomeCard({ mode }: { mode: Mode }) {
   return (
     <Card
       title={tr("Income vs offender rate (regions)")}
-      subtitle={tr("Each dot is a region: income per capita (x) vs offenders per 1,000 residents of the group (y). Ecological correlation -- region-level association, not individual behavior.")}
+      subtitle={tr(
+        "Each dot is a region: income per capita (x) vs offenders per 1,000 residents of the group (y). Ecological correlation -- region-level association, not individual behavior.",
+      )}
     >
-      {!yearsLoaded ? (
-        <Loading />
-      ) : !ready ? (
-        <div data-testid="crime-income-missing">
-          <EmptyNote>{tr(INCOME_MISSING_TEXT)}</EmptyNote>
-        </div>
+      {yearsLoaded ? (
+        ready ? (
+          <div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "1.5em",
+                alignItems: "flex-end",
+                marginBottom: "0.75rem",
+              }}
+            >
+              <LabeledSelect
+                label="Year"
+                testId="crime-income-year-select"
+                options={years}
+                value={year}
+                onChange={setYear}
+              />
+              <div>
+                <p
+                  style={{
+                    color: inkSecondary(),
+                    fontSize: "0.8em",
+                    margin: "0 0 0.2rem",
+                  }}
+                >
+                  {tr("Correlation (Italians)")}
+                </p>
+                {/* `corrItl`/`corrFrg` come straight from incomeCorrelations() (queries/static.ts),
+                 * already formatted (e.g. "r = +0.42 (n=18)" or "—") -- rendered verbatim, same
+                 * rule as the KPI tiles above: never reformatted. */}
+                <p
+                  data-testid="crime-income-corr-italians"
+                  style={{ color: inkPrimary(), fontWeight: 600, margin: 0 }}
+                >
+                  {corrItl}
+                </p>
+              </div>
+              <div>
+                <p
+                  style={{
+                    color: inkSecondary(),
+                    fontSize: "0.8em",
+                    margin: "0 0 0.2rem",
+                  }}
+                >
+                  {tr("Correlation (Foreigners)")}
+                </p>
+                <p
+                  data-testid="crime-income-corr-foreigners"
+                  style={{ color: inkPrimary(), fontWeight: 600, margin: 0 }}
+                >
+                  {corrFrg}
+                </p>
+              </div>
+            </div>
+            <div data-testid="crime-income-scatter">
+              {dataLoading ? (
+                <Loading />
+              ) : itl.length === 0 && frg.length === 0 ? (
+                <EmptyNote>
+                  {trt("No income/rate data for {year}.", { year })}
+                </EmptyNote>
+              ) : (
+                <PlotFigure spec={scatterSpecMemo} />
+              )}
+            </div>
+            <p
+              style={{
+                color: inkMuted(),
+                fontSize: "0.75em",
+                margin: "0.75rem 0 0",
+              }}
+            >
+              {tr(INCOME_CAVEAT_TEXT)}
+            </p>
+          </div>
+        ) : (
+          <div data-testid="crime-income-missing">
+            <EmptyNote>{tr(INCOME_MISSING_TEXT)}</EmptyNote>
+          </div>
+        )
       ) : (
-        <div>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "1.5em",
-              alignItems: "flex-end",
-              marginBottom: "0.75rem",
-            }}
-          >
-            <LabeledSelect
-              label="Year"
-              testId="crime-income-year-select"
-              options={years}
-              value={year}
-              onChange={setYear}
-            />
-            <div>
-              <p style={{ color: inkSecondary(), fontSize: "0.8em", margin: "0 0 0.2rem" }}>
-                {tr("Correlation (Italians)")}
-              </p>
-              {/* `corrItl`/`corrFrg` come straight from incomeCorrelations() (queries/static.ts),
-               * already formatted (e.g. "r = +0.42 (n=18)" or "—") -- rendered verbatim, same
-               * rule as the KPI tiles above: never reformatted. */}
-              <p
-                data-testid="crime-income-corr-italians"
-                style={{ color: inkPrimary(), fontWeight: 600, margin: 0 }}
-              >
-                {corrItl}
-              </p>
-            </div>
-            <div>
-              <p style={{ color: inkSecondary(), fontSize: "0.8em", margin: "0 0 0.2rem" }}>
-                {tr("Correlation (Foreigners)")}
-              </p>
-              <p
-                data-testid="crime-income-corr-foreigners"
-                style={{ color: inkPrimary(), fontWeight: 600, margin: 0 }}
-              >
-                {corrFrg}
-              </p>
-            </div>
-          </div>
-          <div data-testid="crime-income-scatter">
-            {dataLoading ? (
-              <Loading />
-            ) : itl.length === 0 && frg.length === 0 ? (
-              <EmptyNote>{trt("No income/rate data for {year}.", { year })}</EmptyNote>
-            ) : (
-              <PlotFigure spec={scatterSpecMemo} />
-            )}
-          </div>
-          <p style={{ color: inkMuted(), fontSize: "0.75em", margin: "0.75rem 0 0" }}>
-            {tr(INCOME_CAVEAT_TEXT)}
-          </p>
-        </div>
+        <Loading />
       )}
     </Card>
   );
@@ -928,7 +1087,12 @@ type CrimeOptions = {
   age: string[];
 };
 
-const EMPTY_CRIME_OPTIONS: CrimeOptions = { region: [ALL], offence: [ALL], sex: [ALL], age: [ALL] };
+const EMPTY_CRIME_OPTIONS: CrimeOptions = {
+  region: [ALL],
+  offence: [ALL],
+  sex: [ALL],
+  age: [ALL],
+};
 
 function ConvictionsTab({ mode }: { mode: Mode }) {
   const { lang } = useLang();
@@ -1029,9 +1193,21 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
     void (async () => {
       const trend = await martTrendPivot(CRIME_MART, selections, splitBy);
       if (cancelled) return;
-      const offenceBreakdown = await martBreakdown(CRIME_MART, "offence", selections, 10, breakdownYear || null);
+      const offenceBreakdown = await martBreakdown(
+        CRIME_MART,
+        "offence",
+        selections,
+        10,
+        breakdownYear || null,
+      );
       if (cancelled) return;
-      const regionBreakdown = await martBreakdown(CRIME_MART, "region", selections, 25, breakdownYear || null);
+      const regionBreakdown = await martBreakdown(
+        CRIME_MART,
+        "region",
+        selections,
+        25,
+        breakdownYear || null,
+      );
       if (cancelled) return;
       const [rows, labels] = trend;
       setTrendRows(rows);
@@ -1049,9 +1225,17 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
     const seriesDefs =
       trendLabels.length === 0
         ? [{ key: "value", label: tr("Convictions"), color: series(1) }]
-        : trendLabels.map((label, i) => ({ key: `s${i + 1}`, label, color: series(i + 1) }));
+        : trendLabels.map((label, i) => ({
+            key: `s${i + 1}`,
+            label,
+            color: series(i + 1),
+          }));
     // Convictions are a headcount, same as the offenders trend above.
-    return lineSeriesSpec(trendRows, { series: seriesDefs, yLabel: tr("Convictions"), valueDecimals: 0 });
+    return lineSeriesSpec(trendRows, {
+      series: seriesDefs,
+      yLabel: tr("Convictions"),
+      valueDecimals: 0,
+    });
   }, [trendRows, trendLabels, mode, lang]);
 
   const byOffenceSpec = useMemo(
@@ -1076,11 +1260,24 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
   return (
     <div>
       <p style={{ color: inkMuted(), fontSize: "0.85em", margin: "0 0 1rem" }}>
-        {trt("Felonies of persons convicted by final judgement. Data through {year}.", { year: latestYear })}
+        {trt(
+          "Felonies of persons convicted by final judgement. Data through {year}.",
+          { year: latestYear },
+        )}
       </p>
 
-      <Card title={tr("Explore")} subtitle={tr("Filter, or split by one dimension (top 3 groups shown)")}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "1em", alignItems: "flex-end" }}>
+      <Card
+        title={tr("Explore")}
+        subtitle={tr("Filter, or split by one dimension (top 3 groups shown)")}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "1em",
+            alignItems: "flex-end",
+          }}
+        >
           <LabeledSelect
             label="Region"
             testId="crime-convictions-region-select"
@@ -1130,7 +1327,10 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
         </div>
       </Card>
 
-      <Card title={tr("Convictions over time")} subtitle={tr("Annual totals for the current filters")}>
+      <Card
+        title={tr("Convictions over time")}
+        subtitle={tr("Annual totals for the current filters")}
+      >
         <div data-testid="crime-convictions-trend">
           {loading ? (
             <Loading />
@@ -1154,7 +1354,10 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
         )}
       </Card>
 
-      <Card title={tr("By offence type")} subtitle={tr("Selected year, current filters -- top 10")}>
+      <Card
+        title={tr("By offence type")}
+        subtitle={tr("Selected year, current filters -- top 10")}
+      >
         <LabeledSelect
           label="Year"
           testId="crime-convictions-year-select"
@@ -1162,12 +1365,17 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
           value={breakdownYear}
           onChange={setBreakdownYear}
         />
-        <div data-testid="crime-convictions-by-offence" style={{ marginTop: "0.75rem" }}>
+        <div
+          data-testid="crime-convictions-by-offence"
+          style={{ marginTop: "0.75rem" }}
+        >
           {loading ? (
             <Loading />
           ) : byOffence.length === 0 ? (
             <EmptyNote>
-              {trt("No breakdown data for {year}.", { year: breakdownYear || tr("this year") })}
+              {trt("No breakdown data for {year}.", {
+                year: breakdownYear || tr("this year"),
+              })}
             </EmptyNote>
           ) : (
             <PlotFigure spec={byOffenceSpec} />
@@ -1185,13 +1393,20 @@ function ConvictionsTab({ mode }: { mode: Mode }) {
         )}
       </Card>
 
-      <Card title={tr("By region")} subtitle={tr("Totals by region, selected year, current filters (same year as above)")}>
+      <Card
+        title={tr("By region")}
+        subtitle={tr(
+          "Totals by region, selected year, current filters (same year as above)",
+        )}
+      >
         <div data-testid="crime-convictions-by-region">
           {loading ? (
             <Loading />
           ) : byRegion.length === 0 ? (
             <EmptyNote>
-              {trt("No regional data for {year}.", { year: breakdownYear || tr("this year") })}
+              {trt("No regional data for {year}.", {
+                year: breakdownYear || tr("this year"),
+              })}
             </EmptyNote>
           ) : (
             <PlotFigure spec={byRegionSpec} />
@@ -1224,7 +1439,14 @@ export default function Crime({ mode }: { mode: Mode }) {
   return (
     <div>
       <h1 style={{ color: inkPrimary(), margin: "0 0 1rem" }}>{tr("Crime")}</h1>
-      <div style={{ display: "flex", gap: "1.25rem", marginBottom: "1.25rem", borderBottom: `1px solid ${gridline()}` }}>
+      <div
+        style={{
+          display: "flex",
+          gap: "1.25rem",
+          marginBottom: "1.25rem",
+          borderBottom: `1px solid ${gridline()}`,
+        }}
+      >
         {tabs.map(([key, label]) => (
           <button
             key={key}
@@ -1236,7 +1458,10 @@ export default function Crime({ mode }: { mode: Mode }) {
               fontWeight: tab === key ? 700 : 400,
               background: "transparent",
               border: "none",
-              borderBottom: tab === key ? `2px solid ${inkPrimary()}` : "2px solid transparent",
+              borderBottom:
+                tab === key
+                  ? `2px solid ${inkPrimary()}`
+                  : "2px solid transparent",
               padding: "0.5rem 0.1rem",
               marginBottom: "-1px",
               cursor: "pointer",
@@ -1247,7 +1472,11 @@ export default function Crime({ mode }: { mode: Mode }) {
           </button>
         ))}
       </div>
-      {tab === "offenders" ? <OffendersTab mode={mode} /> : <ConvictionsTab mode={mode} />}
+      {tab === "offenders" ? (
+        <OffendersTab mode={mode} />
+      ) : (
+        <ConvictionsTab mode={mode} />
+      )}
     </div>
   );
 }

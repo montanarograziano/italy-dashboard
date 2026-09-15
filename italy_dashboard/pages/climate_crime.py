@@ -32,6 +32,11 @@ def climate_crime_page() -> rx.Component:
                     rx.vstack(
                         rx.text(ClimateCrimeState.coverage_text, font_weight="700"),
                         rx.cond(
+                            ClimateCrimeState.has_partial_endpoint,
+                            rx.text(ClimateCrimeState.partial_endpoint_note, font_size="0.9em"),
+                            rx.fragment(),
+                        ),
+                        rx.cond(
                             ClimateCrimeState.has_partial_coverage,
                             rx.text(t("cc_coverage_note"), font_size="0.9em"),
                             rx.fragment(),
@@ -81,7 +86,9 @@ def climate_crime_page() -> rx.Component:
                         label_name=t("region"),
                     ),
                 ),
-                rx.callout(t("cc_caveat"), icon="info", color_scheme="gray", width="100%"),
+                rx.callout(
+                    ClimateCrimeState.caveat_text, icon="info", color_scheme="gray", width="100%"
+                ),
                 spacing="5",
                 width="100%",
             ),

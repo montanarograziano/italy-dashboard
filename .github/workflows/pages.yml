@@ -62,8 +62,12 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Verify sealed release snapshot
+        run: python3 scripts/validate_snapshot.py
       - run: npm ci
         working-directory: web
+      - name: Stage verified release data
+        run: python3 scripts/stage_web_data.py --strict
       # scripts/stage_web_data.py runs automatically via web/package.json's
       # `prebuild` hook (stdlib-only, needs nothing but the `python3` set up
       # above -- see that script's own docstring). Builds against the

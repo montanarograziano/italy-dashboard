@@ -14,49 +14,57 @@ export const NATIONAL = "Italia (totale)";
 // over every territory, which would double-count macro-areas/regions/
 // provinces layered in the same view.
 async function regionFilter(
-  region: string,
-  view: string,
+   region: string,
+   view: string,
 ): Promise<{ clause: string; params: unknown[] }> {
-  if (region === NATIONAL) {
-    const rows = await runSql(`SELECT 1 FROM ${view} WHERE territory = 'IT' LIMIT 1`);
-    if (rows.length > 0) return { clause: "AND territory = 'IT'", params: [] };
-    return { clause: "AND regexp_matches(territory, '^IT[A-Z][0-9]$')", params: [] };
-  }
-  return { clause: "AND territory_name = ?", params: [region] };
+   if (region === NATIONAL) {
+      const rows = await runSql(
+         `SELECT 1 FROM ${view} WHERE territory = 'IT' LIMIT 1`,
+      );
+      if (rows.length > 0)
+         return { clause: "AND territory = 'IT'", params: [] };
+      return {
+         clause: "AND regexp_matches(territory, '^IT[A-Z][0-9]$')",
+         params: [],
+      };
+   }
+   return { clause: "AND territory_name = ?", params: [region] };
 }
 
 // Matches italy_dashboard.queries.region_names. Region-level territories
 // only: the NUTS2 regex excludes the macro-areas and provinces some
 // snapshots also carry, which do not belong in a region picker.
-export async function regionNames(view: string = "labor_unemployment"): Promise<string[]> {
-  const rows = await runSql(
-    `SELECT DISTINCT territory_name FROM ${view} ` +
-      "WHERE territory_name IS NOT NULL " +
-      "AND regexp_matches(territory, '^IT[A-Z][0-9]$') " +
-      "ORDER BY territory_name",
-  );
-  return [NATIONAL, ...rows.map((r) => String(r.territory_name))];
+export async function regionNames(
+   view: string = "labor_unemployment",
+): Promise<string[]> {
+   const rows = await runSql(
+      `SELECT DISTINCT territory_name FROM ${view} ` +
+         "WHERE territory_name IS NOT NULL " +
+         "AND regexp_matches(territory, '^IT[A-Z][0-9]$') " +
+         "ORDER BY territory_name",
+   );
+   return [NATIONAL, ...rows.map((r) => String(r.territory_name))];
 }
 
 // Matches italy_dashboard.queries.population_timeseries.
 export async function populationTimeseries(region: string) {
-  const { clause, params } = await regionFilter(region, "population_resident");
-  return runSql(
-    `SELECT period, ROUND(SUM(value) / 1e6, 2) AS value
+   const { clause, params } = await regionFilter(region, "population_resident");
+   return runSql(
+      `SELECT period, ROUND(SUM(value) / 1e6, 2) AS value
      FROM population_resident
      WHERE value IS NOT NULL ${clause}
      GROUP BY period ORDER BY period`,
-    params,
-  );
+      params,
+   );
 }
 
 // Matches italy_dashboard.queries.foreign_share_timeseries: foreign
 // residents as % of resident population, by year.
 export async function foreignShareTimeseries(region: string) {
-  const res = await regionFilter(region, "population_resident");
-  const forn = await regionFilter(region, "population_foreign");
-  return runSql(
-    `WITH res AS (
+   const res = await regionFilter(region, "population_resident");
+   const forn = await regionFilter(region, "population_foreign");
+   return runSql(
+      `WITH res AS (
        SELECT period, SUM(value) AS pop FROM population_resident
        WHERE value IS NOT NULL ${res.clause} GROUP BY period
      ),
@@ -68,42 +76,42 @@ export async function foreignShareTimeseries(region: string) {
      FROM res JOIN forn USING (period)
      WHERE res.pop > 0
      ORDER BY res.period`,
-    [...res.params, ...forn.params],
-  );
+      [...res.params, ...forn.params],
+   );
 }
 
-// Matches italy_dashboard.queries.unemployment_series: selected region vs the
-// NATIONAL rate (the IT row, not an unweighted average of regions -- small
-// regions must not weigh like Lombardia).
+// Matches italy_dashboard.queries.unemployment_series: official national
+// observations come only from territory IT. No unweighted regional fallback.
+// LEFT JOIN preserves selected-region years when national data is missing.
 export async function unemploymentSeries(region: string) {
-  const sel = await regionFilter(region, "labor_unemployment");
-  const nat = await regionFilter(NATIONAL, "labor_unemployment");
-  return runSql(
-    `WITH sel AS (
+   const sel = await regionFilter(region, "labor_unemployment");
+   return runSql(
+      `WITH sel AS (
        SELECT period, ROUND(AVG(value), 1) AS selected
        FROM labor_unemployment WHERE value IS NOT NULL ${sel.clause}
        GROUP BY period
      ),
      nat AS (
        SELECT period, ROUND(AVG(value), 1) AS national
-       FROM labor_unemployment WHERE value IS NOT NULL ${nat.clause}
+       FROM labor_unemployment
+       WHERE value IS NOT NULL AND territory = 'IT'
        GROUP BY period
      )
      SELECT sel.period, sel.selected, nat.national
-     FROM sel JOIN nat USING (period)
+     FROM sel LEFT JOIN nat USING (period)
      ORDER BY sel.period`,
-    [...sel.params, ...nat.params],
-  );
+      sel.params,
+   );
 }
 
 // Matches italy_dashboard.queries.naspi_series: NASPI beneficiaries (INPS),
 // selected region vs NATIONAL, summed over both sex rows (mart_naspi's
 // category dimension has no total code).
 export async function naspiSeries(region: string) {
-  const sel = await regionFilter(region, "mart_naspi");
-  const nat = await regionFilter(NATIONAL, "mart_naspi");
-  return runSql(
-    `WITH sel AS (
+   const sel = await regionFilter(region, "mart_naspi");
+   const nat = await regionFilter(NATIONAL, "mart_naspi");
+   return runSql(
+      `WITH sel AS (
        SELECT period, SUM(value) AS selected
        FROM mart_naspi WHERE value IS NOT NULL ${sel.clause}
        GROUP BY period
@@ -116,6 +124,6 @@ export async function naspiSeries(region: string) {
      SELECT sel.period, sel.selected, nat.national
      FROM sel JOIN nat USING (period)
      ORDER BY sel.period`,
-    [...sel.params, ...nat.params],
-  );
+      [...sel.params, ...nat.params],
+   );
 }

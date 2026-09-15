@@ -96,9 +96,10 @@ would inject discontinuities indistinguishable from real climate signal.
 
 Fetch with `just refresh-weather`, or `just refresh-weather ITC45` for one city.
 The Copernicus ARCO time-series path (`just refresh-weather-cds-timeseries`)
-has now been run successfully against the real API: the development snapshot
-contains all 106 capitals, from 1950-01-02 through 2026-08-26, with daily
-temperature and precipitation values. The snapshot is real ERA5-Land
+has been run successfully against the real API. Do not assume every checkout
+has identical coverage: the current snapshot carries all 106 capitals,
+1950-01-02 through 2026-09-06, and both UIs report actual coverage dynamically.
+The snapshot is real ERA5-Land
 reanalysis data, not station observations; interpret it as a consistent
 gridded climate estimate rather than as local thermometer measurements.
 
@@ -184,9 +185,10 @@ responses. A full 106-city backfill completed successfully after switching to
 serial requests to respect the dataset's queued-job limit. Eleven coastal
 capitals initially mapped to ocean cells; each was re-probed against a real
 0.1° area response and its seed coordinate was moved to the nearest valid land
-cell. The final snapshot passed the null gate and was published with 106
-capitals, 1950-01-02 through 2026-08-26 coverage, and non-null daily
-precipitation. The live run also showed intermittent object-store connection
+cell. That run's snapshot passed the null gate with non-null daily
+precipitation; the snapshot actually present in a checkout can differ (see
+the coverage note above and `data/source-receipts.json`), so read coverage
+from the data, not from this paragraph. The live run also showed intermittent object-store connection
 resets, which the provider client retried successfully.
 
 ### FAST backfill via the Copernicus ARCO time-series dataset
@@ -205,10 +207,12 @@ CDS dataset that Copernicus launched in 2025 specifically for this use case:
 This is the key difference from the bulk path: instead of downloading a whole
 year × whole-Italy grid and extracting 106 points locally, each request asks
 for **one coordinate over a date range** and gets hourly values at the nearest
-cell back. A full backfill is therefore **106 lightweight point queries**
-rather than **228 queued year-grid downloads** (or **848 quota-limited decade
-chunks** against Open-Meteo), so it completes in **minutes rather than days** —
-and because there is no free-tier quota, modest concurrency genuinely helps.
+cell back. A full backfill is therefore **106 lightweight point queries** rather than
+**228 queued year-grid downloads** (or **848 quota-limited decade chunks**
+against Open-Meteo). Runtime still depends on CDS queue and download latency;
+the current run took roughly 25 hours, so "fast" means fewer requests, not a
+guaranteed wall-clock duration. Because there is no free-tier quota, modest
+concurrency can help.
 
 Fetch with `just refresh-weather-cds-timeseries` (1950 → now) or
 `just refresh-weather-cds-timeseries 1950 1979` for one year range. Same
@@ -239,7 +243,7 @@ provider keeps its own terms, verified against their current published pages
 rather than assumed:
 
 | Provider | Data license | Free-API usage |
-|---|---|---|
+| --- | --- | --- |
 | [ISTAT](https://www.istat.it/it/note-legali) | CC BY 4.0 ("Licenza CC-by Creative Commons 4.0", per ISTAT's own legal notice) | SDMX REST API, free and keyless |
 | [MUR/USTAT](https://dati-ustat.mur.gov.it) | Italian Open Data License (IODL) 2.0, attributed to "MUR - Servizio Statistico" (per the CKAN dataset's own `license_id`) | CKAN API, free and keyless |
 | INPS | Not documented for the StatKit hub endpoint this project reads — flagged, not guessed, by `scripts/generate_provenance_manifest.py`; verify with INPS before external redistribution | Free and keyless |

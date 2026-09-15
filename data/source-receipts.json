@@ -1,0 +1,138 @@
+{
+  "crime_reported": {
+    "status": "fetched",
+    "provider": "ISTAT",
+    "source_flow": "73_58",
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/73_58/A..FELONYFJ..ALL.ALL.TOTAL.ALL.ALL.99.ALL..TOTAL.?startPeriod=1970",
+    "retrieved_at": "2026-09-15T10:10:37+00:00",
+    "raw_sha256": "e5a740e060c689b082fa3c3f52c3fc5c7e7b8e5e8e839eecec5c4010a7716733",
+    "bytes": 165189585,
+    "lines": 473941,
+    "raw_path": "data/raw/crime_reported.csv"
+  },
+  "crime_reported_police_73_67": {
+    "status": "kept-as-candidate-unwired",
+    "provider": "ISTAT",
+    "source_flow": "73_67",
+    "title": "Police-reported crimes (candidate flow, NOT wired into any dbt model)",
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/73_67/A.IT+ITC1+ITC2+ITC3+ITC4+ITD1+ITD2+ITD3+ITD4+ITD5+ITE1+ITE2+ITE3+ITE4+ITF1+ITF2+ITF3+ITF4+ITF5+ITG1+ITG2.CRIMEN..9.YRDUR?startPeriod=2007",
+    "retrieved_at": "2026-09-08T20:58:18+00:00",
+    "raw_path": "data/raw/crime_reported_police_73_67.csv",
+    "raw_sha256": "e95514bc1f403fb1b5d5b9395de255a37c60ea1f2f49b6ee490fdadb63034d00",
+    "bytes": 4848160,
+    "lines": 21021,
+    "note": "Renamed off the crime_reported slot per task instructions (this is the dataset a previous worker mistakenly fetched thinking it was 'crime_reported'). Not referenced by registry.yaml or any dbt model; kept only as a candidate if a future 'police-reported crimes' metric is added."
+  },
+  "crime_offenders": {
+    "status": "fetched",
+    "provider": "ISTAT",
+    "interim_raw": {
+      "path": "data/raw/crime_offenders.csv",
+      "raw_sha256": "d793446cec1b139302a4d06c9d3d53e304b8c5f83cbe53ea1a1a9fe5c23d34c7",
+      "bytes": 1695047,
+      "source_flow": "73_230_DF_DCCV_AUTVITTPS_7",
+      "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/73_230_DF_DCCV_AUTVITTPS_7/A.IT+ITC1+ITC2+ITC3+ITC4+ITD1+ITD2+ITD3+ITD4+ITD5+ITE1+ITE2+ITE3+ITE4+ITF1+ITF2+ITF3+ITF4+ITF5+ITG1+ITG2.OFFEND..9.TOTAL.TOTAL.WORLD?startPeriod=2007",
+      "retrieved_at": "2026-09-08T20:58:18+00:00",
+      "limitation": "genuine ISTAT extract but sex/age/citizenship pinned to totals; feeds mart_offenders (3,549 rows) as an interim, insufficient for citizenship rates and the crime-climate panel"
+    },
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/73_230_DF_DCCV_AUTVITTPS_7/A.......?startPeriod=1970",
+    "retrieved_at": "2026-09-15T10:12:48+00:00",
+    "raw_sha256": "782f682f6d79970e48bd742f5bd59a3c50b8d9a32dc38e46eca45a523920d2a6",
+    "bytes": 349821339,
+    "lines": 702275,
+    "source_flow": "73_230_DF_DCCV_AUTVITTPS_7",
+    "raw_path": "data/raw/crime_offenders.csv"
+  },
+  "population_resident": {
+    "status": "fetched",
+    "provider": "ISTAT",
+    "source_flow": "22_289",
+    "raw_path": "data/raw/population_resident.csv",
+    "raw_sha256": "63b4eed40e0d370ae7c097828389a94f3d45446c7be9a60c5d9c9f8b8fc29cac",
+    "bytes": 9787948,
+    "lines": 64370,
+    "verification": "offline benchmark 2026-09-08: IT rows match official: 2023=58,997,201 2024=58,971,230 2025=58,943,464",
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/22_289/ALL?startPeriod=1970",
+    "retrieved_at": "2026-09-15T10:16:54+00:00"
+  },
+  "population_foreign": {
+    "status": "fetched",
+    "provider": "ISTAT",
+    "source_flow": "29_7",
+    "raw_path": "data/raw/population_foreign.csv",
+    "raw_sha256": "26258bb23129ca3a89f9e4c010a2184ea44cb27c3527b1f8ade4f0e320508475",
+    "bytes": 4271619,
+    "lines": 31825,
+    "verification": "offline benchmark 2026-09-08: IT 1 Jan 2025 = 5,371,251 matches census release",
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/29_7/A.IT+ITC1+ITC2+ITC3+ITC4+ITH1+ITH2+ITH3+ITH4+ITH5+ITI1+ITI2+ITI3+ITI4+ITF1+ITF2+ITF3+ITF4+ITF5+ITF6+ITG1+ITG2...?startPeriod=1970",
+    "retrieved_at": "2026-09-15T10:16:03+00:00"
+  },
+  "labor_unemployment": {
+    "status": "fetched",
+    "provider": "ISTAT",
+    "source_flow": "151_914",
+    "raw_path": "data/raw/labor_unemployment.csv",
+    "raw_sha256": "45bd6494b6cd4f1c7e9fd09180a27e561b8be332735eb48bca256bdd79e8bd67",
+    "bytes": 18380616,
+    "lines": 100801,
+    "verification": "offline benchmark 2026-09-08: headline IT: 2023=7.65 2024=6.52 vs official 7.7/6.5",
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/151_914/ALL?startPeriod=1970",
+    "retrieved_at": "2026-09-15T10:09:24+00:00"
+  },
+  "economy_inflation": {
+    "status": "fetched",
+    "provider": "ISTAT",
+    "source_flow": "167_745_DF_DCSP_NIC1B2025_6",
+    "raw_path": "data/raw/economy_inflation.csv",
+    "raw_sha256": "da383e5a5c4446855c88002765a7dceea54f0f35682c6c4ca1f7efa8abf89515",
+    "bytes": 80946,
+    "lines": 357,
+    "verification": "offline benchmark 2026-09-08: avg monthly YoY IT: 2022=8.18 2023=5.71 2024=0.98 vs official NIC 8.1/5.7/1.0",
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/167_745_DF_DCSP_NIC1B2025_6/M.IT..7.00?startPeriod=1990",
+    "retrieved_at": "2026-09-15T10:09:25+00:00"
+  },
+  "income_regional": {
+    "status": "fetched",
+    "provider": "ISTAT",
+    "source_flow": "93_1095_DF_DCCN_ISTITUZ_TNA1_1",
+    "raw_path": "data/raw/income_regional.csv",
+    "raw_sha256": "61435e8362802de05cab7e0cb9f9004ec8004aa0a897e436b6e21120ba1b9ae1",
+    "bytes": 146221244,
+    "lines": 494017,
+    "verification": "offline benchmark 2026-09-08: B6G_B_W0 x S14 slice uniform Z/V/S/N EURO millions; ITC1 2006=90,165.9M plausible ~20.8k/capita",
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/93_1095_DF_DCCN_ISTITUZ_TNA1_1/A.........?startPeriod=1995",
+    "retrieved_at": "2026-09-15T10:15:55+00:00"
+  },
+  "labor_naspi_beneficiaries": {
+    "status": "fetched",
+    "provider": "inps",
+    "source_flow": "DFB_ST_NASPI_BENEFICIARI_02",
+    "raw_path": "data/raw/labor_naspi_beneficiaries.csv",
+    "raw_sha256": "e222e7e79d9bc809d731871a7e2cf6920ca295472c5f063baff70029bab9735c",
+    "bytes": 12644,
+    "lines": 211,
+    "request_url": "https://opendata.inps.it/databrowser/api/core/nodes/1/datasets/INPS,DFB_ST_NASPI_BENEFICIARI_02,1.0/download/csv",
+    "retrieved_at": "2026-09-15T10:17:24+00:00"
+  },
+  "education_university_scholarships": {
+    "status": "fetched",
+    "provider": "ustat",
+    "source_flow": "diritto-allo-studio-universitario-dsu-regionale",
+    "raw_path": "data/raw/education_university_scholarships.csv",
+    "raw_sha256": "c3d3b03819f5f352ddde2da8fd23d889357ac1bfbf892f8f8e1dd69ae9e964a0",
+    "bytes": 1975004,
+    "lines": 8977,
+    "request_url": "https://dati-ustat.mur.gov.it/dataset/b89d46ba-1b59-4a45-9165-5b09df42a884/resource/2e57c680-e871-474f-8bb9-2eec44dcfee2/download/2025_dsu_interventi_rett25062026.csv",
+    "retrieved_at": "2026-09-15T10:17:24+00:00"
+  },
+  "weather": {
+    "status": "fetched",
+    "provider": "Copernicus C3S ERA5-Land",
+    "request_url": "https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land-timeseries",
+    "retrieved_at": "2026-09-14T13:54:12+00:00",
+    "raw_sha256": "fd8de6bfab7ba1c10f70962bed2683a572e4205ac16ce2c185c08c394fbede86",
+    "bytes": 57386990,
+    "source_flow": "reanalysis-era5-land-timeseries",
+    "raw_path": "data/raw/cds_timeseries"
+  }
+}

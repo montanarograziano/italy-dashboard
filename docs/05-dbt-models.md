@@ -48,7 +48,7 @@ The query layer picks slices dynamically — see
 ## Marts
 
 | Mart | Grain | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `mart_offenders` | year × region × indicator × crime × sex × age × citizenship | the crime explorer's engine |
 | `mart_crime` | year × region × offence × sex × age | convictions (courts) |
 | `mart_population` | year × region | `pop_total`, `pop_foreign`, `pop_italian = total − foreign` |

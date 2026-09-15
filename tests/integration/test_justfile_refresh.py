@@ -1,13 +1,9 @@
 """Integration: `just refresh` must fail loudly, not silently.
 
 The `refresh` recipe runs `ingestion.fetch refresh` then `just transform`.
-Per-dataset failures inside `cmd_refresh` are intentionally swallowed there
-(one bad dataset must not sink the rest, see ingestion/fetch.py) and
-`transform` intentionally still runs afterwards so the snapshot rebuilds from
-whatever DID land. But the justfile used to run both steps with a `-`
-ignore-error prefix, which also swallowed the RECIPE's own exit code: `just
-refresh` reported success even when ingestion or dbt genuinely failed. This
-locks in the fix by faking each half of the pipeline in turn.
+The recipe must stop before dbt when fetch fails: a partial snapshot must
+never become a release candidate. It also propagates transform failures. This
+locks both behaviors in by faking each half of the pipeline in turn.
 """
 
 from __future__ import annotations
@@ -65,9 +61,7 @@ def test_refresh_exits_nonzero_when_transform_fails(tmp_path):
     assert result.returncode != 0, result.stdout + result.stderr
 
 
-def test_refresh_still_runs_transform_after_ingestion_failure(tmp_path):
-    """The intentional continuation this fix must NOT remove: a failing fetch
-    still lets `just transform` run, it just must no longer report success."""
+def test_refresh_stops_before_transform_after_ingestion_failure(tmp_path):
     _fake_uv(tmp_path, "ingestion.fetch refresh")
     result = _run_refresh(tmp_path)
-    assert "dbt build" in result.stdout + result.stderr
+    assert "dbt build" not in result.stdout + result.stderr

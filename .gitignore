@@ -50,16 +50,21 @@ _to_delete/
 .superpowers/
 
 # Tracked exception: exactly the parquet the running app queries, nothing else.
-# dbt inputs (weather_daily, the raw normalized ISTAT snapshots) stay ignored:
-# the container never runs dbt, it reads pre-built marts.
+# Release normalized snapshots are checked in so manifest hashes can be
+# verified from a clean clone; raw inputs and caches remain ignored.
 !data/.gitkeep
-!data/population_resident.parquet
-!data/population_foreign.parquet
-!data/labor_unemployment.parquet
-!data/economy_inflation.parquet
+!data/*.parquet
+# Required release input; clean clones and deploys must carry this verified snapshot.
+!data/weather_daily.parquet
 !data/marts/
 data/marts/*
 !data/marts/*.parquet
+# Release evidence is checked in; raw/source caches remain ignored.
+!data/release-manifest.json
+!data/source-receipts.json
 
 # Copernicus CDS API credentials (never commit)
 .cdsapirc
+
+# transient flock sidecar for receipt upserts
+data/source-receipts.json.lock

@@ -2,23 +2,23 @@
 -- (both files already hold sex/age totals only, thanks to registry filters).
 -- italian = resident total - foreign residents.
 
+-- Do not aggregate here. A duplicate normalized observation must remain
+-- visible so its uniqueness test fails instead of silently inflating totals.
 with resident as (
     select territory as region_code,
-           any_value(territory_name) as region_name,
+           territory_name as region_name,
            period as year,
-           sum(value) as pop_total
+           value as pop_total
     from {{ source('snapshots', 'population_resident_pq') }}
     where value is not null
-    group by territory, period
 ),
 
 foreign_pop as (
     select territory as region_code,
            period as year,
-           sum(value) as pop_foreign
+           value as pop_foreign
     from {{ source('snapshots', 'population_foreign_pq') }}
     where value is not null
-    group by territory, period
 )
 
 select

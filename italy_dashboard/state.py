@@ -33,6 +33,7 @@ def _coverage_text(
     regions_total: str,
     year_start: str,
     year_end: str,
+    partial_endpoint: str,
 ) -> str:
     """Format the "Coverage: N of M capitals, ..." line for one language.
 
@@ -50,6 +51,7 @@ def _coverage_text(
         regions_total=regions_total,
         year_start=year_start,
         year_end=year_end,
+        partial_endpoint=partial_endpoint,
     )
 
 
@@ -578,6 +580,20 @@ class ClimateState(AppState):
     regions_total: str = "0"
     year_start: str = "—"
     year_end: str = "—"
+    partial_endpoint: str = "—"
+
+    @rx.var
+    def has_partial_endpoint(self) -> bool:
+        return self.partial_endpoint != "—"
+
+    @rx.var
+    def partial_endpoint_note(self) -> str:
+        return _format_translation(
+            self.lang,
+            "climate_partial_endpoint_note",
+            partial_endpoint=self.partial_endpoint,
+            year_end=self.year_end,
+        )
 
     # Distribution-card windows, derived per city (see
     # queries.climate_distribution_windows). Held as strings because they only
@@ -618,6 +634,7 @@ class ClimateState(AppState):
             self.regions_total,
             self.year_start,
             self.year_end,
+            self.partial_endpoint,
         )
 
     @rx.var
@@ -715,6 +732,7 @@ class ClimateState(AppState):
         self.regions_total = coverage["regions_total"]
         self.year_start = coverage["year_start"]
         self.year_end = coverage["year_end"]
+        self.partial_endpoint = coverage["partial_endpoint"]
         if self.mart_ready:
             self.region_options = q.climate_region_options()
             if self.region not in self.region_options:
@@ -794,6 +812,8 @@ class ClimateCrimeState(AppState):
     regions_total: str = "0"
     year_start: str = "—"
     year_end: str = "—"
+    partial_endpoint: str = "—"
+    panel_regions: str = "0"
 
     @rx.var
     def coverage_text(self) -> str:
@@ -805,7 +825,25 @@ class ClimateCrimeState(AppState):
             self.regions_total,
             self.year_start,
             self.year_end,
+            self.partial_endpoint,
         )
+
+    @rx.var
+    def caveat_text(self) -> str:
+        return _format_translation(self.lang, "cc_caveat", clusters=self.panel_regions)
+
+    @rx.var
+    def partial_endpoint_note(self) -> str:
+        return _format_translation(
+            self.lang,
+            "climate_partial_endpoint_note",
+            partial_endpoint=self.partial_endpoint,
+            year_end=self.year_end,
+        )
+
+    @rx.var
+    def has_partial_endpoint(self) -> bool:
+        return self.partial_endpoint != "—"
 
     @rx.var
     def has_partial_coverage(self) -> bool:
@@ -817,9 +855,8 @@ class ClimateCrimeState(AppState):
         is false, and showing the warning about a fully-covered country would
         understate the confound is visible.
         """
-        return (
-            int(self.capitals_included) > 0
-            and int(self.capitals_included) < int(self.capitals_total)
+        return int(self.capitals_included) > 0 and int(self.capitals_included) < int(
+            self.capitals_total
         )
 
     @rx.event
@@ -833,10 +870,12 @@ class ClimateCrimeState(AppState):
         self.regions_total = coverage["regions_total"]
         self.year_start = coverage["year_start"]
         self.year_end = coverage["year_end"]
+        self.partial_endpoint = coverage["partial_endpoint"]
         if self.mart_ready:
             scatter = q.crime_climate_scatter()
             self.raw_points = scatter["raw"]
             self.panel_points = scatter["panel"]
+            self.panel_regions = str(len({r["region"] for r in self.panel_points}))
             stats = q.crime_climate_stats()
             self.stat_raw = stats["raw"]
             self.stat_panel = stats["panel"]

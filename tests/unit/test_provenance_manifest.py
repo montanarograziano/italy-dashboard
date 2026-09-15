@@ -114,6 +114,12 @@ def test_provider_licenses_cover_every_provider_in_the_registry():
     )
 
 
+def test_receipt_records_accepts_root_keyed_source_receipts():
+    assert gen._receipt_records({"economy_inflation": {"status": "fetched"}}) == {
+        "economy_inflation": {"status": "fetched"}
+    }
+
+
 def test_registry_loads_with_yaml():
     """Sanity check on the loader itself, independent of build_manifest()."""
     registry = gen._registry()

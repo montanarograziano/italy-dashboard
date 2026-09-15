@@ -97,12 +97,13 @@ export const IT: Record<string, string> = {
   "Foreign share": "Quota straniera",
   "of offenders, latest year": "dei denunciati, ultimo anno",
   "Rate ratio": "Rapporto tassi",
-  "foreign vs italian per-capita rate": "tasso pro capite stranieri vs italiani",
+  "reported-count rate ratio; not individual likelihood":
+    "rapporto tra conteggi denunciati, non probabilità individuale",
   "latest year, current filters": "ultimo anno, filtri correnti",
   "Offenders per 1,000 residents, by citizenship":
     "Denunciati ogni 1.000 residenti, per cittadinanza",
-  "Each group divided by its own population -- the honest comparison. Foreign-resident denominators are available from 2019.":
-    "Ogni gruppo diviso per la propria popolazione — il confronto onesto. I denominatori sugli stranieri residenti sono disponibili dal 2019.",
+  "Rates divide reported-offender counts by resident-population estimates. The numerator may include nonresidents, so this is not an individual's likelihood of offending; foreign-resident denominators are available from 2019.":
+    "I tassi dividono i conteggi degli autori denunciati per stime della popolazione residente. Il numeratore può includere non residenti, quindi non è la probabilità individuale di commettere reati; i denominatori sugli stranieri residenti sono disponibili dal 2019.",
   "Regions compared (per 1,000)": "Regioni a confronto (ogni 1.000)",
   "All regions, offenders per 1,000 residents of the selected group, selected year. Population-normalized -- denominators exist from 2019.":
     "Tutte le regioni, denunciati ogni 1.000 residenti del gruppo selezionato, anno scelto. Normalizzato per popolazione — denominatori disponibili dal 2019.",
@@ -127,7 +128,8 @@ export const IT: Record<string, string> = {
   "Offence type": "Tipo di delitto",
   "No data for the current filters.": "Nessun dato per i filtri correnti.",
   "this year": "quest'anno",
-  "No rate data for this selection.": "Nessun dato sui tassi per questa selezione.",
+  "No rate data for this selection.":
+    "Nessun dato sui tassi per questa selezione.",
   "No ranking data for {year}.": "Nessun dato per la classifica per {year}.",
   "No share data for this selection.":
     "Nessun dato sulla quota per questa selezione.",
@@ -135,10 +137,11 @@ export const IT: Record<string, string> = {
   "No regional data for {year}.": "Nessun dato regionale per {year}.",
   "Data mart not built yet. Run  just refresh  (or  just sample), which rebuilds the dbt marts, then reload.":
     "Mart dati non ancora costruito. Esegui  just refresh  (o  just sample), che ricostruisce i mart dbt, poi ricarica.",
-  "Counts, not rates, unless stated: compare groups only against their population denominators. Citizenship distinguishes Italian vs foreign nationals; residence status (regular/irregular) is not part of ISTAT statistics. Cross-crime totals count a person once per crime type.":
-    "Conteggi, non tassi, salvo indicazione: confronta i gruppi solo con i rispettivi denominatori di popolazione. La cittadinanza distingue italiani e stranieri; lo status di soggiorno (regolare/irregolare) non fa parte delle statistiche ISTAT. I totali tra reati contano una persona una volta per tipo di reato.",
+  "Counts, not rates, unless stated: compare groups only against their population denominators. Citizenship distinguishes Italian vs foreign nationals; residence status (regular/irregular) is not part of ISTAT statistics. Cross-offence sums are not unique-person counts. Reported numerators may include nonresidents, while denominators are residents.":
+    "Conteggi, non tassi, salvo indicazione: confronta i gruppi solo con i rispettivi denominatori di popolazione. La cittadinanza distingue italiani e stranieri; lo status di soggiorno (regolare/irregolare) non fa parte delle statistiche ISTAT. Le somme tra delitti non contano persone uniche. I numeratori possono includere non residenti, mentre i denominatori sono residenti.",
   // income card
-  "Income vs offender rate (regions)": "Reddito vs tasso di denunciati (regioni)",
+  "Income vs offender rate (regions)":
+    "Reddito vs tasso di denunciati (regioni)",
   "Each dot is a region: income per capita (x) vs offenders per 1,000 residents of the group (y). Ecological correlation -- region-level association, not individual behavior.":
     "Ogni punto è una regione: reddito pro capite (x) vs denunciati ogni 1.000 residenti del gruppo (y). Correlazione ecologica — associazione a livello regionale, non comportamento individuale.",
   "Income per capita (EUR)": "Reddito pro capite (EUR)",
@@ -161,8 +164,8 @@ export const IT: Record<string, string> = {
   "DSU scholarship mart not built yet.":
     "Il mart delle borse DSU non è ancora stato creato.",
   "Scholarships granted": "Borse concesse",
-  "Selected region vs national average (%)":
-    "Regione selezionata vs media nazionale (%)",
+  "Selected region vs official national IT series (%)":
+    "Regione selezionata vs serie nazionale ufficiale IT (%)",
   "Selected region": "Regione selezionata",
   "National average": "Media nazionale",
   "Unemployment rate (%)": "Tasso di disoccupazione (%)",
@@ -174,14 +177,15 @@ export const IT: Record<string, string> = {
   Recipients: "Percettori",
   Selected: "Selezionata",
   National: "Nazionale",
-  "No population data for {region}.": "Nessun dato sulla popolazione per {region}.",
+  "No population data for {region}.":
+    "Nessun dato sulla popolazione per {region}.",
   "No unemployment data for {region}.":
     "Nessun dato sulla disoccupazione per {region}.",
   "No foreign-share data for {region}.":
     "Nessun dato sulla quota straniera per {region}.",
   "Inflation (consumer prices)": "Inflazione (prezzi al consumo)",
-  "Annual average change of the general index (%)":
-    "Variazione media annua dell'indice generale (%)",
+  "Mean monthly year-over-year change; complete years only (%)":
+    "Media mensile della variazione annua; solo anni completi (%)",
   "Change (%)": "Variazione (%)",
   "No inflation data.": "Nessun dato sull'inflazione.",
   // climate page
@@ -193,10 +197,12 @@ export const IT: Record<string, string> = {
   "Min (mean of daily minima)": "Minima (media delle minime giornaliere)",
   Mean: "Media",
   "Max (mean of daily maxima)": "Massima (media delle massime giornaliere)",
-  "Anomaly against the 1981-2010 normal": "Anomalia rispetto alla norma 1981-2010",
+  "Anomaly against the 1981-2010 normal":
+    "Anomalia rispetto alla norma 1981-2010",
   "Degrees Celsius above or below the own 1981-2010 average.":
     "Gradi Celsius sopra o sotto la media 1981-2010 della città.",
-  "Hot days, tropical nights and frost days": "Giorni caldi, notti tropicali e giorni di gelo",
+  "Hot days, tropical nights and frost days":
+    "Giorni caldi, notti tropicali e giorni di gelo",
   "Days per year with max ≥ 30°C, min ≥ 20°C and min ≤ 0°C.":
     "Giorni all'anno con massima ≥ 30°C, minima ≥ 20°C e minima ≤ 0°C.",
   "Hot days": "Giorni caldi",
@@ -213,7 +219,8 @@ export const IT: Record<string, string> = {
   "No annual temperature data for {name}.":
     "Nessun dato sulla temperatura annuale per {name}.",
   "No anomaly data for {name}.": "Nessun dato sulle anomalie per {name}.",
-  "No threshold-day data for {name}.": "Nessun dato sui giorni soglia per {name}.",
+  "No threshold-day data for {name}.":
+    "Nessun dato sui giorni soglia per {name}.",
   "Daily temperature data isn't included in this build, so the distribution chart isn't available for any city.":
     "I dati giornalieri di temperatura non sono inclusi in questa build, quindi il grafico della distribuzione non è disponibile per nessuna città.",
   "Couldn't load the daily-maxima distribution for {name} just now. Reloading the page may help.":
@@ -227,7 +234,8 @@ export const IT: Record<string, string> = {
   "No ranking data.": "Nessun dato per la classifica.",
   "No temperature data yet. Run ": "Nessun dato di temperatura. Esegui ",
   "(or ": "(oppure ",
-  " for synthetic dev data), then reload.": " per dati sintetici di sviluppo), poi ricarica.",
+  " for synthetic dev data), then reload.":
+    " per dati sintetici di sviluppo), poi ricarica.",
   "Fastest-warming cities": "Città che si scaldano più in fretta",
   "Degrees Celsius per decade, ordinary least squares over annual means. Not filtered by the selection above — the selected city (if any) is outlined instead.":
     "Gradi Celsius per decennio, minimi quadrati sulle medie annuali. Non filtrato dalla selezione qui sopra — la città selezionata (se presente) è invece evidenziata con un contorno.",
@@ -238,8 +246,10 @@ export const IT: Record<string, string> = {
     "{name} non è tra le prime 20 città che si scaldano più in fretta, quindi non è evidenziata qui sotto.",
   "{region} here means {covered} of {total} capitals covered so far, not the whole region: the rest of {region} has no temperature data in this snapshot yet.":
     "Qui {region} significa {covered} di {total} capoluoghi coperti finora, non tutta la regione: il resto di {region} non ha ancora dati di temperatura in questo snapshot.",
-  "Coverage: {capitals} of {capitals_total} capitals, {regions} of {regions_total} regions, {year_start}-{year_end}":
-    "Copertura: {capitals} di {capitals_total} capoluoghi, {regions} di {regions_total} regioni, {year_start}-{year_end}",
+  "Coverage: {capitals} of {capitals_total} capitals, {regions} of {regions_total} regions; complete years {year_start}-{year_end}; partial endpoint {partial_endpoint}":
+    "Copertura: {capitals} di {capitals_total} capoluoghi, {regions} di {regions_total} regioni; anni completi {year_start}-{year_end}; endpoint parziale {partial_endpoint}",
+  "Latest endpoint {partial_endpoint} is incomplete; climate charts use complete years through {year_end}.":
+    "L'ultimo endpoint {partial_endpoint} è incompleto; i grafici climatici usano anni completi fino a {year_end}.",
   "Italia is an unweighted mean of the capitals covered so far, and the temperature backfill runs in province-code order, so it fills from the north: much of the South is still missing and the absolute level reads colder than Italy's. The anomaly chart is far more robust to this, because it measures each year against the same cities' own baseline.":
     "Italia è una media non ponderata dei capoluoghi finora coperti, e il backfill delle temperature procede in ordine di codice provinciale, quindi da nord: gran parte del Sud manca ancora e il livello assoluto risulta più freddo di quello italiano. Il grafico delle anomalie è molto più robusto: misura ogni anno rispetto alla baseline delle stesse città.",
   "Anomaly (°C)": "Anomalia (°C)",
@@ -261,7 +271,8 @@ export const IT: Record<string, string> = {
   "Naive view: raw cross-section": "Vista ingenua: sezione trasversale grezza",
   "Every region-year, untransformed: absolute summer temperature against offender counts. The hotter southern regions sit on the right, so this mostly recovers that the South is warmer and reports crime differently — a confound, not a finding.":
     "Ogni regione-anno, senza trasformazioni: temperatura estiva assoluta contro il numero di autori. Le regioni del Sud, più calde, stanno a destra: ritrova soprattutto che il Sud è più caldo e denuncia in modo diverso, un fattore confondente, non un risultato.",
-  "Panel view: within-region deviation": "Vista panel: deviazione entro regione",
+  "Panel view: within-region deviation":
+    "Vista panel: deviazione entro regione",
   "Region and year fixed effects removed, so each point is a region's deviation from its own norm in a year that was unusual nationally.":
     "Effetti fissi di regione e anno rimossi: ogni punto è lo scostamento di una regione dalla propria norma in un anno anomalo a livello nazionale.",
   "Summer mean daily max (C)": "Media estiva delle massime giornaliere (C)",
@@ -273,7 +284,8 @@ export const IT: Record<string, string> = {
   Raw: "Grezzo",
   Panel: "Panel",
   Observations: "Osservazioni",
-  "region-years, shared by both views": "regione-anno, comuni a entrambe le viste",
+  "region-years, shared by both views":
+    "regione-anno, comuni a entrambe le viste",
   "No region-year observations.": "Nessuna osservazione regione-anno.",
   "Association only. This is an ECOLOGICAL comparison: it is region-level and says nothing about individuals. It is ANNUAL, while the heat-aggression literature works at daily and monthly grain. It is UNDERPOWERED, bounded by ISTAT publishing province-level offenders only from 2022. The outcome is offender counts, not rates, because population denominators start in 2019; region fixed effects absorb the population level but not differential regional growth. No p-values or confidence intervals are shown: with 21 clusters they would overstate precision.":
     "Solo associazione. Confronto ECOLOGICO: è a livello regionale e non dice nulla sugli individui. È ANNUALE, mentre la letteratura su caldo e aggressività lavora su scala giornaliera e mensile. Ha SCARSA POTENZA STATISTICA, limitata dal fatto che ISTAT pubblica gli autori a livello provinciale solo dal 2022. L'esito è il conteggio degli autori, non un tasso, perché i denominatori di popolazione partono dal 2019; gli effetti fissi di regione assorbono il livello della popolazione ma non la crescita differenziale. Non sono mostrati p-value né intervalli di confidenza: con 21 cluster sovrastimerebbero la precisione.",
@@ -387,7 +399,9 @@ export function LangToggle() {
   );
 
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+    <span
+      style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+    >
       {chip("en", "EN")}·{chip("it", "IT")}
     </span>
   );

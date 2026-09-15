@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import polars as pl
+import pytest
 
 from ingestion.fetch import ColumnMap, DatasetConfig, load_registry, normalize_raw_csv
 
@@ -58,30 +59,16 @@ CANDIDATE_COLUMNS = ColumnMap(
 )
 
 
-def test_normalize_plain_headers_with_separate_label_columns(data_dir: Path):
+def test_normalize_rejects_invalid_value_without_snapshot_replacement(data_dir: Path):
     raw = data_dir / "raw.csv"
     raw.write_text(
         "ITTER107,Territorio,REATI,Tipo,TIME_PERIOD,OBS_VALUE,EXTRA\n"
         "ITC4,Lombardia,FURTO,Furti,2023,181000,x\n"
-        "ITI4,Lazio,FURTO,Furti,2023,possibly-bad,x\n"  # non-numeric -> dropped
+        "ITI4,Lazio,FURTO,Furti,2023,possibly-bad,x\n"
     )
-    out = normalize_raw_csv("test_ds", _config(PLAIN_COLUMNS), raw)
-
-    df = pl.read_parquet(out)
-    assert df.columns == [
-        "territory",
-        "territory_name",
-        "category",
-        "category_name",
-        "period",
-        "value",
-    ]
-    assert df.height == 1  # the non-numeric row is filtered out
-    row = df.row(0, named=True)
-    assert row["territory"] == "ITC4"
-    assert row["territory_name"] == "Lombardia"
-    assert row["value"] == 181000.0
-    assert isinstance(row["value"], float)
+    with pytest.raises(ValueError, match="invalid key/value"):
+        normalize_raw_csv("test_ds", _config(PLAIN_COLUMNS), raw)
+    assert not (data_dir / "test_ds.parquet").exists()
 
 
 def test_normalize_labels_both_combined_headers_and_values(data_dir: Path):
@@ -119,27 +106,21 @@ def test_normalize_candidates_fall_back_across_naming_schemes(data_dir: Path):
     assert row["category"] == "FURTO"
 
 
-def test_normalize_missing_component_becomes_null_not_crash(data_dir: Path, caplog):
+def test_normalize_missing_required_component_fails_closed(data_dir: Path):
     raw = data_dir / "raw.csv"
     raw.write_text("ITTER107,TIME_PERIOD,OBS_VALUE\nITC4,2023,42\n")
 
-    out = normalize_raw_csv("test_ds", _config(CANDIDATE_COLUMNS), raw)
-
-    df = pl.read_parquet(out)
-    assert df.height == 1
-    row = df.row(0, named=True)
-    assert row["category"] is None  # no candidate matched
-    assert row["category_name"] is None
-    assert row["territory"] == "ITC4"  # the rest still works
-    assert "no column matches" in caplog.text  # loudly warned, not silent
-    assert "ITTER107" in caplog.text  # full column list printed for debugging
+    with pytest.raises(ValueError, match="required mapping"):
+        normalize_raw_csv("test_ds", _config(CANDIDATE_COLUMNS), raw)
+    assert not (data_dir / "test_ds.parquet").exists()
 
 
-def test_normalize_empty_csv_gives_empty_parquet(data_dir: Path):
+def test_normalize_empty_csv_fails_closed(data_dir: Path):
     raw = data_dir / "raw.csv"
     raw.write_text("ITTER107,Territorio,REATI,Tipo,TIME_PERIOD,OBS_VALUE\n")
-    out = normalize_raw_csv("test_ds", _config(PLAIN_COLUMNS), raw)
-    assert pl.read_parquet(out).height == 0
+    with pytest.raises(ValueError, match="no rows"):
+        normalize_raw_csv("test_ds", _config(PLAIN_COLUMNS), raw)
+    assert not (data_dir / "test_ds.parquet").exists()
 
 
 def test_normalize_handles_mixed_annual_and_quarterly_periods(data_dir: Path):
@@ -181,7 +162,7 @@ def test_normalize_filters_keep_only_matching_codes(data_dir: Path):
     assert df.row(0, named=True)["value"] == 8.1
 
 
-def test_normalize_unknown_filter_component_is_skipped_with_warning(data_dir: Path, caplog):
+def test_normalize_unknown_filter_component_fails_closed(data_dir: Path):
     cfg = DatasetConfig(
         domain="labor",
         title="Test",
@@ -192,9 +173,54 @@ def test_normalize_unknown_filter_component_is_skipped_with_warning(data_dir: Pa
     )
     raw = data_dir / "raw.csv"
     raw.write_text("ITTER107,TIPO_REATO,TIME_PERIOD,OBS_VALUE\nIT,X,2023,1\n")
+    with pytest.raises(ValueError, match="required filter dimension"):
+        normalize_raw_csv("test_ds", cfg, raw)
+    assert not (data_dir / "test_ds.parquet").exists()
+
+
+def test_normalize_filter_alias_and_observation_status(data_dir: Path):
+    cfg = DatasetConfig(
+        domain="labor",
+        title="Test",
+        dataflow_id="151_914",
+        search_hint="test",
+        columns=ColumnMap(
+            territory="ITTER107",
+            category="TYPE",
+            period="TIME_PERIOD",
+            value="OBS_VALUE",
+        ),
+        filters={"SEX": "9"},
+    )
+    raw = data_dir / "raw.csv"
+    raw.write_text(
+        "ITTER107,TYPE,TIME_PERIOD,OBS_VALUE,SEXISTAT1,OBS_STATUS\n"
+        "IT,X,2023,1,9,A\n"
+        "IT,X,2023,2,1,B\n"
+    )
     out = normalize_raw_csv("test_ds", cfg, raw)
-    assert pl.read_parquet(out).height == 1  # filter skipped, rows kept
-    assert "filter component" in caplog.text
+    df = pl.read_parquet(out)
+    assert df.height == 1
+    assert df["value"].to_list() == [1.0]
+    assert df["observation_status"].to_list() == ["A"]
+
+
+def test_normalize_failure_preserves_previous_snapshot(data_dir: Path):
+    raw = data_dir / "raw.csv"
+    raw.write_text("ITTER107,TYPE,TIME_PERIOD,OBS_VALUE\nIT,X,2023,1\n")
+    cfg = DatasetConfig(
+        domain="crime",
+        title="Test",
+        dataflow_id="x",
+        search_hint="x",
+        columns=ColumnMap(territory="ITTER107", category="TYPE"),
+    )
+    out = normalize_raw_csv("test_ds", cfg, raw)
+    previous = pl.read_parquet(out)
+    raw.write_text("ITTER107,TYPE,TIME_PERIOD,OBS_VALUE\n")
+    with pytest.raises(ValueError, match="no rows"):
+        normalize_raw_csv("test_ds", cfg, raw)
+    assert pl.read_parquet(out).equals(previous)
 
 
 def test_normalize_is_idempotent(data_dir: Path):
@@ -234,8 +260,9 @@ def test_placeholder_snapshots_do_not_overwrite_real_data(data_dir: Path, monkey
     ensure_placeholder_snapshots(load_registry())  # second call: still safe
 
     assert pl.read_parquet(real).height == 1  # untouched
-    # every registry dataset now has a snapshot file, empty but readable
+    # Missing snapshots stay absent; failed refresh must not fabricate empties.
     for name in load_registry().datasets:
         p = data_dir / f"{name}.parquet"
-        assert p.exists()
-        duckdb.sql(f"SELECT * FROM read_parquet('{p}')")
+        if p.exists():
+            duckdb.sql(f"SELECT * FROM read_parquet('{p}')")
+    assert not (data_dir / "economy_inflation.parquet").exists()

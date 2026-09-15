@@ -32,7 +32,7 @@ avoids it.
 ## Stack at a glance
 
 | Layer | Technology |
-|---|---|
+| --- | --- |
 | Ingestion | Python + httpx2 against ISTAT SDMX, INPS StatKit, MUR/USTAT CKAN, Open-Meteo/CDS |
 | Storage | Parquet snapshots, queried in-memory via DuckDB |
 | Transformation | dbt (dbt-duckdb), marts materialized as Parquet |

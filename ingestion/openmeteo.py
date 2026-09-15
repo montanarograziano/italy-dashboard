@@ -182,6 +182,7 @@ class OpenMeteoClient:
         if not italian:
             raise OpenMeteoError(f"No Italian match for city {city!r}")
         best = max(italian, key=lambda r: r.get("population") or 0)
+        # pi-lens-ignore: unchecked-throwing-call-python
         return float(best["latitude"]), float(best["longitude"])
 
     async def daily_temperatures(
@@ -232,6 +233,7 @@ def _retry_after_seconds(resp: httpx2.Response) -> float | None:
     try:
         return max(0.0, float(raw))
     except ValueError:
+        # pi-lens-ignore: python-empty-except
         pass
     try:
         when = parsedate_to_datetime(raw)

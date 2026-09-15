@@ -14,24 +14,18 @@ setup:
 run:
     uv run reflex run
 
-# Generate synthetic sample data (fake numbers, dev only), then build marts
+# Generate synthetic sample data (fake numbers, dev only), isolated from
+# production data. Sample never gets a release manifest.
 sample:
-    uv run python -m ingestion.fetch sample
-    just transform
+    ITALY_DATA_DIR=data/sample uv run python -m ingestion.fetch sample
+    ITALY_DATA_DIR=data/sample just transform
 
-# Fetch/refresh real ISTAT data, then rebuild dbt marts. A failure on one
-# dataset doesn't stop the others (see ingestion/fetch.py:cmd_refresh -- one
-# bad dataset must not sink the rest) and transform still runs afterwards so
-# the snapshot rebuilds from whatever DID land -- but the recipe itself must
-# still fail loudly if refresh OR transform failed, so CI/cron callers see a
-# nonzero exit instead of a silently incomplete snapshot.
+# Fetch/refresh real data, then rebuild marts. Failed fetch stops before
+# transform: a partial snapshot must not become a derived release candidate.
 refresh *dataset:
-    #!/usr/bin/env bash
-    set -uo pipefail
-    status=0
-    uv run python -m ingestion.fetch refresh {{dataset}} || status=$?
-    just transform || status=$?
-    exit "$status"
+    set -euo pipefail
+    uv run python -m ingestion.fetch refresh {{dataset}}
+    just transform
 
 alias fetch := refresh
 
@@ -98,7 +92,7 @@ notebook:
 
 # Run the dbt models: raw CSVs -> staging -> marts (data/marts/*.parquet)
 transform:
-    mkdir -p data/marts
+    mkdir -p "${ITALY_DATA_DIR:-data}/marts"
     uv run dbt build --project-dir dbt --profiles-dir dbt
 
 # Generate and open the dbt documentation (model lineage, columns, tests)
@@ -144,11 +138,18 @@ test-live:
 test-browser:
     uv run pytest tests/browser -m browser
 
-# Verify the committed data/ snapshot: every mart present, nonempty, hashed,
-# and attributed to a source/provider/license -- see the script's own
-# docstring for what this deliberately does NOT duplicate (dbt's grain tests)
+# Describe current tracked snapshot (diagnostic; does not certify release).
 provenance:
     uv run python scripts/generate_provenance_manifest.py
+
+# Seal live bytes after source receipts, normalization and dbt validation.
+# Never run this from a build: sealing is an explicit release operation.
+seal-release:
+    uv run python scripts/generate_provenance_manifest.py --seal
+
+# Dependency-free production gate used by CI, Pages and Docker.
+release-gate:
+    python3 scripts/validate_snapshot.py
 
 # Lint + typecheck + tests: what CI's `python` job runs (.github/workflows/ci.yml)
 check: lint typecheck test

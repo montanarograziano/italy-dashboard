@@ -36,7 +36,7 @@ async def test_fetch_dataset_end_to_end_with_mocked_api(data_dir, monkeypatch):
         assert "/data/73_58/" in request.url.path
         return httpx2.Response(200, text=FAKE_ISTAT_CSV)
 
-    cfg = load_registry().datasets["crime_reported"]
+    cfg = load_registry().datasets["crime_reported"].model_copy(update={"filters": {}})
     assert isinstance(cfg, DatasetConfig)
 
     async with IstatClient(transport=httpx2.MockTransport(handler)) as client:
@@ -60,7 +60,7 @@ async def test_pipeline_feeds_the_dashboard_query_layer(data_dir, monkeypatch):
     async def handler(request: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(200, text=FAKE_ISTAT_CSV)
 
-    cfg = load_registry().datasets["crime_reported"]
+    cfg = load_registry().datasets["crime_reported"].model_copy(update={"filters": {}})
     async with IstatClient(transport=httpx2.MockTransport(handler)) as client:
         await fetch.fetch_dataset(client, "crime_reported", cfg)
 

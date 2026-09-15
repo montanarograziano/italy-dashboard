@@ -250,9 +250,13 @@ def test_unemployment_series_has_selected_and_national(sample_db):
     assert rows
     for r in rows:
         assert set(r) == {"period", "selected", "national"}
-    # When the selection IS the national aggregate, both series coincide.
+    # The sample snapshot has no official IT row (only NUTS2 regions), so the
+    # national series must be null throughout -- never silently backfilled
+    # with an unweighted regional average, which is exactly the bug this
+    # query was fixed to stop having.
     nat = q.unemployment_series(q.NATIONAL)
-    assert all(r["selected"] == r["national"] for r in nat)
+    assert nat
+    assert all(r["national"] is None for r in nat)
 
 
 @pytest.fixture
@@ -351,7 +355,10 @@ def test_kpis_are_formatted_strings(sample_db):
     k = q.kpis()
     assert set(k) == {"crime", "population", "unemployment", "inflation"}
     assert k["population"].endswith("M")
-    assert k["unemployment"].endswith("%")
+    # The sample snapshot has no official IT row for labor_unemployment, so
+    # the national unemployment KPI must degrade to "—" rather than crash
+    # or silently substitute an unweighted regional average.
+    assert k["unemployment"] == "—"
     assert k["inflation"][0] in "+-"
 
 
@@ -1452,6 +1459,7 @@ def test_climate_coverage_reports_only_seed_totals_without_a_mart(missing_db):
         "regions_total": "21",
         "year_start": "—",
         "year_end": "—",
+        "partial_endpoint": "—",
     }
 
 

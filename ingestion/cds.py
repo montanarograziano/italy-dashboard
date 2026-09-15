@@ -75,6 +75,7 @@ from typing import Any
 
 import polars as pl
 
+from ingestion.receipts import upsert_fetch_receipt
 from ingestion.weather import (
     DATA_DIR,
     MAX_NULL_RATE,
@@ -442,7 +443,9 @@ def _time_coord_name(ds: Any) -> str:
 def _select_nearest(ds: Any, lat: float, lon: float, province_code: str) -> Any:
     """The nearest grid cell to (lat, lon), logging and gating the distance."""
     point = ds.sel(latitude=lat, longitude=lon, method="nearest")
+    # pi-lens-ignore: unchecked-throwing-call-python
     cell_lat = float(point["latitude"])
+    # pi-lens-ignore: unchecked-throwing-call-python
     cell_lon = float(point["longitude"])
     distance = math.hypot(cell_lat - lat, cell_lon - lon)
     logger.info(
@@ -465,6 +468,7 @@ def _select_nearest(ds: Any, lat: float, lon: float, province_code: str) -> Any:
 
 
 def _kelvin_to_celsius_or_none(value: Any) -> float | None:
+    # pi-lens-ignore: unchecked-throwing-call-python
     fvalue = float(value)
     return None if math.isnan(fvalue) else fvalue - KELVIN_TO_CELSIUS_OFFSET
 
@@ -694,7 +698,7 @@ def _find_var(ds: Any, short_name: str, long_name_fragment: str) -> str:
 
 def _datetime64_to_date(value: Any) -> date:
     """numpy.datetime64 -> datetime.date, for grouping hourly values by day."""
-    import numpy as np  # part of the `cds` extra
+    import numpy as np  # pyrefly: ignore[missing-import]  # optional extra
 
     ts = np.datetime64(value, "s").item()
     return ts.date() if hasattr(ts, "date") else date.fromisoformat(str(value)[:10])
@@ -709,9 +713,7 @@ def _float_or_none(value: Any) -> float | None:
     return None if math.isnan(fvalue) else fvalue
 
 
-def _collect_arco_arrays(
-    sources: list[Path], xr: Any, origin: Path
-) -> tuple[list[Any], Any, Any]:
+def _collect_arco_arrays(sources: list[Path], xr: Any, origin: Path) -> tuple[list[Any], Any, Any]:
     """Pull the time axis, ``t2m`` (K) and ``tp`` (m) out of NetCDF sources.
 
     ``sources`` is one or more read-able NetCDF paths — the members of an ARCO
@@ -736,16 +738,19 @@ def _collect_arco_arrays(
                     time_name = _time_coord_name(ds)
                     times = ds[time_name].values
                 except CDSError:
+                    # pi-lens-ignore: python-empty-except
                     pass
             try:
                 t2m_name = _find_var(ds, "t2m", "2 metre temperature")
                 t2m_kelvin = ds[t2m_name].values
             except CDSError:
+                # pi-lens-ignore: python-empty-except
                 pass
             try:
                 tp_name = _find_var(ds, "tp", "total precipitation")
                 tp_metres = ds[tp_name].values
             except CDSError:
+                # pi-lens-ignore: python-empty-except
                 pass
         finally:
             ds.close()
@@ -770,7 +775,10 @@ def _read_arco_arrays(path: Path) -> tuple[list[Any], Any, Any]:
     try:
         # Combined into one `with` (SIM117): the temp dir must outlive the
         # member extraction, and both are closed together.
-        with zipfile.ZipFile(path) as archive, tempfile.TemporaryDirectory(prefix="arco_") as tmp_dir:
+        with (
+            zipfile.ZipFile(path) as archive,
+            tempfile.TemporaryDirectory(prefix="arco_") as tmp_dir,
+        ):
             sources: list[Path] = []
             for member in archive.infolist():
                 member_path = Path(tmp_dir) / member.filename
@@ -839,9 +847,7 @@ def _is_queue_limit_error(exc: Exception) -> bool:
     return "queued requests" in str(exc).lower() and "temporarily limited" in str(exc).lower()
 
 
-def _retrieve_arco_with_retry(
-    client: Any, request: dict, target: Path, label: str
-) -> None:
+def _retrieve_arco_with_retry(client: Any, request: dict, target: Path, label: str) -> None:
     """client.retrieve() with pause-and-retry on the queued-job limit.
 
     A queue-limit rejection is not a transient blip to hammer: the limit is how
@@ -852,23 +858,30 @@ def _retrieve_arco_with_retry(
     means a later rerun would just pay for the same chunk again anyway).
     """
     for attempt in range(1, QUEUE_LIMIT_RETRIES + 1):
+        exc: Exception | None = None
+        queue_limit = False
         try:
             client.retrieve(TIMESERIES_DATASET_ID, request, str(target))
+        except Exception as caught:
+            exc = caught
+            queue_limit = _is_queue_limit_error(caught)
+        else:
             return
-        except Exception as exc:
-            if not _is_queue_limit_error(exc) or attempt == QUEUE_LIMIT_RETRIES:
-                target.unlink(missing_ok=True)
-                raise exc
-            logger.warning(
-                "%s: queued-job limit hit (attempt %d/%d); waiting %.0fs before retrying...",
-                label,
-                attempt,
-                QUEUE_LIMIT_RETRIES,
-                QUEUE_LIMIT_BACKOFF_S,
-            )
-            import time
 
-            time.sleep(QUEUE_LIMIT_BACKOFF_S)
+        if not queue_limit or attempt == QUEUE_LIMIT_RETRIES:
+            target.unlink(missing_ok=True)
+            assert exc is not None
+            raise exc
+        logger.warning(
+            "%s: queued-job limit hit (attempt %d/%d); waiting %.0fs before retrying...",
+            label,
+            attempt,
+            QUEUE_LIMIT_RETRIES,
+            QUEUE_LIMIT_BACKOFF_S,
+        )
+        import time
+
+        time.sleep(QUEUE_LIMIT_BACKOFF_S)
 
 
 def _fetch_capital_timeseries(
@@ -1002,7 +1015,17 @@ def cmd_refresh_timeseries(
             )
             all_rows = kept.to_dicts() + all_rows
 
-    write_snapshot(all_rows, data_dir)
+    snapshot_path = write_snapshot(all_rows, data_dir)
+    upsert_fetch_receipt(
+        data_dir / "source-receipts.json",
+        "weather",
+        provider="Copernicus C3S ERA5-Land",
+        source_flow=TIMESERIES_DATASET_ID,
+        request_url=f"https://cds.climate.copernicus.eu/datasets/{TIMESERIES_DATASET_ID}",
+        raw_path=f"data/{raw_dir.relative_to(data_dir)}",
+        raw_bytes=snapshot_path.read_bytes(),
+        count_lines=False,
+    )
     return 0
 
 
@@ -1126,7 +1149,17 @@ def cmd_refresh(
             )
             all_rows = kept.to_dicts() + all_rows
 
-    write_snapshot(all_rows, data_dir)
+    snapshot_path = write_snapshot(all_rows, data_dir)
+    upsert_fetch_receipt(
+        data_dir / "source-receipts.json",
+        "weather",
+        provider="Copernicus C3S ERA5-Land",
+        source_flow=CDS_DATASET_ID,
+        request_url=f"https://cds.climate.copernicus.eu/datasets/{CDS_DATASET_ID}",
+        raw_path=f"data/{raw_dir.relative_to(data_dir)}",
+        raw_bytes=snapshot_path.read_bytes(),
+        count_lines=False,
+    )
     return 0
 
 

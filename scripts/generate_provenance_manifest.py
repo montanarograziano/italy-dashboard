@@ -19,10 +19,12 @@ import `build_manifest()` for the JSON payload.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -143,17 +145,35 @@ def _covered_period(con: duckdb.DuckDBPyConnection, path: Path) -> dict[str, Any
     columns that occur in practice, in order, rather than assuming one.
     """
     cols = {
-        row[0] for row in con.execute(f"describe select * from read_parquet('{path}')").fetchall()
+        row[0]
+        for row in con.execute("describe select * from read_parquet(?)", [str(path)]).fetchall()
     }
-    for column in ("obs_date", "period", "year", "academic_year"):
-        if column in cols:
-            row = con.execute(
-                f"select min({column}), max({column}) from read_parquet('{path}')"
-            ).fetchone()
-            if row is None:  # pragma: no cover - an aggregate always returns one row
-                raise RuntimeError(f"min/max({column}) over {path} returned no row")
-            lo, hi = row
-            return {"column": column, "min": str(lo), "max": str(hi)}
+    if "obs_date" in cols:
+        column = "obs_date"
+        row = con.execute(
+            "select min(obs_date), max(obs_date) from read_parquet(?)", [str(path)]
+        ).fetchone()
+    elif "period" in cols:
+        column = "period"
+        row = con.execute(
+            "select min(period), max(period) from read_parquet(?)", [str(path)]
+        ).fetchone()
+    elif "year" in cols:
+        column = "year"
+        row = con.execute(
+            "select min(year), max(year) from read_parquet(?)", [str(path)]
+        ).fetchone()
+    elif "academic_year" in cols:
+        column = "academic_year"
+        row = con.execute(
+            "select min(academic_year), max(academic_year) from read_parquet(?)", [str(path)]
+        ).fetchone()
+    else:
+        return None
+    if row is None:  # pragma: no cover - an aggregate always returns one row
+        raise RuntimeError(f"min/max({column}) over {path} returned no row")
+    lo, hi = row
+    return {"column": column, "min": str(lo), "max": str(hi)}
     return None
 
 
@@ -211,8 +231,14 @@ def build_manifest() -> dict[str, Any]:
             rel = path.relative_to(REPO_ROOT).as_posix()
             stem = path.stem
             is_mart = path.parent.name == "marts"
-            source_keys = MART_LINEAGE[stem] if is_mart else [stem]
-            count_row = con.execute(f"select count(*) from read_parquet('{path}')").fetchone()
+            source_keys = (
+                MART_LINEAGE[stem]
+                if is_mart
+                else ["weather"]
+                if stem == "weather_daily"
+                else [stem]
+            )
+            count_row = con.execute("select count(*) from read_parquet(?)", [str(path)]).fetchone()
             if count_row is None:  # pragma: no cover - an aggregate always returns one row
                 raise RuntimeError(f"count(*) over {path} returned no row")
             row_count = count_row[0]
@@ -243,7 +269,136 @@ def build_manifest() -> dict[str, Any]:
     }
 
 
+RELEASE_MANIFEST = DATA_DIR / "release-manifest.json"
+SOURCE_RECEIPTS = DATA_DIR / "source-receipts.json"
+RELEASE_MAX_AGE_DAYS = 35
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _receipt_records(payload: Any) -> dict[str, dict[str, Any]]:
+    # source-receipts.json currently uses dataset names at its root. Accept
+    # sealed-manifest-style {"datasets": {...}} too for tooling reuse.
+    records = payload.get("datasets", payload) if isinstance(payload, dict) else payload
+    if isinstance(records, dict):
+        return {str(name): value for name, value in records.items() if isinstance(value, dict)}
+    if isinstance(records, list):
+        return {
+            str(item["dataset"]): item
+            for item in records
+            if isinstance(item, dict) and isinstance(item.get("dataset"), str)
+        }
+    return {}
+
+
+def _seal_release(receipts_path: Path, output_path: Path) -> dict[str, Any]:
+    """Seal current bytes only when live source attestations bind every input."""
+    from validate_snapshot import MART_LINEAGE as RELEASE_LINEAGE  # type: ignore[import-not-found]
+    from validate_snapshot import REQUIRED_ARTIFACTS, SOURCE_NAMES  # type: ignore[import-not-found]
+
+    try:
+        payload = json.loads(receipts_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"unable to read source receipts: {receipts_path}") from exc
+    receipts = _receipt_records(payload)
+    now = datetime.now(UTC).replace(microsecond=0)
+    datasets: dict[str, Any] = {}
+    for name in SOURCE_NAMES:
+        receipt = receipts.get(name)
+        if receipt is None:
+            raise ValueError(f"missing source receipt for {name}")
+        # data/source-receipts.json schema: provider/source_flow/request_url/
+        # retrieved_at/raw_sha256 flat per dataset (see crime_reported/
+        # crime_offenders entries already in the repo).
+        required = ("provider", "request_url", "retrieved_at", "raw_sha256")
+        missing = [
+            field
+            for field in required
+            if not isinstance(receipt.get(field), str) or not receipt[field].strip()
+        ]
+        if missing:
+            raise ValueError(f"{name}: receipt missing {', '.join(missing)}")
+        if receipt.get("status", "fetched") != "fetched" or receipt["provider"].lower() in {
+            "sample",
+            "unknown",
+        }:
+            raise ValueError(f"{name}: source receipt is not live")
+        raw_sha = receipt["raw_sha256"]
+        if len(raw_sha) != 64:
+            raise ValueError(f"{name}: receipt raw_sha256 required")
+        raw_path = receipt.get("raw_path")
+        normalized_path = DATA_DIR / (
+            "weather_daily.parquet" if name == "weather" else f"{name}.parquet"
+        )
+        if not normalized_path.is_file():
+            raise FileNotFoundError(f"required normalized artifact missing: {normalized_path}")
+        actual_normalized = _sha256(normalized_path)
+        marts = []
+        for mart, sources in RELEASE_LINEAGE.items():
+            if name in sources:
+                mart_path = DATA_DIR / "marts" / f"{mart}.parquet"
+                if not mart_path.is_file():
+                    raise FileNotFoundError(f"required mart missing: {mart_path}")
+                marts.append({"path": f"data/marts/{mart}.parquet", "sha256": _sha256(mart_path)})
+        datasets[name] = {
+            "source": {
+                "provider": receipt["provider"],
+                "flow_url": receipt["request_url"],
+                "retrieved_at": receipt["retrieved_at"],
+            },
+            "raw": {
+                "path": raw_path,
+                "sha256": raw_sha,
+            },
+            "normalized": {"path": f"data/{normalized_path.name}", "sha256": actual_normalized},
+            "marts": marts,
+        }
+
+    artifacts: dict[str, str] = {}
+    for relative in REQUIRED_ARTIFACTS:
+        path = REPO_ROOT / relative
+        if not path.is_file():
+            raise FileNotFoundError(f"required release artifact missing: {path}")
+        artifacts[relative] = _sha256(path)
+    manifest = {
+        "schema_version": 1,
+        "status": "sealed",
+        "snapshot_mode": "live",
+        "sealed_at": now.isoformat(),
+        "expires_at": (now + timedelta(days=RELEASE_MAX_AGE_DAYS)).isoformat(),
+        "datasets": datasets,
+        "artifacts": artifacts,
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output_path.with_name(output_path.name + ".tmp")
+    temporary.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(output_path)
+    return manifest
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--seal", action="store_true", help="write checked-in live release manifest"
+    )
+    parser.add_argument("--receipts", type=Path, default=SOURCE_RECEIPTS)
+    parser.add_argument("--output", type=Path, default=RELEASE_MANIFEST)
+    args = parser.parse_args()
+    if args.seal:
+        try:
+            manifest = _seal_release(args.receipts, args.output)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"release seal refused: {exc}", file=sys.stderr)
+            return 1
+        print(f"sealed {args.output} ({len(manifest['artifacts'])} artifacts)")
+        return 0
+
     manifest = build_manifest()
     print(json.dumps(manifest, indent=2, sort_keys=True))
     if manifest["warnings"]:
