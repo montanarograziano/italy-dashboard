@@ -259,7 +259,9 @@ def _sha256(path: Path) -> str:
 
 
 def _receipt_records(payload: Any) -> dict[str, dict[str, Any]]:
-    records = payload.get("datasets") if isinstance(payload, dict) else payload
+    # source-receipts.json currently uses dataset names at its root. Accept
+    # sealed-manifest-style {"datasets": {...}} too for tooling reuse.
+    records = payload.get("datasets", payload) if isinstance(payload, dict) else payload
     if isinstance(records, dict):
         return {str(name): value for name, value in records.items() if isinstance(value, dict)}
     if isinstance(records, list):
@@ -276,7 +278,11 @@ def _seal_release(receipts_path: Path, output_path: Path) -> dict[str, Any]:
     from validate_snapshot import MART_LINEAGE as RELEASE_LINEAGE  # type: ignore[import-not-found]
     from validate_snapshot import REQUIRED_ARTIFACTS, SOURCE_NAMES  # type: ignore[import-not-found]
 
-    receipts = _receipt_records(json.loads(receipts_path.read_text(encoding="utf-8")))
+    try:
+        payload = json.loads(receipts_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"unable to read source receipts: {receipts_path}") from exc
+    receipts = _receipt_records(payload)
     now = datetime.now(UTC).replace(microsecond=0)
     datasets: dict[str, Any] = {}
     for name in SOURCE_NAMES:

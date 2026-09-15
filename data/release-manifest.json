@@ -1,0 +1,277 @@
+{
+  "artifacts": {
+    "data/crime_offenders.parquet": "2acaf5d2fa4a9c511be5ff46aef0e7998bd340eb9760d872acff437e51648d52",
+    "data/crime_reported.parquet": "a3519e2fc1d611ccd7086df45751d69aa33aaa0098339e60b24c6272a51ee8ec",
+    "data/economy_inflation.parquet": "3fc70cd4e3e5febdf87afc7698ae1bd0ed05b49213717ed601ee19c252160c2f",
+    "data/education_university_scholarships.parquet": "6ccb8d8cc3c66f3b29f0c94e882bbd92aa80ae4a4ac36e13cb7229ad46d945be",
+    "data/income_regional.parquet": "7821c5d152df89ccd6b0a3578f835f33029c66dd3fa11ae59a4cbbf77c18a56c",
+    "data/labor_naspi_beneficiaries.parquet": "6c08ce657d2198cfda63cc77de837efda1aed979cb21a3bdb0e252f5aeeab630",
+    "data/labor_unemployment.parquet": "bcbf81232c61af882aa6227a9a59516a1d66041f987e97f5b22aaf79815941c1",
+    "data/marts/mart_climate_annual.parquet": "d7e68d0fd1c876a3c98dc6da62dd16da16fd3065eb9e811ed37aaacc62810258",
+    "data/marts/mart_climate_daily.parquet": "86a5a25b713736d51fff8ab00a105d6568c1a518c846d0aa088ff0828e1933f1",
+    "data/marts/mart_climate_monthly.parquet": "b7303e705fb60ef1a41153e20dff7b20ccb7b7b55d8ad43a5ad74b27a0b2a1a9",
+    "data/marts/mart_climate_region.parquet": "f3ca11a4eb8941b254869ffebcc44b066051c15b92f8eeeef9469346fb0cbfce",
+    "data/marts/mart_crime.parquet": "0a17692ca7f1201f4bf9996c42c07d6d423739b96ddee1e30dbc2cb2827c11dc",
+    "data/marts/mart_crime_climate.parquet": "51a32727c0631aa22ee98b3fb993c4b1918fbc8c640e6d50074e1aa5033a9942",
+    "data/marts/mart_crime_income.parquet": "7fd4dd6480461a2bb662a0ad8b6244645857d0985261dcb8d94f7af3d0604b9c",
+    "data/marts/mart_dsu.parquet": "54fb3e4c837cccfa24b74706c45f034e62b9c2a9bf77569dfee13d921336db9d",
+    "data/marts/mart_naspi.parquet": "4fa2cacbef76480751cf7ff7654b62feaa86ad4bc83c820a7342f7241fe5a452",
+    "data/marts/mart_offender_rates.parquet": "76b075c91bd99b6c2c747c8895e46e53f77e979f1b05cab6e46752a39c6197c4",
+    "data/marts/mart_offenders.parquet": "36bb768f88c43003917149356658d582eff51029832ad8bd1522cb1b4265c0a6",
+    "data/marts/mart_population.parquet": "d5f0d758475568eaca9b4f29696865f49b621ad01db7a3ac8dcea7f9f74b8083",
+    "data/population_foreign.parquet": "007c2a300ba5ccf313567d3aee2f2c5a3095325540a16324ea422868dda53f8f",
+    "data/population_resident.parquet": "2879eb2fb840cff4590323ea711e7ccb6293385bb8a33eb8819d903f69d048fc",
+    "data/weather_daily.parquet": "fd8de6bfab7ba1c10f70962bed2683a572e4205ac16ce2c185c08c394fbede86"
+  },
+  "datasets": {
+    "crime_offenders": {
+      "marts": [
+        {
+          "path": "data/marts/mart_offenders.parquet",
+          "sha256": "36bb768f88c43003917149356658d582eff51029832ad8bd1522cb1b4265c0a6"
+        },
+        {
+          "path": "data/marts/mart_offender_rates.parquet",
+          "sha256": "76b075c91bd99b6c2c747c8895e46e53f77e979f1b05cab6e46752a39c6197c4"
+        },
+        {
+          "path": "data/marts/mart_crime_income.parquet",
+          "sha256": "7fd4dd6480461a2bb662a0ad8b6244645857d0985261dcb8d94f7af3d0604b9c"
+        },
+        {
+          "path": "data/marts/mart_crime_climate.parquet",
+          "sha256": "51a32727c0631aa22ee98b3fb993c4b1918fbc8c640e6d50074e1aa5033a9942"
+        }
+      ],
+      "normalized": {
+        "path": "data/crime_offenders.parquet",
+        "sha256": "2acaf5d2fa4a9c511be5ff46aef0e7998bd340eb9760d872acff437e51648d52"
+      },
+      "raw": {
+        "path": "data/raw/crime_offenders.csv",
+        "sha256": "782f682f6d79970e48bd742f5bd59a3c50b8d9a32dc38e46eca45a523920d2a6"
+      },
+      "source": {
+        "flow_url": "https://esploradati.istat.it/SDMXWS/rest/data/73_230_DF_DCCV_AUTVITTPS_7/A.......?startPeriod=1970",
+        "provider": "ISTAT",
+        "retrieved_at": "2026-09-15T10:12:48+00:00"
+      }
+    },
+    "crime_reported": {
+      "marts": [
+        {
+          "path": "data/marts/mart_crime.parquet",
+          "sha256": "0a17692ca7f1201f4bf9996c42c07d6d423739b96ddee1e30dbc2cb2827c11dc"
+        }
+      ],
+      "normalized": {
+        "path": "data/crime_reported.parquet",
+        "sha256": "a3519e2fc1d611ccd7086df45751d69aa33aaa0098339e60b24c6272a51ee8ec"
+      },
+      "raw": {
+        "path": "data/raw/crime_reported.csv",
+        "sha256": "e5a740e060c689b082fa3c3f52c3fc5c7e7b8e5e8e839eecec5c4010a7716733"
+      },
+      "source": {
+        "flow_url": "https://esploradati.istat.it/SDMXWS/rest/data/73_58/A..FELONYFJ..ALL.ALL.TOTAL.ALL.ALL.99.ALL..TOTAL.?startPeriod=1970",
+        "provider": "ISTAT",
+        "retrieved_at": "2026-09-15T10:10:37+00:00"
+      }
+    },
+    "economy_inflation": {
+      "marts": [],
+      "normalized": {
+        "path": "data/economy_inflation.parquet",
+        "sha256": "3fc70cd4e3e5febdf87afc7698ae1bd0ed05b49213717ed601ee19c252160c2f"
+      },
+      "raw": {
+        "path": "data/raw/economy_inflation.csv",
+        "sha256": "da383e5a5c4446855c88002765a7dceea54f0f35682c6c4ca1f7efa8abf89515"
+      },
+      "source": {
+        "flow_url": "https://esploradati.istat.it/SDMXWS/rest/data/167_745_DF_DCSP_NIC1B2025_6/M.IT..7.00?startPeriod=1990",
+        "provider": "ISTAT",
+        "retrieved_at": "2026-09-15T10:09:25+00:00"
+      }
+    },
+    "education_university_scholarships": {
+      "marts": [
+        {
+          "path": "data/marts/mart_dsu.parquet",
+          "sha256": "54fb3e4c837cccfa24b74706c45f034e62b9c2a9bf77569dfee13d921336db9d"
+        }
+      ],
+      "normalized": {
+        "path": "data/education_university_scholarships.parquet",
+        "sha256": "6ccb8d8cc3c66f3b29f0c94e882bbd92aa80ae4a4ac36e13cb7229ad46d945be"
+      },
+      "raw": {
+        "path": "data/raw/education_university_scholarships.csv",
+        "sha256": "c3d3b03819f5f352ddde2da8fd23d889357ac1bfbf892f8f8e1dd69ae9e964a0"
+      },
+      "source": {
+        "flow_url": "https://dati-ustat.mur.gov.it/dataset/b89d46ba-1b59-4a45-9165-5b09df42a884/resource/2e57c680-e871-474f-8bb9-2eec44dcfee2/download/2025_dsu_interventi_rett25062026.csv",
+        "provider": "ustat",
+        "retrieved_at": "2026-09-15T10:17:24+00:00"
+      }
+    },
+    "income_regional": {
+      "marts": [
+        {
+          "path": "data/marts/mart_crime_income.parquet",
+          "sha256": "7fd4dd6480461a2bb662a0ad8b6244645857d0985261dcb8d94f7af3d0604b9c"
+        }
+      ],
+      "normalized": {
+        "path": "data/income_regional.parquet",
+        "sha256": "7821c5d152df89ccd6b0a3578f835f33029c66dd3fa11ae59a4cbbf77c18a56c"
+      },
+      "raw": {
+        "path": "data/raw/income_regional.csv",
+        "sha256": "61435e8362802de05cab7e0cb9f9004ec8004aa0a897e436b6e21120ba1b9ae1"
+      },
+      "source": {
+        "flow_url": "https://esploradati.istat.it/SDMXWS/rest/data/93_1095_DF_DCCN_ISTITUZ_TNA1_1/A.........?startPeriod=1995",
+        "provider": "ISTAT",
+        "retrieved_at": "2026-09-15T10:15:55+00:00"
+      }
+    },
+    "labor_naspi_beneficiaries": {
+      "marts": [
+        {
+          "path": "data/marts/mart_naspi.parquet",
+          "sha256": "4fa2cacbef76480751cf7ff7654b62feaa86ad4bc83c820a7342f7241fe5a452"
+        }
+      ],
+      "normalized": {
+        "path": "data/labor_naspi_beneficiaries.parquet",
+        "sha256": "6c08ce657d2198cfda63cc77de837efda1aed979cb21a3bdb0e252f5aeeab630"
+      },
+      "raw": {
+        "path": "data/raw/labor_naspi_beneficiaries.csv",
+        "sha256": "e222e7e79d9bc809d731871a7e2cf6920ca295472c5f063baff70029bab9735c"
+      },
+      "source": {
+        "flow_url": "https://opendata.inps.it/databrowser/api/core/nodes/1/datasets/INPS,DFB_ST_NASPI_BENEFICIARI_02,1.0/download/csv",
+        "provider": "inps",
+        "retrieved_at": "2026-09-15T10:17:24+00:00"
+      }
+    },
+    "labor_unemployment": {
+      "marts": [],
+      "normalized": {
+        "path": "data/labor_unemployment.parquet",
+        "sha256": "bcbf81232c61af882aa6227a9a59516a1d66041f987e97f5b22aaf79815941c1"
+      },
+      "raw": {
+        "path": "data/raw/labor_unemployment.csv",
+        "sha256": "45bd6494b6cd4f1c7e9fd09180a27e561b8be332735eb48bca256bdd79e8bd67"
+      },
+      "source": {
+        "flow_url": "https://esploradati.istat.it/SDMXWS/rest/data/151_914/ALL?startPeriod=1970",
+        "provider": "ISTAT",
+        "retrieved_at": "2026-09-15T10:09:24+00:00"
+      }
+    },
+    "population_foreign": {
+      "marts": [
+        {
+          "path": "data/marts/mart_offender_rates.parquet",
+          "sha256": "76b075c91bd99b6c2c747c8895e46e53f77e979f1b05cab6e46752a39c6197c4"
+        },
+        {
+          "path": "data/marts/mart_crime_income.parquet",
+          "sha256": "7fd4dd6480461a2bb662a0ad8b6244645857d0985261dcb8d94f7af3d0604b9c"
+        },
+        {
+          "path": "data/marts/mart_population.parquet",
+          "sha256": "d5f0d758475568eaca9b4f29696865f49b621ad01db7a3ac8dcea7f9f74b8083"
+        }
+      ],
+      "normalized": {
+        "path": "data/population_foreign.parquet",
+        "sha256": "007c2a300ba5ccf313567d3aee2f2c5a3095325540a16324ea422868dda53f8f"
+      },
+      "raw": {
+        "path": "data/raw/population_foreign.csv",
+        "sha256": "26258bb23129ca3a89f9e4c010a2184ea44cb27c3527b1f8ade4f0e320508475"
+      },
+      "source": {
+        "flow_url": "https://esploradati.istat.it/SDMXWS/rest/data/29_7/A.IT+ITC1+ITC2+ITC3+ITC4+ITH1+ITH2+ITH3+ITH4+ITH5+ITI1+ITI2+ITI3+ITI4+ITF1+ITF2+ITF3+ITF4+ITF5+ITF6+ITG1+ITG2...?startPeriod=1970",
+        "provider": "ISTAT",
+        "retrieved_at": "2026-09-15T10:16:03+00:00"
+      }
+    },
+    "population_resident": {
+      "marts": [
+        {
+          "path": "data/marts/mart_offender_rates.parquet",
+          "sha256": "76b075c91bd99b6c2c747c8895e46e53f77e979f1b05cab6e46752a39c6197c4"
+        },
+        {
+          "path": "data/marts/mart_crime_income.parquet",
+          "sha256": "7fd4dd6480461a2bb662a0ad8b6244645857d0985261dcb8d94f7af3d0604b9c"
+        },
+        {
+          "path": "data/marts/mart_population.parquet",
+          "sha256": "d5f0d758475568eaca9b4f29696865f49b621ad01db7a3ac8dcea7f9f74b8083"
+        }
+      ],
+      "normalized": {
+        "path": "data/population_resident.parquet",
+        "sha256": "2879eb2fb840cff4590323ea711e7ccb6293385bb8a33eb8819d903f69d048fc"
+      },
+      "raw": {
+        "path": "data/raw/population_resident.csv",
+        "sha256": "63b4eed40e0d370ae7c097828389a94f3d45446c7be9a60c5d9c9f8b8fc29cac"
+      },
+      "source": {
+        "flow_url": "https://esploradati.istat.it/SDMXWS/rest/data/22_289/ALL?startPeriod=1970",
+        "provider": "ISTAT",
+        "retrieved_at": "2026-09-15T10:16:54+00:00"
+      }
+    },
+    "weather": {
+      "marts": [
+        {
+          "path": "data/marts/mart_climate_daily.parquet",
+          "sha256": "86a5a25b713736d51fff8ab00a105d6568c1a518c846d0aa088ff0828e1933f1"
+        },
+        {
+          "path": "data/marts/mart_climate_monthly.parquet",
+          "sha256": "b7303e705fb60ef1a41153e20dff7b20ccb7b7b55d8ad43a5ad74b27a0b2a1a9"
+        },
+        {
+          "path": "data/marts/mart_climate_annual.parquet",
+          "sha256": "d7e68d0fd1c876a3c98dc6da62dd16da16fd3065eb9e811ed37aaacc62810258"
+        },
+        {
+          "path": "data/marts/mart_climate_region.parquet",
+          "sha256": "f3ca11a4eb8941b254869ffebcc44b066051c15b92f8eeeef9469346fb0cbfce"
+        },
+        {
+          "path": "data/marts/mart_crime_climate.parquet",
+          "sha256": "51a32727c0631aa22ee98b3fb993c4b1918fbc8c640e6d50074e1aa5033a9942"
+        }
+      ],
+      "normalized": {
+        "path": "data/weather_daily.parquet",
+        "sha256": "fd8de6bfab7ba1c10f70962bed2683a572e4205ac16ce2c185c08c394fbede86"
+      },
+      "raw": {
+        "path": "data/raw/cds_timeseries",
+        "sha256": "fd8de6bfab7ba1c10f70962bed2683a572e4205ac16ce2c185c08c394fbede86"
+      },
+      "source": {
+        "flow_url": "https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land-timeseries",
+        "provider": "Copernicus C3S ERA5-Land",
+        "retrieved_at": "2026-09-14T13:54:12+00:00"
+      }
+    }
+  },
+  "expires_at": "2026-10-20T10:22:44+00:00",
+  "schema_version": 1,
+  "sealed_at": "2026-09-15T10:22:44+00:00",
+  "snapshot_mode": "live",
+  "status": "sealed"
+}

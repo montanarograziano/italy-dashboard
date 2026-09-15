@@ -861,8 +861,8 @@ def _retrieve_arco_with_retry(client: Any, request: dict, target: Path, label: s
         try:
             client.retrieve(TIMESERIES_DATASET_ID, request, str(target))
             return
+        # pi-lens-ignore: no-boolean-in-except
         except Exception as exc:
-            # pi-lens-ignore: no-boolean-in-except
             if not _is_queue_limit_error(exc) or attempt == QUEUE_LIMIT_RETRIES:
                 target.unlink(missing_ok=True)
                 raise exc
