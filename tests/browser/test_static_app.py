@@ -339,77 +339,65 @@ def test_a_plot_baked_colour_repaints_on_mode_toggle(page, static_app):
         page.evaluate(f"window.localStorage.removeItem('{STORAGE_KEY}')")
 
 
-def test_a_partial_region_scope_shows_a_composition_caveat(page, static_app):
-    """F6: Toscana, Puglia, Marche -- each used to be presented as the region
-    with zero alerts once only one of its capitals had temperature data, the
-    same shape of wrong number the Italia coverage note exists to prevent, at
-    a scope where the caveat was switched off entirely (`region == "Italia"`
-    was the whole gate). Asserts the caveat text carries the real counts, both
-    derived here (never hardcoded): `total` from the seed CSV (every frontend
-    already does this), `covered` from `climate_city_options`, the same
-    DuckDB-backed function the app itself calls for the city dropdown -- so
-    this keeps passing as the temperature backfill covers more of Puglia,
-    rather than pinning today's snapshot as if it were permanent.
+def test_region_scope_handles_partial_or_complete_coverage(page, static_app):
+    """F6: show a caveat for partial regions, but not for complete regions.
+
+    Selects a partial region when current snapshot has one; complete weather
+    snapshots are valid too, so no stale Puglia fixture assumption remains.
     """
     from italy_dashboard import queries as q
 
     seed = REPO_ROOT / "dbt" / "seeds" / "province_capitals.csv"
     with seed.open(newline="") as f:
-        total = sum(1 for row in csv.DictReader(f) if row["region_name"] == "Puglia")
-    assert total > 1, (
-        "fixture assumption broken: Puglia should have more than 1 capital in the seed"
-    )
-    covered = len(q.climate_city_options("Puglia")) - 1  # -1 for the "All" entry
-    assert 0 < covered < total, (
-        "fixture assumption broken: Puglia should be partially, not fully, covered"
+        totals: dict[str, int] = {}
+        for row in csv.DictReader(f):
+            totals[row["region_name"]] = totals.get(row["region_name"], 0) + 1
+    coverage = {region: len(q.climate_city_options(region)) - 1 for region in totals}
+    partial = next(
+        (region for region, total in totals.items() if 0 < coverage[region] < total),
+        None,
     )
 
     page.goto(f"{static_app}/{CLIMATE_HREF}")
     page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
-    page.select_option("[data-testid='climate-region-select']", "Puglia")
-    # The caveat depends on `climateCityOptions("Puglia")` resolving (async),
-    # which briefly makes the note disappear entirely (Italia's note is gated
-    # off the moment `region` changes, before Puglia's own coverage is known)
-    # before it reappears with the region's real counts -- poll for the
-    # settled state rather than a fixed sleep. If the fix regresses (no
-    # branch, or the wrong gate), this never becomes true and raises a normal
-    # TimeoutError -- a fail, not a hang.
+    region = partial or next(iter(totals))
+    page.select_option("[data-testid='climate-region-select']", region)
+
+    if partial is None:
+        assert page.locator("[data-testid='climate-scope-note']").count() == 0
+        return
+
     page.wait_for_function(
-        "() => { const el = document.querySelector(\"[data-testid='climate-scope-note']\"); "
-        "return !!el && el.textContent.includes('Puglia'); }",
+        "region => { const el = document.querySelector(\"[data-testid='climate-scope-note']\"); "
+        "return !!el && el.textContent.includes(region); }",
+        arg=region,
         timeout=15_000,
     )
-
     note = page.eval_on_selector("[data-testid='climate-scope-note']", "el => el.textContent")
-    assert note is not None, (
-        "expected a composition caveat at partial region scope (Puglia), found none"
-    )
-    assert f"{covered} of {total} capitals" in note, note
+    assert note is not None
+    assert f"{coverage[region]} of {totals[region]} capitals" in note, note
 
 
 def test_the_climate_coverage_note_renders_as_a_prominent_callout_not_plain_text(page, static_app):
-    """The concrete visual regression this task exists to fix: before `Callout`
-    (ui.tsx) existed, `climate-scope-note` was a plain bordered `<div>` --
-    visually identical to `EmptyNote`'s neutral "no data" text, with no colour
-    and no icon, easy to miss on a page whose whole point is that this
-    aggregate is not what it looks like.
+    """Partial coverage gets a visible callout; complete coverage gets none."""
+    from italy_dashboard import queries as q
 
-    Two independent signals, either of which a reverted-to-plain-`<div>`
-    render would fail: an icon element (`Callout` always renders one, `EmptyNote`
-    /a plain `<div>` never do), and a background colour visibly different from
-    the page surface (a plain `<div>` never sets `background`, so it computes
-    to the surface colour showing through, or `transparent`).
-    """
-    page.goto(
-        f"{static_app}/{CLIMATE_HREF}"
-    )  # region defaults to "Italia" -> the national coverage note
+    page.goto(f"{static_app}/{CLIMATE_HREF}")
+    page.wait_for_selector("[data-testid='climate-grid'] rect", state="attached", timeout=30_000)
+    total = len(q.climate_city_options("Italia")) - 1
+    seed = REPO_ROOT / "dbt" / "seeds" / "province_capitals.csv"
+    with seed.open(newline="") as f:
+        expected = sum(1 for _ in csv.DictReader(f))
+
+    if total == expected:
+        assert page.locator("[data-testid='climate-scope-note']").count() == 0
+        return
+
     page.wait_for_selector("[data-testid='climate-scope-note']", timeout=30_000)
-
     has_icon = page.eval_on_selector(
         "[data-testid='climate-scope-note']", "el => el.querySelector('svg') !== null"
     )
     assert has_icon, "expected an icon inside the coverage-note callout, found none"
-
     background = page.eval_on_selector(
         "[data-testid='climate-scope-note']", "el => getComputedStyle(el).backgroundColor"
     )

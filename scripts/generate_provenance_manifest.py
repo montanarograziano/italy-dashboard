@@ -148,16 +148,32 @@ def _covered_period(con: duckdb.DuckDBPyConnection, path: Path) -> dict[str, Any
         row[0]
         for row in con.execute("describe select * from read_parquet(?)", [str(path)]).fetchall()
     }
-    for column in ("obs_date", "period", "year", "academic_year"):
-        if column in cols:
-            row = con.execute(
-                f"select min({column}), max({column}) from read_parquet(?)",
-                [str(path)],
-            ).fetchone()
-            if row is None:  # pragma: no cover - an aggregate always returns one row
-                raise RuntimeError(f"min/max({column}) over {path} returned no row")
-            lo, hi = row
-            return {"column": column, "min": str(lo), "max": str(hi)}
+    if "obs_date" in cols:
+        column = "obs_date"
+        row = con.execute(
+            "select min(obs_date), max(obs_date) from read_parquet(?)", [str(path)]
+        ).fetchone()
+    elif "period" in cols:
+        column = "period"
+        row = con.execute(
+            "select min(period), max(period) from read_parquet(?)", [str(path)]
+        ).fetchone()
+    elif "year" in cols:
+        column = "year"
+        row = con.execute(
+            "select min(year), max(year) from read_parquet(?)", [str(path)]
+        ).fetchone()
+    elif "academic_year" in cols:
+        column = "academic_year"
+        row = con.execute(
+            "select min(academic_year), max(academic_year) from read_parquet(?)", [str(path)]
+        ).fetchone()
+    else:
+        return None
+    if row is None:  # pragma: no cover - an aggregate always returns one row
+        raise RuntimeError(f"min/max({column}) over {path} returned no row")
+    lo, hi = row
+    return {"column": column, "min": str(lo), "max": str(hi)}
     return None
 
 
