@@ -96,10 +96,10 @@ would inject discontinuities indistinguishable from real climate signal.
 
 Fetch with `just refresh-weather`, or `just refresh-weather ITC45` for one city.
 The Copernicus ARCO time-series path (`just refresh-weather-cds-timeseries`)
-has been run successfully against the real API. Do not quote a fixed coverage
-from this page: the snapshot in a given checkout can be partial (the current
-one carries 80 of 106 capitals, 1950-01-02 through 2026-08-12), and both UIs
-report the actual coverage dynamically. The snapshot is real ERA5-Land
+has been run successfully against the real API. Do not assume every checkout
+has identical coverage: the current snapshot carries all 106 capitals,
+1950-01-02 through 2026-09-06, and both UIs report actual coverage dynamically.
+The snapshot is real ERA5-Land
 reanalysis data, not station observations; interpret it as a consistent
 gridded climate estimate rather than as local thermometer measurements.
 
@@ -207,10 +207,12 @@ CDS dataset that Copernicus launched in 2025 specifically for this use case:
 This is the key difference from the bulk path: instead of downloading a whole
 year × whole-Italy grid and extracting 106 points locally, each request asks
 for **one coordinate over a date range** and gets hourly values at the nearest
-cell back. A full backfill is therefore **106 lightweight point queries**
-rather than **228 queued year-grid downloads** (or **848 quota-limited decade
-chunks** against Open-Meteo), so it completes in **minutes rather than days** —
-and because there is no free-tier quota, modest concurrency genuinely helps.
+cell back. A full backfill is therefore **106 lightweight point queries** rather than
+**228 queued year-grid downloads** (or **848 quota-limited decade chunks**
+against Open-Meteo). Runtime still depends on CDS queue and download latency;
+the current run took roughly 25 hours, so "fast" means fewer requests, not a
+guaranteed wall-clock duration. Because there is no free-tier quota, modest
+concurrency can help.
 
 Fetch with `just refresh-weather-cds-timeseries` (1950 → now) or
 `just refresh-weather-cds-timeseries 1950 1979` for one year range. Same

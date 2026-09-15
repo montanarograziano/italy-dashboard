@@ -1016,7 +1016,7 @@ def cmd_refresh_timeseries(
         provider="Copernicus C3S ERA5-Land",
         source_flow=TIMESERIES_DATASET_ID,
         request_url=f"https://cds.climate.copernicus.eu/datasets/{TIMESERIES_DATASET_ID}",
-        raw_path=f"data/raw/{raw_dir.relative_to(data_dir)}",
+        raw_path=f"data/{raw_dir.relative_to(data_dir)}",
         raw_bytes=snapshot_path.read_bytes(),
         count_lines=False,
     )
@@ -1150,7 +1150,7 @@ def cmd_refresh(
         provider="Copernicus C3S ERA5-Land",
         source_flow=CDS_DATASET_ID,
         request_url=f"https://cds.climate.copernicus.eu/datasets/{CDS_DATASET_ID}",
-        raw_path=f"data/raw/{raw_dir.relative_to(data_dir)}",
+        raw_path=f"data/{raw_dir.relative_to(data_dir)}",
         raw_bytes=snapshot_path.read_bytes(),
         count_lines=False,
     )

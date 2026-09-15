@@ -297,7 +297,7 @@ async def cmd_refresh(only: str | None = None, data_dir: Path = DATA_DIR) -> int
         provider="Open-Meteo",
         source_flow=None,
         request_url=ARCHIVE_URL,
-        raw_path=f"data/raw/weather (cache: {raw_dir.relative_to(data_dir)})",
+        raw_path=f"data/{raw_dir.relative_to(data_dir)} (cache)",
         raw_bytes=snapshot_path.read_bytes(),
         count_lines=False,
     )
