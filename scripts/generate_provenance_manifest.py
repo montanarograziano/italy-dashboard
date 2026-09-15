@@ -145,12 +145,14 @@ def _covered_period(con: duckdb.DuckDBPyConnection, path: Path) -> dict[str, Any
     columns that occur in practice, in order, rather than assuming one.
     """
     cols = {
-        row[0] for row in con.execute(f"describe select * from read_parquet('{path}')").fetchall()
+        row[0]
+        for row in con.execute("describe select * from read_parquet(?)", [str(path)]).fetchall()
     }
     for column in ("obs_date", "period", "year", "academic_year"):
         if column in cols:
             row = con.execute(
-                f"select min({column}), max({column}) from read_parquet('{path}')"
+                f"select min({column}), max({column}) from read_parquet(?)",
+                [str(path)],
             ).fetchone()
             if row is None:  # pragma: no cover - an aggregate always returns one row
                 raise RuntimeError(f"min/max({column}) over {path} returned no row")
@@ -213,8 +215,14 @@ def build_manifest() -> dict[str, Any]:
             rel = path.relative_to(REPO_ROOT).as_posix()
             stem = path.stem
             is_mart = path.parent.name == "marts"
-            source_keys = MART_LINEAGE[stem] if is_mart else [stem]
-            count_row = con.execute(f"select count(*) from read_parquet('{path}')").fetchone()
+            source_keys = (
+                MART_LINEAGE[stem]
+                if is_mart
+                else ["weather"]
+                if stem == "weather_daily"
+                else [stem]
+            )
+            count_row = con.execute("select count(*) from read_parquet(?)", [str(path)]).fetchone()
             if count_row is None:  # pragma: no cover - an aggregate always returns one row
                 raise RuntimeError(f"count(*) over {path} returned no row")
             row_count = count_row[0]

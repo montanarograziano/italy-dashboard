@@ -858,24 +858,30 @@ def _retrieve_arco_with_retry(client: Any, request: dict, target: Path, label: s
     means a later rerun would just pay for the same chunk again anyway).
     """
     for attempt in range(1, QUEUE_LIMIT_RETRIES + 1):
+        exc: Exception | None = None
+        queue_limit = False
         try:
             client.retrieve(TIMESERIES_DATASET_ID, request, str(target))
+        except Exception as caught:
+            exc = caught
+            queue_limit = _is_queue_limit_error(caught)
+        else:
             return
-        # pi-lens-ignore: no-boolean-in-except
-        except Exception as exc:
-            if not _is_queue_limit_error(exc) or attempt == QUEUE_LIMIT_RETRIES:
-                target.unlink(missing_ok=True)
-                raise exc
-            logger.warning(
-                "%s: queued-job limit hit (attempt %d/%d); waiting %.0fs before retrying...",
-                label,
-                attempt,
-                QUEUE_LIMIT_RETRIES,
-                QUEUE_LIMIT_BACKOFF_S,
-            )
-            import time
 
-            time.sleep(QUEUE_LIMIT_BACKOFF_S)
+        if not queue_limit or attempt == QUEUE_LIMIT_RETRIES:
+            target.unlink(missing_ok=True)
+            assert exc is not None
+            raise exc
+        logger.warning(
+            "%s: queued-job limit hit (attempt %d/%d); waiting %.0fs before retrying...",
+            label,
+            attempt,
+            QUEUE_LIMIT_RETRIES,
+            QUEUE_LIMIT_BACKOFF_S,
+        )
+        import time
+
+        time.sleep(QUEUE_LIMIT_BACKOFF_S)
 
 
 def _fetch_capital_timeseries(
