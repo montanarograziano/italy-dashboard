@@ -20,6 +20,13 @@ models:
       # (italy_dashboard/queries.py builds views from data/marts/*.parquet).
       +materialized: external
 
+# A year needs this many observed days to count as complete. MUST equal
+# italy_dashboard.queries.MIN_DAYS_FOR_A_FULL_YEAR (a unit test pins it): the
+# marts gate precipitation normals and anomalies on it, the query layer gates
+# every plotted annual series on it, and the two must agree on what a year is.
+vars:
+  min_days_for_a_full_year: 360
+
 seed-paths: ["seeds"]
 
 seeds:

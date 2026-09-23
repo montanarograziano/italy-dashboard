@@ -32,8 +32,10 @@ unweighted average of regions), plus NASPI unemployment-benefit recipients
 **Education** — university scholarships granted (Diritto allo Studio
 Universitario, MUR/USTAT), ranked by region.
 
-**Climate** *(beta)* and **Climate × Crime** *(beta)* — daily temperature by
-province capital (Open-Meteo/Copernicus ERA5-Land, 1950–present) and its
+**Climate** *(beta)* and **Climate × Crime** *(beta)* — daily temperature and
+annual precipitation by province capital (Open-Meteo/Copernicus ERA5-Land,
+1950–present; precipitation is grid-cell reanalysis, not rain gauges) and
+temperature's
 ecological correlation with violent-offender rates; both pages surface their
 current backfill coverage rather than presenting a partial snapshot as
 complete — see [Datasets](04-datasets.md#weather_daily-temperature-non-istat).

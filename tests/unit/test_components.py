@@ -297,14 +297,42 @@ def test_climate_page_warming_card_uses_the_band_trend_chart():
     from italy_dashboard.pages.climate import climate_page
 
     tree = climate_page().render()
-    composed = _nodes(tree, "RechartsComposedChart")
-    assert composed, "warming card must use the band+line composed chart"
+    # Picked by its band, not by position: the page has a second composed
+    # chart (precipitation's bars + line) and `_nodes` walks depth-first.
+    composed = [n for n in _nodes(tree, "RechartsComposedChart") if _nodes(n, "RechartsArea")]
+    assert len(composed) == 1, "warming card must use the band+line composed chart"
 
     warming = composed[0]
     assert len(_nodes(warming, "RechartsArea")) == 1
     assert len(_nodes(warming, "RechartsLine")) == 2
     assert _nodes(warming, "RechartsLegend")
     assert "wrapperStyle" not in str(warming)
+
+
+def test_climate_page_precip_card_uses_one_hue_bars_and_rolling_line():
+    """The precipitation card: bars for the annual total and ONE rolling line,
+    both in the same sequential-ramp hue (not temperature's series(1)), on a
+    single y-axis, with no leak into `wrapperStyle`."""
+    from italy_dashboard.pages.climate import climate_page
+
+    tree = climate_page().render()
+    precip = [node for node in _nodes(tree, "RechartsComposedChart") if _nodes(node, "RechartsBar")]
+    assert len(precip) == 1, "exactly one bar+line composed chart: the precipitation card"
+    chart = precip[0]
+    assert len(_nodes(chart, "RechartsBar")) == 1
+    assert len(_nodes(chart, "RechartsLine")) == 1
+    assert str(chart).count("YAxis") == 1
+    assert "wrapperStyle" not in str(chart)
+    rendered = str(chart)
+    assert palette.SEQUENTIAL_LIGHT[3] in rendered and palette.SEQUENTIAL_DARK[3] in rendered
+    assert palette.CATEGORICAL_LIGHT[0] not in rendered
+
+
+def test_theme_sequential_rejects_an_out_of_range_step():
+    with pytest.raises(ValueError):
+        theme.sequential(0)
+    with pytest.raises(ValueError):
+        theme.sequential(len(palette.SEQUENTIAL_LIGHT) + 1)
 
 
 def test_climate_crime_scatters_render_and_carry_no_legend():

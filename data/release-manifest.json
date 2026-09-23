@@ -7,10 +7,10 @@
     "data/income_regional.parquet": "7821c5d152df89ccd6b0a3578f835f33029c66dd3fa11ae59a4cbbf77c18a56c",
     "data/labor_naspi_beneficiaries.parquet": "6c08ce657d2198cfda63cc77de837efda1aed979cb21a3bdb0e252f5aeeab630",
     "data/labor_unemployment.parquet": "bcbf81232c61af882aa6227a9a59516a1d66041f987e97f5b22aaf79815941c1",
-    "data/marts/mart_climate_annual.parquet": "c4af844084510559252ac02acadc84ce7489676f6a5cc9b65ed2b1f6bb56845f",
-    "data/marts/mart_climate_daily.parquet": "00791982360190552971ae5f6275b9635c2e5a363dc16bdcc430f3856a4a63db",
-    "data/marts/mart_climate_monthly.parquet": "3900a064394b7f80522378a91f6439170a22049b1582e3b31abc29eb91fd09e1",
-    "data/marts/mart_climate_region.parquet": "7a548241bf07d71853bdab1ebf8a29015c560345d53d63e12b52bb68ad7141b0",
+    "data/marts/mart_climate_annual.parquet": "dad8542037cd7980794cdcdf712db618158f3f9f6c89cf821c2e3a9181a7ddb0",
+    "data/marts/mart_climate_daily.parquet": "83daec20e7da0bb0024e1d18038ecaa29b914c7fa3b735edd986f8a212dbf22a",
+    "data/marts/mart_climate_monthly.parquet": "a31414aa3624534bd67c870b4f4224c73064a938f5182cebe390d21b29bed4af",
+    "data/marts/mart_climate_region.parquet": "57ed30b4346b7d8a1bf11a0e57c397b50d187b7773e28ceef4ff4de09bddd27f",
     "data/marts/mart_crime.parquet": "0a17692ca7f1201f4bf9996c42c07d6d423739b96ddee1e30dbc2cb2827c11dc",
     "data/marts/mart_crime_climate.parquet": "881c34f5da8527aae25d905febb10b7d6a65e83eb5a9e0865ab84151488d8c38",
     "data/marts/mart_crime_income.parquet": "66711b2416de4c019b02e23f11ed375d5b7633c04b8dc21460ba3c22cce527dc",
@@ -235,19 +235,19 @@
       "marts": [
         {
           "path": "data/marts/mart_climate_daily.parquet",
-          "sha256": "00791982360190552971ae5f6275b9635c2e5a363dc16bdcc430f3856a4a63db"
+          "sha256": "83daec20e7da0bb0024e1d18038ecaa29b914c7fa3b735edd986f8a212dbf22a"
         },
         {
           "path": "data/marts/mart_climate_monthly.parquet",
-          "sha256": "3900a064394b7f80522378a91f6439170a22049b1582e3b31abc29eb91fd09e1"
+          "sha256": "a31414aa3624534bd67c870b4f4224c73064a938f5182cebe390d21b29bed4af"
         },
         {
           "path": "data/marts/mart_climate_annual.parquet",
-          "sha256": "c4af844084510559252ac02acadc84ce7489676f6a5cc9b65ed2b1f6bb56845f"
+          "sha256": "dad8542037cd7980794cdcdf712db618158f3f9f6c89cf821c2e3a9181a7ddb0"
         },
         {
           "path": "data/marts/mart_climate_region.parquet",
-          "sha256": "7a548241bf07d71853bdab1ebf8a29015c560345d53d63e12b52bb68ad7141b0"
+          "sha256": "57ed30b4346b7d8a1bf11a0e57c397b50d187b7773e28ceef4ff4de09bddd27f"
         },
         {
           "path": "data/marts/mart_crime_climate.parquet",
@@ -269,9 +269,9 @@
       }
     }
   },
-  "expires_at": "2026-10-28T23:12:30+00:00",
+  "expires_at": "2026-10-28T23:39:18+00:00",
   "schema_version": 1,
-  "sealed_at": "2026-09-23T23:12:30+00:00",
+  "sealed_at": "2026-09-23T23:39:18+00:00",
   "snapshot_mode": "live",
   "status": "sealed"
 }

@@ -1,6 +1,6 @@
 import * as Plot from "@observablehq/plot";
 import { tr, trt } from "../i18n";
-import { divergingSteps, gridline, inkPrimary, series } from "../theme";
+import { divergingSteps, gridline, inkPrimary, sequentialSteps, series } from "../theme";
 import {
   labelInk,
   pointerRuleX,
@@ -15,7 +15,7 @@ import {
 // testable as plain data-in/spec-out functions and keeps PlotFigure (plot.tsx)
 // the one place that does.
 //
-// Colour comes only from theme.ts's accessors (series/divergingSteps) or from
+// Colour comes only from theme.ts's accessors (series/divergingSteps/sequentialSteps) or from
 // a row's own `fill` (a `var(--div-N)` string set by queries/climate.ts's
 // withStripeFill) -- never a literal hex here.
 
@@ -489,6 +489,76 @@ export function thresholdSpec(rows: Row[]): Plot.PlotOptions {
               ...keys.map(
                 ([key, label]) => `${label}: ${Number(d[key]).toFixed(0)}`,
               ),
+            ].join("\n"),
+          ...tipOptions(),
+        }),
+      ),
+    ],
+  });
+}
+
+/** Annual precipitation: the year's total as a translucent bar and a 10-year
+ * centred rolling mean as a heavy line, ONE hue for both -- `bandTrendSpec`'s
+ * idea (one quantity at two levels of detail, told apart by mark weight, not
+ * colour) and Reflex's `bar_trend_chart` (italy_dashboard.components).
+ *
+ * The hue is the deep step of the sequential ramp, not `series(1)`: that
+ * blue already means temperature on the card above, and the cool half of the
+ * stripes' diverging ramp means "colder", so borrowing either would suggest a
+ * link that is not there.
+ *
+ * Zero stays IN the domain (the opposite of `bandTrendSpec`): a total is a
+ * ratio quantity, 0 mm is a real baseline, and a bar's length must be
+ * proportional to its value. The bars are `rectY` with explicit `x1`/`x2`
+ * half a year either side of the year rather than `barY`, because `barY`
+ * forces a band x scale, on which the rolling line would sit at band edges
+ * and Plot's tick thinning would not apply (see `stripesSpec`). A linear
+ * scale keeps both marks centred on the same year and the axis readable.
+ * `precip_rolling` is null at both edges and the line stops short there,
+ * as in `bandTrendSpec`.
+ */
+export function precipSpec(rows: Row[]): Plot.PlotOptions {
+  const hue = sequentialSteps()[3]!;
+  const mm = (v: unknown) =>
+    v === null || v === undefined ? tr("n/a") : `${Math.round(Number(v))} mm`;
+  const pct = (v: unknown) => {
+    if (v === null || v === undefined) return tr("n/a");
+    const n = Number(v);
+    return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
+  };
+  return themed({
+    x: { label: tr("Year"), tickFormat: (y: number) => String(y) },
+    y: { label: tr("Precipitation (mm)") },
+    marks: [
+      Plot.ruleY([0], { stroke: gridline() }),
+      Plot.rectY(rows, {
+        x1: (d: Row) => year(d) - 0.42,
+        x2: (d: Row) => year(d) + 0.42,
+        y: "precip_mm",
+        fill: hue,
+        fillOpacity: 0.35,
+      }),
+      Plot.line(rows, {
+        x: year,
+        y: "precip_rolling",
+        stroke: hue,
+        strokeWidth: 2.75,
+      }),
+      pointerRuleX(rows, year),
+      Plot.tip(
+        rows,
+        Plot.pointerX({
+          x: year,
+          y: "precip_mm",
+          title: (d: Row) =>
+            [
+              String(d.period),
+              trt("Total: {v}", { v: mm(d.precip_mm) }),
+              trt("Wet days (≥ 1 mm): {v}", {
+                v: d.wet_days === null || d.wet_days === undefined ? tr("n/a") : Number(d.wet_days).toFixed(0),
+              }),
+              trt("{value} vs 1981-2010", { value: pct(d.anomaly_pct) }),
+              trt("10-yr average: {v}", { v: mm(d.precip_rolling) }),
             ].join("\n"),
           ...tipOptions(),
         }),

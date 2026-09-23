@@ -100,6 +100,21 @@ def series(n: int) -> rx.Var:
     )
 
 
+def sequential(n: int) -> rx.Var:
+    """The current mode's colour for sequential step n (1-based, pale -> deep).
+
+    Mirrors web/src/theme.ts's `sequentialSteps()`. For a single-quantity
+    chart that should not borrow a categorical slot's meaning (precipitation:
+    a blue that is not temperature's `series(1)`).
+    """
+    if not 1 <= n <= len(palette.SEQUENTIAL_LIGHT):
+        raise ValueError(f"sequential step {n} outside 1..{len(palette.SEQUENTIAL_LIGHT)}")
+    return rx.color_mode_cond(
+        light=palette.SEQUENTIAL_LIGHT[n - 1],
+        dark=palette.SEQUENTIAL_DARK[n - 1],
+    )
+
+
 def surface() -> rx.Var:
     return _cond("SURFACE")
 

@@ -6,6 +6,7 @@ from italy_dashboard import theme
 from italy_dashboard.components import (
     area_compare_chart,
     band_trend_chart,
+    bar_trend_chart,
     card,
     data_gate,
     data_table,
@@ -98,6 +99,37 @@ def _selected_scope_section() -> rx.Component:
                     ("tropical_nights", t("tropical_nights"), theme.series(1)),
                     ("frost_days", t("frost_days"), theme.series(3)),
                 ],
+            ),
+        ),
+        card(
+            t("precip_title"),
+            t("precip_sub"),
+            # Empty on a snapshot without precipitation (weather cached before
+            # precip_sum was fetched): say so rather than draw an empty frame,
+            # since NULL precipitation is never read as zero rain.
+            rx.cond(
+                ClimateState.has_precip,
+                rx.fragment(
+                    bar_trend_chart(
+                        ClimateState.precip,
+                        bar_key="precip_mm",
+                        rolling_key="precip_rolling",
+                        bar_label=t("precip_total"),
+                        rolling_label=t("precip_rolling"),
+                        color=theme.sequential(4),
+                    ),
+                    data_table(
+                        ClimateState.precip,
+                        [
+                            ("period", t("year")),
+                            ("precip_mm", t("precip_total")),
+                            ("wet_days", t("wet_days")),
+                            ("anomaly_pct", t("precip_anomaly")),
+                            ("precip_rolling", t("precip_rolling")),
+                        ],
+                    ),
+                ),
+                rx.text(t("no_precip"), color=theme.ink_muted(), font_size="0.9em"),
             ),
         ),
         card(

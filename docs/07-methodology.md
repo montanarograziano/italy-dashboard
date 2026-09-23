@@ -190,6 +190,34 @@ Synthetic development snapshots remain a separate mode and must not be
 presented as official data. Authentic climate input alone does not validate
 a climate–crime comparison: its crime input must also pass release checks.
 
+## Precipitation
+
+**Grid-cell reanalysis, not rain gauges.** The Climate page's precipitation
+card shows ERA5-Land's total for the 0.1° cell nearest each capital. That is an
+area average over roughly 100 km², so it smooths out convective downpours and
+is wrong for "the wettest day ever recorded in Genova"; it is right for how
+wet one year was against another, and for long-run change. It is not
+elevation-corrected: the lapse rate is a temperature relation.
+
+**Totals, not means, so partial data is short, not noisy.** A year that stops
+in September is a quarter short of rain, and would plot as a record drought.
+The same `days_observed >= 360` gate as the temperature cards drops it; on top
+of that every total is NULL unless every observed day has a value, so a gap in
+the snapshot can never read as a dry spell, and region and Italia totals are
+NULL for a year where any member capital's is.
+
+**Region and Italia are unweighted means of the capitals' annual totals**, for
+the same missing-weights reason as temperature. Italia's 1991-2020 mean is
+about 999 mm a year on 123 wet days (≥ 1 mm, the ETCCDI R1mm index). Over
+1951-2025 the Italia series has no meaningful linear trend (about −5 mm per
+decade, R² < 0.01): year-to-year variation dominates, which is why the card
+leads with a 10-year centred rolling mean rather than a fitted line.
+
+**Anomalies are percentages** of the 1971-2000 or 1981-2010 mean annual total
+(the table shows 1981-2010), because a 100 mm deficit is an ordinary year in
+Udine and a severe one in Cagliari. The normal admits only complete years and
+still needs 25 of the window's 30.
+
 ## Crime and temperature
 
 The panel is region × year, 2007-2024, n ≈ 378. Province-level offenders exist

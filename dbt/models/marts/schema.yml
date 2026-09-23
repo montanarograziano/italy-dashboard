@@ -112,8 +112,34 @@ models:
       - name: citizenship_code
         tests: [not_null]
 
+  - name: mart_climate_daily
+    description: >
+      Daily temperature (elevation-corrected) and precipitation (raw ERA5-Land
+      grid cell) per province capital, with threshold-day flags.
+    # Precipitation columns carry no not_null test on purpose: raw weather
+    # cached before precip_sum was fetched has none (ingestion/weather.py
+    # reads it back as NULL), and NULL (no data) is kept distinct from 0 (a
+    # dry day) all the way down rather than failing the whole build. Value
+    # checks are the non_negative tests below.
+    columns:
+      - name: province_code
+        tests: [not_null]
+      - name: obs_date
+        tests: [not_null]
+      - name: t_mean
+        tests: [not_null]
+      - name: precip_mm
+        description: >
+          Day's total precipitation in mm (ERA5-Land reanalysis grid cell,
+          UTC day, not a rain gauge). NULL when unknown, never 0-filled.
+        tests: [non_negative]
+      - name: is_wet_day
+        description: precip_mm >= 1 mm (ETCCDI R1mm), on the unrounded value.
+
   - name: mart_climate_annual
-    description: Annual temperature per province capital, with CLINO anomalies.
+    description: >
+      Annual temperature and precipitation per province capital, with CLINO
+      anomalies (absolute for temperature, percent for precipitation).
     columns:
       - name: province_code
         tests: [not_null]
@@ -121,9 +147,27 @@ models:
         tests: [not_null]
       - name: t_mean
         tests: [not_null]
+      - name: days_observed
+        tests: [not_null]
+      - name: precip_mm
+        description: >
+          Annual total in mm; NULL unless every observed day has a value.
+          Short for a partial year: check days_observed.
+        tests: [non_negative]
+      - name: wet_days
+        description: Days with precip_mm >= 1 mm; NULL under the same rule.
+        tests: [non_negative]
+      - name: precip_anomaly_pct_1971_2000
+        description: >
+          Percent departure from the 1971-2000 mean annual total, from complete
+          years only (25 of 30 required). NULL for an incomplete year.
+      - name: precip_anomaly_pct_1981_2010
+        description: As precip_anomaly_pct_1971_2000, against 1981-2010.
 
   - name: mart_climate_monthly
-    description: Monthly temperature per province capital, with CLINO anomalies.
+    description: >
+      Monthly temperature and precipitation per province capital, with CLINO
+      temperature anomalies.
     columns:
       - name: province_code
         tests: [not_null]
@@ -131,6 +175,13 @@ models:
         tests: [not_null]
       - name: month
         tests: [not_null]
+      - name: days_observed
+        tests: [not_null]
+      - name: precip_mm
+        description: >
+          Monthly total in mm; NULL unless every observed day has a value.
+          Short for the running month: check days_observed.
+        tests: [non_negative]
 
   - name: mart_crime_climate
     description: >
@@ -155,3 +206,17 @@ models:
         tests: [not_null]
       - name: year
         tests: [not_null]
+      - name: precip_mm
+        description: >
+          Unweighted mean of member capitals' annual totals (mm); NULL if any
+          member's total is NULL.
+        tests: [non_negative]
+      - name: wet_days
+        description: Unweighted mean of member capitals' wet-day counts.
+        tests: [non_negative]
+      - name: precip_anomaly_pct_1971_2000
+        description: >
+          Percent departure of this scope's own total series from its
+          1971-2000 mean, complete years only; NULL for an incomplete year.
+      - name: precip_anomaly_pct_1981_2010
+        description: As precip_anomaly_pct_1971_2000, against 1981-2010.

@@ -486,6 +486,59 @@ def band_trend_chart(
     )
 
 
+def bar_trend_chart(
+    data: ChartData,
+    bar_key: str,
+    rolling_key: str,
+    bar_label: str | rx.Var,
+    rolling_label: str | rx.Var,
+    color: str | rx.Var,
+    height: int = 300,
+) -> rx.Component:
+    """A yearly TOTAL as bars with its multi-year rolling mean over them, both
+    in ONE hue and on ONE y-axis: `band_trend_chart`'s idea (one quantity,
+    two levels of detail, told apart by mark weight rather than colour) for a
+    quantity that accumulates, where a bar rooted at zero is the honest mark.
+
+    Unlike `band_trend_chart`, the y-axis KEEPS zero: a precipitation total is
+    a ratio quantity, so 0 mm is a meaningful baseline and bar length must be
+    proportional to it. The translucent bars leave the rolling line as the
+    signal. `rolling_key` is `None` at the series' edges (an incomplete
+    window) and `connect_nulls` stays False, so the line stops short there.
+    `fillOpacity` goes through `custom_attrs` for the reason given in
+    `band_trend_chart`'s docstring.
+    """
+    return rx.recharts.composed_chart(
+        rx.recharts.bar(
+            data_key=bar_key,
+            name=bar_label,
+            fill=color,
+            custom_attrs={"fillOpacity": 0.35},
+            legend_type="rect",
+            is_animation_active=False,
+        ),
+        rx.recharts.line(
+            data_key=rolling_key,
+            name=rolling_label,
+            stroke=color,
+            stroke_width=3,
+            dot=False,
+            legend_type="line",
+            type_="monotone",
+        ),
+        _x_axis(),
+        _y_axis(),
+        _grid(),
+        _tooltip(),
+        rx.recharts.legend(),
+        data=data,
+        bar_category_gap="15%",
+        width="100%",
+        height=height,
+        margin={"top": 8, "right": 8, "bottom": 4, "left": 8},
+    )
+
+
 def bar_chart(
     data: ChartData,
     data_key: str,

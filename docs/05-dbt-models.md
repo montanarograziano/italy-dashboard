@@ -56,10 +56,22 @@ The query layer picks slices dynamically — see
 | `mart_crime_income` | year × region × citizenship | rate joined with income per capita (regions only) |
 | `mart_naspi` | year × region × sex | INPS NASPI benefit recipients — straight passthrough of `stg_naspi` |
 | `mart_dsu` | region × academic year | MUR/USTAT scholarships granted — straight passthrough of `stg_dsu` |
-| `mart_climate_daily` | province × date | daily temperature + hot-day/tropical-night/frost-day flags |
-| `mart_climate_monthly` | province × month | monthly means + anomalies against both ISTAT climate normals (1971–2000, 1981–2010) |
-| `mart_climate_annual` | province × year | annual means/extremes, `days_observed`, anomalies (25-of-30-year gate) |
-| `mart_climate_region` | region × year | unweighted mean of member province capitals, incl. a national `IT` row |
+| `mart_climate_daily` | province × date | daily temperature + hot-day/tropical-night/frost-day flags; `precip_mm` + `is_wet_day` (≥ 1 mm) |
+| `mart_climate_monthly` | province × month | monthly means + anomalies against both ISTAT climate normals (1971–2000, 1981–2010); `precip_mm` total + `days_observed` |
+| `mart_climate_annual` | province × year | annual means/extremes, `days_observed`, anomalies (25-of-30-year gate); `precip_mm` total, `wet_days`, `precip_anomaly_pct_1971_2000` / `_1981_2010` |
+| `mart_climate_region` | region × year | unweighted mean of member province capitals, incl. a national `IT` row; same precipitation columns |
+
+Precipitation columns follow three rules, all of them because a total is not a
+mean: a total is NULL unless every observed day in it has a value (never a
+sum that skips NULL days); its 1971–2000 / 1981–2010 normal admits only
+complete years (`min_days_for_a_full_year` in `dbt_project.yml`, pinned by a
+unit test to the query layer's `MIN_DAYS_FOR_A_FULL_YEAR`) and still needs 25
+of them; and the anomaly is a **percent** of that normal, NULL for an
+incomplete year. The normal/anomaly SQL is the `precip_baseline` /
+`precip_anomaly_pct` macros in `dbt/macros/climate.sql`, shared by the annual
+and region marts. Tests: a generic `non_negative` test on every precipitation
+total and wet-day count, `assert_mart_climate_annual_wet_days_within_year`, and
+`assert_mart_climate_region_national_precip_matches_capitals`.
 | `mart_crime_climate` | region × year, 2007–2024 | ecological panel: summer heat vs. violent-offender counts — **read the model's own header before quoting it** |
 
 See [Datasets](04-datasets.md) for what feeds each of these and

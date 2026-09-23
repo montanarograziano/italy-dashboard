@@ -1261,6 +1261,31 @@ def climate_region_threshold_days(region: str = ITALIA) -> list[Row]:
     )
 
 
+def climate_precip_series(city: str) -> list[Row]:
+    """Annual precipitation for one capital: total, wet days (>= 1 mm), percent
+    anomaly against 1981-2010 and a 10-year centred rolling mean of the total.
+
+    ERA5-Land reanalysis grid-cell precipitation, not rain-gauge data. Partial
+    years are dropped (see MIN_DAYS_FOR_A_FULL_YEAR), which matters MORE here
+    than for temperature: an unfinished year's total is short, not merely
+    noisy, so it would plot as a record drought. Years with no precipitation
+    value at all are dropped too, never read as zero; a snapshot without
+    precipitation therefore returns [] rather than a row of zeros. The rolling
+    mean carries `climate_annual_series`'s full-window guard; see
+    shared/queries/climate_precip_annual.sql.
+    """
+    return _query(load_sql("climate_precip_annual"), [city, MIN_DAYS_FOR_A_FULL_YEAR])
+
+
+def climate_region_precip_series(region: str = ITALIA) -> list[Row]:
+    """`climate_precip_series`'s region/Italia counterpart: the unweighted
+    mean of the member capitals' annual totals (see mart_climate_region.sql),
+    with completeness taken as in `_region_completeness_cte`. Italia needs no
+    special case, as for `climate_region_annual_series`.
+    """
+    return _query(load_sql("climate_region_precip_annual"), [region, MIN_DAYS_FOR_A_FULL_YEAR])
+
+
 def climate_month_heatmap(city: str) -> list[Row]:
     """Year x month anomalies, pivoted wide — one row per year, m1..m12."""
     months = ", ".join(
