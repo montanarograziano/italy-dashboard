@@ -52,7 +52,7 @@ RUN uv sync --frozen --no-dev
 
 # Bake the real data snapshots into the image. `data/` is GITIGNORED, so this
 # image can only be built from a checkout that already has one: run
-# `just refresh` (+ `just refresh-weather`/`just refresh-weather-cds`) for the
+# `just refresh` (+ `just refresh-weather`/`just refresh-weather-cds-timeseries`) for the
 # real ISTAT/Open-Meteo snapshot, or `just sample` for synthetic dev data,
 # THEN `docker build`. There is no fallback generation here anymore; a
 # checkout without data produces a loud build failure below, not a silently

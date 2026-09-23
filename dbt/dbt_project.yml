@@ -34,6 +34,8 @@ seeds:
         region_name: varchar
         lat: double
         lon: double
+        elevation_m: double
+        cell_elevation_m: double
     violent_crime_codes:
       +column_types:
         crime_code: varchar

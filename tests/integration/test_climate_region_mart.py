@@ -54,19 +54,32 @@ MOLISE = ("ITF22", "ITF2", 1981, 2004, lambda y: 16.0 + 0.04 * (y - 1981))
 UMBRIA = ("ITE21", "ITE2", 1981, 2005, lambda y: 14.0 + 0.06 * (y - 1981))
 PROVINCES = [PIEMONTE, LAZIO, CAMPANIA, MOLISE, UMBRIA]
 
+# stg_weather shifts each city's raw cell values to the city's height using
+# the real seed; the independent expectation must apply the same shift.
+_SEED = pl.read_csv(PROJECT_ROOT / "dbt" / "seeds" / "province_capitals.csv")
+LAPSE_OFFSET: dict[str, float] = {
+    row["province_code"]: 0.0065 * (row["cell_elevation_m"] - row["elevation_m"])
+    for row in _SEED.iter_rows(named=True)
+}
+
 
 def national_t_mean(year: int) -> float:
     """The unweighted mean across the capitals that HAVE data that year.
 
     Recomputed from the province formulas, independent of the mart's own SQL.
     """
-    values = [fn(year) for _p, _r, start, end, fn in PROVINCES if start <= year <= end]
+    values = [
+        fn(year) + LAPSE_OFFSET[code]
+        for code, _r, start, end, fn in PROVINCES
+        if start <= year <= end
+    ]
     return sum(values) / len(values)
 
 
 EXCLUDED_TESTS = [
     "assert_crime_climate_covers_available_climate",
     "assert_offender_regions_in_capitals_vocabulary",
+    "assert_population_foreign_covers_all_regions",
 ]
 
 

@@ -1,0 +1,13 @@
+version: 2
+
+seeds:
+  - name: province_capitals
+    columns:
+      - name: province_code
+        tests: [not_null, unique]
+      - name: elevation_m
+        description: City-centre height (m), GeoNames via the Open-Meteo geocoder.
+        tests: [not_null]
+      - name: cell_elevation_m
+        description: ERA5-Land orography (m) of the grid cell nearest lat/lon.
+        tests: [not_null]

@@ -188,9 +188,11 @@ def _cache_path(raw_dir: Path, province_code: str, lat: float, lon: float, start
     trend this pipeline exists to measure, invisible in every chart.
 
     Same 4-decimal rounding the request itself uses, so a cache hit means the
-    identical query was made.
+    identical query was made. The ``_cell`` suffix marks raw grid-cell values
+    (``elevation=nan``): older caches hold Open-Meteo-downscaled values and
+    must not be replayed into a snapshot that dbt elevation-corrects again.
     """
-    return raw_dir / f"{province_code}_{lat:.4f}_{lon:.4f}_{start.year}.json"
+    return raw_dir / f"{province_code}_{lat:.4f}_{lon:.4f}_{start.year}_cell.json"
 
 
 async def _fetch_capital(

@@ -33,12 +33,21 @@ models:
         tests: [not_null]
 
   - name: mart_population
-    description: Resident, foreign, and italian population by region and year.
+    description: >
+      Resident, foreign, and italian population by territory and year, at
+      national, macro-area, region, province and municipality grain side by
+      side. Filter territory_level before aggregating.
     columns:
       - name: year
         tests: [not_null]
       - name: region_code
         tests: [not_null]
+      - name: territory_level
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [national, macro_area, region_group, region, province, municipality]
 
   - name: mart_naspi
     description: >

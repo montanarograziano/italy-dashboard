@@ -34,6 +34,19 @@ Italy + NUTS2 regions because the full extraction exceeds what the server will
 serve). Foreign coverage starts **2019** — this bounds the per-capita rates.
 Feed `mart_population` and, through it, all rate calculations.
 
+The key must use this flow's **NUTS 2006 codes** (`ITD1`–`ITD5`, `ITE1`–`ITE4`),
+not the NUTS 2021 `ITH*`/`ITI*` revision: ISTAT answers unknown codes with a
+smaller result and no error. An earlier key did exactly that and silently
+dropped Nord-est and Centro (9 of 21 regions); the 23 Sep 2026 refetch covers
+all 21, and their sum equals the national row every year.
+`assert_population_foreign_covers_all_regions` warns on every build
+and fails a release run with `REQUIRE_COMPLETE_FOREIGN_POPULATION=true`.
+
+`mart_population` stacks national, macro-area, region, province and
+municipality rows in one table; filter `territory_level` before summing.
+Bolzano and Trento (`ITD1`, `ITD2`) are the region-level units, and the combined
+Trentino-Alto Adige row (`ITDA`) is `region_group`, so regions sum to Italy.
+
 ## labor_unemployment
 
 `151_914` — unemployment rate. The raw dataflow mixes quarterly/annual
@@ -100,7 +113,8 @@ has been run successfully against the real API. Do not assume every checkout
 has identical coverage: the current snapshot carries all 106 capitals,
 1950-01-02 through 2026-09-06, and both UIs report actual coverage dynamically.
 The snapshot is real ERA5-Land
-reanalysis data, not station observations; interpret it as a consistent
+reanalysis data, elevation-corrected to each city's height in dbt (see
+[Elevation correction](#elevation-correction-both-fetchers)), not station observations; interpret it as a consistent
 gridded climate estimate rather than as local thermometer measurements.
 
 ### Open-Meteo backfill takes several days, on purpose
@@ -132,15 +146,16 @@ simply misses the cache and refetches it whole.
 Feeds `mart_climate_daily`, `mart_climate_monthly`, `mart_climate_annual`,
 `mart_climate_region` and `mart_crime_climate`.
 
-### Bulk backfill via Copernicus CDS
+### Full backfill via Copernicus CDS (ARCO)
 
 `ingestion/cds.py` is a second, independent fetcher for the same underlying
 data: ERA5-Land, same 0.1 degree grid, same 106 capitals, same
-`data/weather_daily.parquet` snapshot. Use it instead of `ingestion/weather.py`
-when a full or near-full history backfill would otherwise take many days
-against Open-Meteo's free-tier quota; use Open-Meteo for the day-to-day
-incremental top-up, since it needs no account and no licence for
-non-commercial use.
+`data/weather_daily.parquet` snapshot. Use it for a full history backfill,
+which would otherwise take many days against Open-Meteo's free-tier quota;
+use Open-Meteo for the day-to-day incremental top-up, since it needs no
+account and no licence for non-commercial use. (An earlier bulk year-grid
+path over `derived-era5-land-daily-statistics` was removed: 228 server-queued
+downloads that never completed a full run.)
 
 Prerequisites, one-time:
 
@@ -152,32 +167,9 @@ Prerequisites, one-time:
    `uv sync` stays light: `uv sync --extra cds` (pulls in `cdsapi`, `xarray`,
    `netcdf4`).
 
-Fetch with `just refresh-weather-cds` (1950 up to the last fully published month) or
-`just refresh-weather-cds 1950 1979` for one year range. Downloads bulk
-NetCDF from the `derived-era5-land-daily-statistics` dataset, one request per
-(year, daily statistic) — mean, minimum, maximum — cached under
-`data/raw/cds/` so a re-run only requests chunks that never finished (CDS
-requests are server-side queued and can take minutes to hours). Point
-extraction (nearest ERA5-Land grid cell to each capital) happens locally with
-xarray after download; a capital whose nearest cell is more than 0.15 degrees
-away fails the run loudly rather than silently sampling the wrong place. The
-same `MAX_NULL_RATE` gate as the Open-Meteo path applies before the snapshot
-is written, extended to all three temperature columns: the three statistics
-are three separate downloads here, so `t_min` can come back empty while
-`t_mean` is perfect, and each column is gated on its own. The three chunks of
-a year must also cover exactly the same dates, otherwise the run stops: pairing
-them positionally when they do not would attach each day's minimum and maximum
-to another day's mean.
-
-**Where the CDS path stops.** ERA5-Land is published with a lag (the same
-`PUBLICATION_LAG_DAYS` the Open-Meteo path uses). A CDS request is a
-year x month x day cross product, so it cannot stop mid-month; the fetcher
-therefore requests only calendar months that have entirely ended on or before
-that boundary, and leaves the remaining tail (at most ~37 days) to
-`just refresh-weather`. A partially covered year is cached under a filename
-that names its last day (`2026_daily_mean_through_20260731.nc`), so a rerun
-next month downloads a longer chunk instead of replaying a truncated year, and
-a rerun this month costs no queued requests at all.
+Fetch with `just refresh-weather-cds-timeseries` (1950-01-02 up to the last
+published day) or `just refresh-weather-cds-timeseries 1950 1979` for one year
+range; see below for how the ARCO dataset works.
 
 **Status.** The ARCO request shape, ZIP response handling, point extraction,
 and hourly-to-daily aggregation have been validated against real CDS
@@ -227,7 +219,38 @@ the snapshot.
 
 **Once a full backfill is running, use Open-Meteo for the day-to-day
 incremental top-up** (no account needed for non-commercial use) and this ARCO
-path for any re-sync of history. The bulk `refresh` path remains as a fallback.
+path for any re-sync of history. The current decade's chunk is always
+re-requested (it is still growing), so a rerun picks up the newest days
+instead of replaying the first backfill's end date forever.
+
+### Elevation correction (both fetchers)
+
+A 0.1° ERA5-Land cell reports the temperature at the cell's mean model
+orography, not at the city. Around the Alps the two are over a kilometre apart
+(Aosta: city 583 m, cell 1,795 m; Sondrio: 307 m vs 1,514 m), so raw cell
+values read up to ~8 °C too cold and alpine capitals record zero hot days.
+Both fetchers therefore store **raw cell values** (Open-Meteo is called with
+`elevation=nan` to switch off its own downscaling, so the two sources cannot
+splice a step change into one series), and `stg_weather` shifts every daily
+value once, by `0.0065 °C/m × (cell_elevation_m − elevation_m)`: the
+standard-atmosphere lapse rate, which is the same downscaling Open-Meteo applies
+by default.
+
+- `elevation_m` is the city centre's height from the Open-Meteo geocoder's
+  GeoNames record, not a DEM lookup at the seed coordinate (coastal capitals
+  were nudged onto inland cells, where a DEM would return a hillside).
+- `cell_elevation_m` is the ERA5-Land geopotential ÷ g of the nearest cell,
+  downloaded once from CDS.
+
+Both columns live in `dbt/seeds/province_capitals.csv`; refill them with
+`just seed-elevations` after moving any seed coordinate. The correction is a
+constant per city, so trends and anomalies are unchanged; absolute levels and
+the threshold counts (hot days, frost days, tropical nights) are what it fixes.
+Checked against Open-Meteo's downscaled series on 2.2 M overlapping city-days,
+the per-city offset it predicts matches the measured gap to within 0.1 °C for
+Aosta, Sondrio, Bolzano, Trento and Genova. A single lapse rate cannot model
+winter valley inversions, so alpine valley minima can still be off by a degree
+or two.
 
 ### Why not ISTAT
 
