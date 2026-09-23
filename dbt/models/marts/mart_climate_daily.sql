@@ -8,6 +8,7 @@
     materialized='external',
     location=env_var('ITALY_DATA_DIR', 'data') ~ '/marts/mart_climate_daily.parquet',
     format='parquet',
+    options={'compression': 'zstd'},
 ) }}
 
 select
@@ -26,3 +27,4 @@ select
     (t_min >= 20.0) as is_tropical_night,
     (t_min <= 0.0)  as is_frost_day
 from {{ ref('stg_weather') }}
+order by province_code, obs_date

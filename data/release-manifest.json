@@ -7,19 +7,19 @@
     "data/income_regional.parquet": "7821c5d152df89ccd6b0a3578f835f33029c66dd3fa11ae59a4cbbf77c18a56c",
     "data/labor_naspi_beneficiaries.parquet": "6c08ce657d2198cfda63cc77de837efda1aed979cb21a3bdb0e252f5aeeab630",
     "data/labor_unemployment.parquet": "bcbf81232c61af882aa6227a9a59516a1d66041f987e97f5b22aaf79815941c1",
-    "data/marts/mart_climate_annual.parquet": "d7e68d0fd1c876a3c98dc6da62dd16da16fd3065eb9e811ed37aaacc62810258",
-    "data/marts/mart_climate_daily.parquet": "86a5a25b713736d51fff8ab00a105d6568c1a518c846d0aa088ff0828e1933f1",
-    "data/marts/mart_climate_monthly.parquet": "b7303e705fb60ef1a41153e20dff7b20ccb7b7b55d8ad43a5ad74b27a0b2a1a9",
-    "data/marts/mart_climate_region.parquet": "f3ca11a4eb8941b254869ffebcc44b066051c15b92f8eeeef9469346fb0cbfce",
+    "data/marts/mart_climate_annual.parquet": "c4af844084510559252ac02acadc84ce7489676f6a5cc9b65ed2b1f6bb56845f",
+    "data/marts/mart_climate_daily.parquet": "00791982360190552971ae5f6275b9635c2e5a363dc16bdcc430f3856a4a63db",
+    "data/marts/mart_climate_monthly.parquet": "3900a064394b7f80522378a91f6439170a22049b1582e3b31abc29eb91fd09e1",
+    "data/marts/mart_climate_region.parquet": "7a548241bf07d71853bdab1ebf8a29015c560345d53d63e12b52bb68ad7141b0",
     "data/marts/mart_crime.parquet": "0a17692ca7f1201f4bf9996c42c07d6d423739b96ddee1e30dbc2cb2827c11dc",
-    "data/marts/mart_crime_climate.parquet": "51a32727c0631aa22ee98b3fb993c4b1918fbc8c640e6d50074e1aa5033a9942",
-    "data/marts/mart_crime_income.parquet": "7fd4dd6480461a2bb662a0ad8b6244645857d0985261dcb8d94f7af3d0604b9c",
+    "data/marts/mart_crime_climate.parquet": "881c34f5da8527aae25d905febb10b7d6a65e83eb5a9e0865ab84151488d8c38",
+    "data/marts/mart_crime_income.parquet": "66711b2416de4c019b02e23f11ed375d5b7633c04b8dc21460ba3c22cce527dc",
     "data/marts/mart_dsu.parquet": "54fb3e4c837cccfa24b74706c45f034e62b9c2a9bf77569dfee13d921336db9d",
     "data/marts/mart_naspi.parquet": "4fa2cacbef76480751cf7ff7654b62feaa86ad4bc83c820a7342f7241fe5a452",
-    "data/marts/mart_offender_rates.parquet": "76b075c91bd99b6c2c747c8895e46e53f77e979f1b05cab6e46752a39c6197c4",
+    "data/marts/mart_offender_rates.parquet": "8d08555da9d9e147afec0a0e4deffcf18743597e53a588f8064775bb0309522e",
     "data/marts/mart_offenders.parquet": "36bb768f88c43003917149356658d582eff51029832ad8bd1522cb1b4265c0a6",
-    "data/marts/mart_population.parquet": "d5f0d758475568eaca9b4f29696865f49b621ad01db7a3ac8dcea7f9f74b8083",
-    "data/population_foreign.parquet": "007c2a300ba5ccf313567d3aee2f2c5a3095325540a16324ea422868dda53f8f",
+    "data/marts/mart_population.parquet": "34c802b192beb60ccaac4cc63079dc06aa2bd3768e76127f285d12c58e1362e6",
+    "data/population_foreign.parquet": "d06b629e54296d56df7eb8bc2e23f5f974b2f700376fd0c1a0f10c5d1b463d4a",
     "data/population_resident.parquet": "2879eb2fb840cff4590323ea711e7ccb6293385bb8a33eb8819d903f69d048fc",
     "data/weather_daily.parquet": "fd8de6bfab7ba1c10f70962bed2683a572e4205ac16ce2c185c08c394fbede86"
   },
@@ -32,15 +32,15 @@
         },
         {
           "path": "data/marts/mart_offender_rates.parquet",
-          "sha256": "76b075c91bd99b6c2c747c8895e46e53f77e979f1b05cab6e46752a39c6197c4"
+          "sha256": "8d08555da9d9e147afec0a0e4deffcf18743597e53a588f8064775bb0309522e"
         },
         {
           "path": "data/marts/mart_crime_income.parquet",
-          "sha256": "7fd4dd6480461a2bb662a0ad8b6244645857d0985261dcb8d94f7af3d0604b9c"
+          "sha256": "66711b2416de4c019b02e23f11ed375d5b7633c04b8dc21460ba3c22cce527dc"
         },
         {
           "path": "data/marts/mart_crime_climate.parquet",
-          "sha256": "51a32727c0631aa22ee98b3fb993c4b1918fbc8c640e6d50074e1aa5033a9942"
+          "sha256": "881c34f5da8527aae25d905febb10b7d6a65e83eb5a9e0865ab84151488d8c38"
         }
       ],
       "normalized": {
@@ -119,7 +119,7 @@
       "marts": [
         {
           "path": "data/marts/mart_crime_income.parquet",
-          "sha256": "7fd4dd6480461a2bb662a0ad8b6244645857d0985261dcb8d94f7af3d0604b9c"
+          "sha256": "66711b2416de4c019b02e23f11ed375d5b7633c04b8dc21460ba3c22cce527dc"
         }
       ],
       "normalized": {
@@ -177,44 +177,44 @@
       "marts": [
         {
           "path": "data/marts/mart_offender_rates.parquet",
-          "sha256": "76b075c91bd99b6c2c747c8895e46e53f77e979f1b05cab6e46752a39c6197c4"
+          "sha256": "8d08555da9d9e147afec0a0e4deffcf18743597e53a588f8064775bb0309522e"
         },
         {
           "path": "data/marts/mart_crime_income.parquet",
-          "sha256": "7fd4dd6480461a2bb662a0ad8b6244645857d0985261dcb8d94f7af3d0604b9c"
+          "sha256": "66711b2416de4c019b02e23f11ed375d5b7633c04b8dc21460ba3c22cce527dc"
         },
         {
           "path": "data/marts/mart_population.parquet",
-          "sha256": "d5f0d758475568eaca9b4f29696865f49b621ad01db7a3ac8dcea7f9f74b8083"
+          "sha256": "34c802b192beb60ccaac4cc63079dc06aa2bd3768e76127f285d12c58e1362e6"
         }
       ],
       "normalized": {
         "path": "data/population_foreign.parquet",
-        "sha256": "007c2a300ba5ccf313567d3aee2f2c5a3095325540a16324ea422868dda53f8f"
+        "sha256": "d06b629e54296d56df7eb8bc2e23f5f974b2f700376fd0c1a0f10c5d1b463d4a"
       },
       "raw": {
         "path": "data/raw/population_foreign.csv",
-        "sha256": "26258bb23129ca3a89f9e4c010a2184ea44cb27c3527b1f8ade4f0e320508475"
+        "sha256": "6b8ae075cb9e02d7a07a28fd0f1c737ae3ff39d908b668be4a62d4b8d89b4c96"
       },
       "source": {
-        "flow_url": "https://esploradati.istat.it/SDMXWS/rest/data/29_7/A.IT+ITC1+ITC2+ITC3+ITC4+ITH1+ITH2+ITH3+ITH4+ITH5+ITI1+ITI2+ITI3+ITI4+ITF1+ITF2+ITF3+ITF4+ITF5+ITF6+ITG1+ITG2...?startPeriod=1970",
+        "flow_url": "https://esploradati.istat.it/SDMXWS/rest/data/29_7/A.IT+ITC1+ITC2+ITC3+ITC4+ITD1+ITD2+ITD3+ITD4+ITD5+ITE1+ITE2+ITE3+ITE4+ITF1+ITF2+ITF3+ITF4+ITF5+ITF6+ITG1+ITG2...?startPeriod=1970",
         "provider": "ISTAT",
-        "retrieved_at": "2026-09-15T10:16:03+00:00"
+        "retrieved_at": "2026-09-23T18:43:56+00:00"
       }
     },
     "population_resident": {
       "marts": [
         {
           "path": "data/marts/mart_offender_rates.parquet",
-          "sha256": "76b075c91bd99b6c2c747c8895e46e53f77e979f1b05cab6e46752a39c6197c4"
+          "sha256": "8d08555da9d9e147afec0a0e4deffcf18743597e53a588f8064775bb0309522e"
         },
         {
           "path": "data/marts/mart_crime_income.parquet",
-          "sha256": "7fd4dd6480461a2bb662a0ad8b6244645857d0985261dcb8d94f7af3d0604b9c"
+          "sha256": "66711b2416de4c019b02e23f11ed375d5b7633c04b8dc21460ba3c22cce527dc"
         },
         {
           "path": "data/marts/mart_population.parquet",
-          "sha256": "d5f0d758475568eaca9b4f29696865f49b621ad01db7a3ac8dcea7f9f74b8083"
+          "sha256": "34c802b192beb60ccaac4cc63079dc06aa2bd3768e76127f285d12c58e1362e6"
         }
       ],
       "normalized": {
@@ -235,23 +235,23 @@
       "marts": [
         {
           "path": "data/marts/mart_climate_daily.parquet",
-          "sha256": "86a5a25b713736d51fff8ab00a105d6568c1a518c846d0aa088ff0828e1933f1"
+          "sha256": "00791982360190552971ae5f6275b9635c2e5a363dc16bdcc430f3856a4a63db"
         },
         {
           "path": "data/marts/mart_climate_monthly.parquet",
-          "sha256": "b7303e705fb60ef1a41153e20dff7b20ccb7b7b55d8ad43a5ad74b27a0b2a1a9"
+          "sha256": "3900a064394b7f80522378a91f6439170a22049b1582e3b31abc29eb91fd09e1"
         },
         {
           "path": "data/marts/mart_climate_annual.parquet",
-          "sha256": "d7e68d0fd1c876a3c98dc6da62dd16da16fd3065eb9e811ed37aaacc62810258"
+          "sha256": "c4af844084510559252ac02acadc84ce7489676f6a5cc9b65ed2b1f6bb56845f"
         },
         {
           "path": "data/marts/mart_climate_region.parquet",
-          "sha256": "f3ca11a4eb8941b254869ffebcc44b066051c15b92f8eeeef9469346fb0cbfce"
+          "sha256": "7a548241bf07d71853bdab1ebf8a29015c560345d53d63e12b52bb68ad7141b0"
         },
         {
           "path": "data/marts/mart_crime_climate.parquet",
-          "sha256": "51a32727c0631aa22ee98b3fb993c4b1918fbc8c640e6d50074e1aa5033a9942"
+          "sha256": "881c34f5da8527aae25d905febb10b7d6a65e83eb5a9e0865ab84151488d8c38"
         }
       ],
       "normalized": {
@@ -269,9 +269,9 @@
       }
     }
   },
-  "expires_at": "2026-10-20T10:47:54+00:00",
+  "expires_at": "2026-10-28T23:12:30+00:00",
   "schema_version": 1,
-  "sealed_at": "2026-09-15T10:47:54+00:00",
+  "sealed_at": "2026-09-23T23:12:30+00:00",
   "snapshot_mode": "live",
   "status": "sealed"
 }

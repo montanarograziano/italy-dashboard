@@ -382,7 +382,7 @@ def test_cache_path_is_keyed_by_coordinates(tmp_path):
     here = weather._cache_path(tmp_path, "ITC45", 45.4642, 9.19, date(1950, 1, 1))
     moved = weather._cache_path(tmp_path, "ITC45", 45.5000, 9.19, date(1950, 1, 1))
     assert here != moved
-    assert here.name == "ITC45_45.4642_9.1900_1950.json"
+    assert here.name == "ITC45_45.4642_9.1900_1950_cell.json"
 
 
 async def test_moving_a_city_refetches_instead_of_replaying_the_old_point(tmp_path, monkeypatch):

@@ -44,25 +44,21 @@ dims dataset:
 build-capitals:
     uv run python -m ingestion.capitals
 
+# Fill the seed's city and ERA5-Land cell elevations (stg_weather's lapse-rate
+# correction needs both). Needs the `cds` extra + CDS account; REVIEW the CSV.
+seed-elevations:
+    uv run python -m ingestion.elevation
+
 # Fetch ERA5-Land daily temperatures for every province capital, then rebuild marts
 # `just refresh-weather ITC45` refetches one city (after a coordinate fix)
 refresh-weather *province:
     uv run python -m ingestion.weather refresh {{province}}
     just transform
 
-# Bulk ERA5-Land backfill from Copernicus CDS, then rebuild marts. Requires the
-# `cds` extra (`uv sync --extra cds`) and a CDS account with the ERA5-Land
-# licence accepted (credentials in ~/.cdsapirc). `just refresh-weather-cds 1950 1979`
-# backfills one year range; with no args it covers 1950 up to the last fully
-# published month (ERA5-Land lags reality, see docs/04-datasets.md).
-refresh-weather-cds *years:
-    uv run python -m ingestion.cds refresh {{years}}
-    just transform
-
-# FAST full backfill via the Copernicus ARCO point time-series dataset
-# (reanalysis-era5-land-timeseries). One lightweight request per capital, so a
-# 106-city backfill finishes in minutes rather than days. Same prerequisites as
-# the CDS bulk path above (`uv sync --extra cds` + CDS account + licence).
+# Full ERA5-Land backfill via the Copernicus ARCO point time-series dataset
+# (reanalysis-era5-land-timeseries), then rebuild marts. Requires the `cds`
+# extra (`uv sync --extra cds`) and a CDS account with the ERA5-Land licence
+# accepted (credentials in ~/.cdsapirc).
 # `just refresh-weather-cds-timeseries 1950 1979` backfills one year range.
 refresh-weather-cds-timeseries *years:
     uv run python -m ingestion.cds refresh-timeseries {{years}}
@@ -144,6 +140,9 @@ provenance:
 
 # Seal live bytes after source receipts, normalization and dbt validation.
 # Never run this from a build: sealing is an explicit release operation.
+# Run the preceding transform with the release-only completeness gates on:
+#   REQUIRE_COMPLETE_VIOLENT_PANEL=true REQUIRE_INCOME_RAW_DIMENSIONS=true \
+#   REQUIRE_COMPLETE_FOREIGN_POPULATION=true just transform
 seal-release:
     uv run python scripts/generate_provenance_manifest.py --seal
 

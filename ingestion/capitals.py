@@ -33,6 +33,9 @@ SEED_COLUMNS = [
     "region_name",
     "lat",
     "lon",
+    # Filled by `just seed-elevations` (ingestion/elevation.py), not here.
+    "elevation_m",
+    "cell_elevation_m",
 ]
 
 # The 21 region-level NUTS units in ISTAT's coding (19 regions + the two
@@ -241,7 +244,12 @@ async def build_seed(path: Path = SEED_PATH) -> Path:
         writer = csv.DictWriter(fh, fieldnames=SEED_COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
-    logger.info("Wrote %d rows to %s — REVIEW before committing.", len(rows), path)
+    logger.info(
+        "Wrote %d rows to %s. Elevation columns are EMPTY: run `just seed-elevations` "
+        "before `just transform` (dbt rejects a seed without them), then REVIEW.",
+        len(rows),
+        path,
+    )
     return path
 
 

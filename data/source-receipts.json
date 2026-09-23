@@ -60,12 +60,12 @@
     "provider": "ISTAT",
     "source_flow": "29_7",
     "raw_path": "data/raw/population_foreign.csv",
-    "raw_sha256": "26258bb23129ca3a89f9e4c010a2184ea44cb27c3527b1f8ade4f0e320508475",
-    "bytes": 4271619,
-    "lines": 31825,
+    "raw_sha256": "6b8ae075cb9e02d7a07a28fd0f1c737ae3ff39d908b668be4a62d4b8d89b4c96",
+    "bytes": 7369191,
+    "lines": 53857,
     "verification": "offline benchmark 2026-09-08: IT 1 Jan 2025 = 5,371,251 matches census release",
-    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/29_7/A.IT+ITC1+ITC2+ITC3+ITC4+ITH1+ITH2+ITH3+ITH4+ITH5+ITI1+ITI2+ITI3+ITI4+ITF1+ITF2+ITF3+ITF4+ITF5+ITF6+ITG1+ITG2...?startPeriod=1970",
-    "retrieved_at": "2026-09-15T10:16:03+00:00"
+    "request_url": "https://esploradati.istat.it/SDMXWS/rest/data/29_7/A.IT+ITC1+ITC2+ITC3+ITC4+ITD1+ITD2+ITD3+ITD4+ITD5+ITE1+ITE2+ITE3+ITE4+ITF1+ITF2+ITF3+ITF4+ITF5+ITF6+ITG1+ITG2...?startPeriod=1970",
+    "retrieved_at": "2026-09-23T18:43:56+00:00"
   },
   "labor_unemployment": {
     "status": "fetched",

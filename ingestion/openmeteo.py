@@ -164,8 +164,8 @@ class OpenMeteoClient:
             f"Failed after {MAX_RETRIES} attempts: {url} ({last_error})"
         ) from last_error
 
-    async def geocode_italian_city(self, city: str) -> tuple[float, float]:
-        """Coordinates of an Italian city, preferring the most populous match.
+    async def _best_italian_match(self, city: str) -> dict:
+        """The geocoder result for an Italian city, preferring the most populous.
 
         Ambiguity is real (Reggio, Roma, ...), so the rule is deterministic:
         Italian matches only, highest population wins.
@@ -181,9 +181,27 @@ class OpenMeteoClient:
         ]
         if not italian:
             raise OpenMeteoError(f"No Italian match for city {city!r}")
-        best = max(italian, key=lambda r: r.get("population") or 0)
+        return max(italian, key=lambda r: r.get("population") or 0)
+
+    async def geocode_italian_city(self, city: str) -> tuple[float, float]:
+        """Coordinates of an Italian city (see _best_italian_match for the rule)."""
+        best = await self._best_italian_match(city)
         # pi-lens-ignore: unchecked-throwing-call-python
         return float(best["latitude"]), float(best["longitude"])
+
+    async def city_elevation(self, city: str) -> float:
+        """Elevation (m) of the city centre, from the geocoder's GeoNames record.
+
+        This is the height of the city itself, not of whatever coordinate the
+        seed samples: coastal capitals were nudged onto inland grid cells, so a
+        DEM lookup at the seed coordinate would return a hillside.
+        """
+        best = await self._best_italian_match(city)
+        elevation = best.get("elevation")
+        if elevation is None:
+            raise OpenMeteoError(f"Geocoder match for {city!r} carries no elevation")
+        # pi-lens-ignore: unchecked-throwing-call-python
+        return float(elevation)
 
     async def daily_temperatures(
         self, lat: float, lon: float, start: date, end: date
@@ -204,6 +222,10 @@ class OpenMeteoClient:
                 "daily": ",".join(DAILY_VARS),
                 "models": MODEL,
                 "timezone": "UTC",
+                # Raw grid-cell values, no Open-Meteo downscaling: the capital
+                # elevation correction happens once, in dbt (stg_weather), for
+                # every source alike. Downscaled here too, it would apply twice.
+                "elevation": "nan",
             },
         )
         daily = payload.get("daily") or {}

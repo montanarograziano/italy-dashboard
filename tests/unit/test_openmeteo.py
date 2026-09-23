@@ -67,6 +67,27 @@ async def test_geocode_picks_the_most_populous_italian_match():
     assert (round(lat, 4), round(lon, 4)) == (41.8933, 12.4829)
 
 
+async def test_city_elevation_reads_the_most_populous_italian_match():
+    payload = json.loads(json.dumps(GEO_MULTI))
+    payload["results"][1]["elevation"] = 21.0
+    payload["results"][2]["elevation"] = 400.0
+
+    async def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=payload)
+
+    async with make_client(handler) as client:
+        assert await client.city_elevation("Roma") == 21.0
+
+
+async def test_city_elevation_raises_when_the_match_has_none():
+    async def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=GEO_MULTI)
+
+    async with make_client(handler) as client:
+        with pytest.raises(OpenMeteoError, match="no elevation"):
+            await client.city_elevation("Roma")
+
+
 async def test_geocode_raises_when_no_italian_match():
     async def handler(request: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(
@@ -109,6 +130,7 @@ async def test_daily_temperatures_pins_the_era5_land_model_and_parses_arrays():
         out = await client.daily_temperatures(41.9, 12.5, date(1950, 1, 1), date(1950, 1, 2))
 
     assert seen["models"] == "era5_land"
+    assert seen["elevation"] == "nan"  # raw cell values; dbt downscales once
     assert seen["start_date"] == "1950-01-01"
     assert seen["end_date"] == "1950-01-02"
     assert out["time"] == ["1950-01-01", "1950-01-02"]

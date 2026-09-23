@@ -1,107 +1,107 @@
-province_code,province_name,capital_city,region_code,region_name,lat,lon
-IT108,Monza e della Brianza,Monza,ITC4,Lombardia,45.58,9.2725
-IT109,Fermo,Fermo,ITE3,Marche,43.163,13.7227
-IT110,Barletta-Andria-Trani,Barletta,ITF4,Puglia,41.3143,16.2816
-ITC11,Torino,Torino,ITC1,Piemonte,45.0705,7.6868
-ITC12,Vercelli,Vercelli,ITC1,Piemonte,45.3216,8.4199
-ITC13,Biella,Biella,ITC1,Piemonte,45.563,8.058
-ITC14,Verbano-Cusio-Ossola,Verbania,ITC1,Piemonte,45.9214,8.5518
-ITC15,Novara,Novara,ITC1,Piemonte,45.4469,8.6212
-ITC16,Cuneo,Cuneo,ITC1,Piemonte,44.3907,7.5483
-ITC17,Asti,Asti,ITC1,Piemonte,44.9016,8.2075
-ITC18,Alessandria,Alessandria,ITC1,Piemonte,44.9092,8.6101
-ITC20,Valle d'Aosta / Vallée d'Aoste,Aosta,ITC2,Valle d'Aosta / Vallée d'Aoste,45.7376,7.3172
-ITC31,Imperia,Imperia,ITC3,Liguria,43.8892,8.0393
-ITC32,Savona,Savona,ITC3,Liguria,44.3,8.4
-ITC33,Genova,Genova,ITC3,Liguria,44.5,8.9
-ITC34,La Spezia,La Spezia,ITC3,Liguria,44.1,9.9
-ITC41,Varese,Varese,ITC4,Lombardia,45.8206,8.8251
-ITC42,Como,Como,ITC4,Lombardia,45.8082,9.0832
-ITC43,Lecco,Lecco,ITC4,Lombardia,45.8559,9.397
-ITC44,Sondrio,Sondrio,ITC4,Lombardia,46.1685,9.8713
-ITC45,Milano,Milano,ITC4,Lombardia,45.4643,9.1895
-ITC46,Bergamo,Bergamo,ITC4,Lombardia,45.696,9.6672
-ITC47,Brescia,Brescia,ITC4,Lombardia,45.5356,10.2147
-ITC48,Pavia,Pavia,ITC4,Lombardia,45.1921,9.1592
-ITC49,Lodi,Lodi,ITC4,Lombardia,45.3099,9.5008
-ITC4A,Cremona,Cremona,ITC4,Lombardia,45.1332,10.0213
-ITC4B,Mantova,Mantova,ITC4,Lombardia,45.1603,10.7978
-ITD10,Bolzano / Bozen,Bolzano,ITD1,Provincia Autonoma Bolzano / Bozen,46.4907,11.3398
-ITD20,Trento,Trento,ITD2,Provincia Autonoma Trento,46.0679,11.1211
-ITD31,Verona,Verona,ITD3,Veneto,45.4385,10.9938
-ITD32,Vicenza,Vicenza,ITD3,Veneto,45.5467,11.5475
-ITD33,Belluno,Belluno,ITD3,Veneto,46.1426,12.2156
-ITD34,Treviso,Treviso,ITD3,Veneto,45.6667,12.2416
-ITD35,Venezia,Venezia,ITD3,Veneto,45.5,12.3
-ITD36,Padova,Padova,ITD3,Veneto,45.408,11.8859
-ITD37,Rovigo,Rovigo,ITD3,Veneto,45.0698,11.7902
-ITD41,Pordenone,Pordenone,ITD4,Friuli-Venezia Giulia,45.9569,12.6605
-ITD42,Udine,Udine,ITD4,Friuli-Venezia Giulia,46.0693,13.2371
-ITD43,Gorizia,Gorizia,ITD4,Friuli-Venezia Giulia,45.9409,13.6217
-ITD44,Trieste,Trieste,ITD4,Friuli-Venezia Giulia,45.6495,13.7768
-ITD51,Piacenza,Piacenza,ITD5,Emilia-Romagna,45.0524,9.6934
-ITD52,Parma,Parma,ITD5,Emilia-Romagna,44.7993,10.3262
-ITD53,Reggio nell'Emilia,Reggio nell'Emilia,ITD5,Emilia-Romagna,44.6983,10.6312
-ITD54,Modena,Modena,ITD5,Emilia-Romagna,44.6478,10.9254
-ITD55,Bologna,Bologna,ITD5,Emilia-Romagna,44.4938,11.3387
-ITD56,Ferrara,Ferrara,ITD5,Emilia-Romagna,44.838,11.6206
-ITD57,Ravenna,Ravenna,ITD5,Emilia-Romagna,44.4134,12.2012
-ITD58,Forlì-Cesena,Forlì,ITD5,Emilia-Romagna,44.2218,12.0414
-ITD59,Rimini,Rimini,ITD5,Emilia-Romagna,44.0,12.6
-ITE11,Massa-Carrara,Massa,ITE1,Toscana,44.0,10.2
-ITE12,Lucca,Lucca,ITE1,Toscana,43.8437,10.5045
-ITE13,Pistoia,Pistoia,ITE1,Toscana,43.9306,10.9237
-ITE14,Firenze,Firenze,ITE1,Toscana,43.7792,11.2463
-ITE15,Prato,Prato,ITE1,Toscana,43.8805,11.097
-ITE16,Livorno,Livorno,ITE1,Toscana,43.6,10.3
-ITE17,Pisa,Pisa,ITE1,Toscana,43.7085,10.4036
-ITE18,Arezzo,Arezzo,ITE1,Toscana,43.4628,11.8807
-ITE19,Siena,Siena,ITE1,Toscana,43.3182,11.3306
-ITE1A,Grosseto,Grosseto,ITE1,Toscana,42.763,11.1094
-ITE21,Perugia,Perugia,ITE2,Umbria,43.1122,12.3888
-ITE22,Terni,Terni,ITE2,Umbria,42.5633,12.6433
-ITE31,Pesaro e Urbino,Pesaro,ITE3,Marche,43.8,12.9
-ITE32,Ancona,Ancona,ITE3,Marche,43.6072,13.5103
-ITE33,Macerata,Macerata,ITE3,Marche,43.2979,13.4529
-ITE34,Ascoli Piceno,Ascoli Piceno,ITE3,Marche,42.8535,13.5739
-ITE41,Viterbo,Viterbo,ITE4,Lazio,42.4194,12.1056
-ITE42,Rieti,Rieti,ITE4,Lazio,42.4048,12.8574
-ITE43,Roma,Roma,ITE4,Lazio,41.8919,12.5113
-ITE44,Latina,Latina,ITE4,Lazio,41.4661,12.9043
-ITE45,Frosinone,Frosinone,ITE4,Lazio,41.6398,13.3411
-ITF11,L'Aquila,L'Aquila,ITF1,Abruzzo,42.3505,13.3995
-ITF12,Teramo,Teramo,ITF1,Abruzzo,42.6612,13.699
-ITF13,Pescara,Pescara,ITF1,Abruzzo,42.4584,14.2028
-ITF14,Chieti,Chieti,ITF1,Abruzzo,42.3483,14.1649
-ITF21,Isernia,Isernia,ITF2,Molise,41.596,14.234
-ITF22,Campobasso,Campobasso,ITF2,Molise,41.5595,14.6674
-ITF31,Caserta,Caserta,ITF3,Campania,41.0726,14.3323
-ITF32,Benevento,Benevento,ITF3,Campania,41.1307,14.7782
-ITF33,Napoli,Napoli,ITF3,Campania,40.8522,14.2681
-ITF34,Avellino,Avellino,ITF3,Campania,40.9149,14.791
-ITF35,Salerno,Salerno,ITF3,Campania,40.6754,14.7933
-ITF41,Foggia,Foggia,ITF4,Puglia,41.4584,15.5519
-ITF42,Bari,Bari,ITF4,Puglia,41.1207,16.8698
-ITF43,Taranto,Taranto,ITF4,Puglia,40.4644,17.2471
-ITF44,Brindisi,Brindisi,ITF4,Puglia,40.6322,17.9361
-ITF45,Lecce,Lecce,ITF4,Puglia,40.3548,18.1724
-ITF51,Potenza,Potenza,ITF5,Basilicata,40.6418,15.8079
-ITF52,Matera,Matera,ITF5,Basilicata,40.666,16.6046
-ITF61,Cosenza,Cosenza,ITF6,Calabria,39.2989,16.2531
-ITF62,Crotone,Crotone,ITF6,Calabria,39.0808,17.1276
-ITF63,Catanzaro,Catanzaro,ITF6,Calabria,38.8825,16.6009
-ITF64,Vibo Valentia,Vibo Valentia,ITF6,Calabria,38.6762,16.1009
-ITF65,Reggio di Calabria,Reggio di Calabria,ITF6,Calabria,38.1105,15.6613
-ITG11,Trapani,Trapani,ITG1,Sicilia,38.0,12.6
-ITG12,Palermo,Palermo,ITG1,Sicilia,38.1166,13.3636
-ITG13,Messina,Messina,ITG1,Sicilia,38.1939,15.5526
-ITG14,Agrigento,Agrigento,ITG1,Sicilia,37.3107,13.5766
-ITG15,Caltanissetta,Caltanissetta,ITG1,Sicilia,37.4903,14.0622
-ITG16,Enna,Enna,ITG1,Sicilia,37.5655,14.2743
-ITG17,Catania,Catania,ITG1,Sicilia,37.4922,15.0704
-ITG18,Ragusa,Ragusa,ITG1,Sicilia,36.9257,14.7244
-ITG19,Siracusa,Siracusa,ITG1,Sicilia,37.1,15.2
-ITG25,Sassari,Sassari,ITG2,Sardegna,40.7259,8.5555
-ITG26,Nuoro,Nuoro,ITG2,Sardegna,40.3199,9.3257
-ITG27,Cagliari,Cagliari,ITG2,Sardegna,39.3,9.1
-ITG28,Oristano,Oristano,ITG2,Sardegna,39.9036,8.5926
+province_code,province_name,capital_city,region_code,region_name,lat,lon,elevation_m,cell_elevation_m
+IT108,Monza e della Brianza,Monza,ITC4,Lombardia,45.58,9.2725,162,191
+IT109,Fermo,Fermo,ITE3,Marche,43.163,13.7227,319,103
+IT110,Barletta-Andria-Trani,Barletta,ITF4,Puglia,41.3143,16.2816,15,17
+ITC11,Torino,Torino,ITC1,Piemonte,45.0705,7.6868,239,239
+ITC12,Vercelli,Vercelli,ITC1,Piemonte,45.3216,8.4199,130,119
+ITC13,Biella,Biella,ITC1,Piemonte,45.563,8.058,420,642
+ITC14,Verbano-Cusio-Ossola,Verbania,ITC1,Piemonte,45.9214,8.5518,205,418
+ITC15,Novara,Novara,ITC1,Piemonte,45.4469,8.6212,165,132
+ITC16,Cuneo,Cuneo,ITC1,Piemonte,44.3907,7.5483,534,541
+ITC17,Asti,Asti,ITC1,Piemonte,44.9016,8.2075,123,175
+ITC18,Alessandria,Alessandria,ITC1,Piemonte,44.9092,8.6101,95,120
+ITC20,Valle d'Aosta / Vallée d'Aoste,Aosta,ITC2,Valle d'Aosta / Vallée d'Aoste,45.7376,7.3172,583,1795
+ITC31,Imperia,Imperia,ITC3,Liguria,43.8892,8.0393,10,202
+ITC32,Savona,Savona,ITC3,Liguria,44.3,8.4,4,275
+ITC33,Genova,Genova,ITC3,Liguria,44.5,8.9,19,393
+ITC34,La Spezia,La Spezia,ITC3,Liguria,44.1,9.9,3,79
+ITC41,Varese,Varese,ITC4,Lombardia,45.8206,8.8251,382,362
+ITC42,Como,Como,ITC4,Lombardia,45.8082,9.0832,201,409
+ITC43,Lecco,Lecco,ITC4,Lombardia,45.8559,9.397,214,854
+ITC44,Sondrio,Sondrio,ITC4,Lombardia,46.1685,9.8713,307,1514
+ITC45,Milano,Milano,ITC4,Lombardia,45.4643,9.1895,122,131
+ITC46,Bergamo,Bergamo,ITC4,Lombardia,45.696,9.6672,249,347
+ITC47,Brescia,Brescia,ITC4,Lombardia,45.5356,10.2147,149,119
+ITC48,Pavia,Pavia,ITC4,Lombardia,45.1921,9.1592,77,75
+ITC49,Lodi,Lodi,ITC4,Lombardia,45.3099,9.5008,87,74
+ITC4A,Cremona,Cremona,ITC4,Lombardia,45.1332,10.0213,45,47
+ITC4B,Mantova,Mantova,ITC4,Lombardia,45.1603,10.7978,19,37
+ITD10,Bolzano / Bozen,Bolzano,ITD1,Provincia Autonoma Bolzano / Bozen,46.4907,11.3398,262,835
+ITD20,Trento,Trento,ITD2,Provincia Autonoma Trento,46.0679,11.1211,194,864
+ITD31,Verona,Verona,ITD3,Veneto,45.4385,10.9938,59,18
+ITD32,Vicenza,Vicenza,ITD3,Veneto,45.5467,11.5475,39,105
+ITD33,Belluno,Belluno,ITD3,Veneto,46.1426,12.2156,383,627
+ITD34,Treviso,Treviso,ITD3,Veneto,45.6667,12.2416,15,38
+ITD35,Venezia,Venezia,ITD3,Veneto,45.5,12.3,2,-26
+ITD36,Padova,Padova,ITD3,Veneto,45.408,11.8859,12,-6
+ITD37,Rovigo,Rovigo,ITD3,Veneto,45.0698,11.7902,7,-3
+ITD41,Pordenone,Pordenone,ITD4,Friuli-Venezia Giulia,45.9569,12.6605,24,3
+ITD42,Udine,Udine,ITD4,Friuli-Venezia Giulia,46.0693,13.2371,113,99
+ITD43,Gorizia,Gorizia,ITD4,Friuli-Venezia Giulia,45.9409,13.6217,84,132
+ITD44,Trieste,Trieste,ITD4,Friuli-Venezia Giulia,45.6495,13.7768,2,223
+ITD51,Piacenza,Piacenza,ITD5,Emilia-Romagna,45.0524,9.6934,61,68
+ITD52,Parma,Parma,ITD5,Emilia-Romagna,44.7993,10.3262,57,70
+ITD53,Reggio nell'Emilia,Reggio nell'Emilia,ITD5,Emilia-Romagna,44.6983,10.6312,58,96
+ITD54,Modena,Modena,ITD5,Emilia-Romagna,44.6478,10.9254,34,48
+ITD55,Bologna,Bologna,ITD5,Emilia-Romagna,44.4938,11.3387,54,76
+ITD56,Ferrara,Ferrara,ITD5,Emilia-Romagna,44.838,11.6206,9,-1
+ITD57,Ravenna,Ravenna,ITD5,Emilia-Romagna,44.4134,12.2012,4,-10
+ITD58,Forlì-Cesena,Forlì,ITD5,Emilia-Romagna,44.2218,12.0414,34,96
+ITD59,Rimini,Rimini,ITD5,Emilia-Romagna,44.0,12.6,5,68
+ITE11,Massa-Carrara,Massa,ITE1,Toscana,44.0,10.2,65,344
+ITE12,Lucca,Lucca,ITE1,Toscana,43.8437,10.5045,19,119
+ITE13,Pistoia,Pistoia,ITE1,Toscana,43.9306,10.9237,67,133
+ITE14,Firenze,Firenze,ITE1,Toscana,43.7792,11.2463,50,168
+ITE15,Prato,Prato,ITE1,Toscana,43.8805,11.097,61,207
+ITE16,Livorno,Livorno,ITE1,Toscana,43.6,10.3,3,16
+ITE17,Pisa,Pisa,ITE1,Toscana,43.7085,10.4036,4,13
+ITE18,Arezzo,Arezzo,ITE1,Toscana,43.4628,11.8807,296,414
+ITE19,Siena,Siena,ITE1,Toscana,43.3182,11.3306,322,239
+ITE1A,Grosseto,Grosseto,ITE1,Toscana,42.763,11.1094,10,61
+ITE21,Perugia,Perugia,ITE2,Umbria,43.1122,12.3888,493,278
+ITE22,Terni,Terni,ITE2,Umbria,42.5633,12.6433,130,368
+ITE31,Pesaro e Urbino,Pesaro,ITE3,Marche,43.8,12.9,11,138
+ITE32,Ancona,Ancona,ITE3,Marche,43.6072,13.5103,16,50
+ITE33,Macerata,Macerata,ITE3,Marche,43.2979,13.4529,315,112
+ITE34,Ascoli Piceno,Ascoli Piceno,ITE3,Marche,42.8535,13.5739,154,324
+ITE41,Viterbo,Viterbo,ITE4,Lazio,42.4194,12.1056,326,387
+ITE42,Rieti,Rieti,ITE4,Lazio,42.4048,12.8574,405,764
+ITE43,Roma,Roma,ITE4,Lazio,41.8919,12.5113,20,43
+ITE44,Latina,Latina,ITE4,Lazio,41.4661,12.9043,21,20
+ITE45,Frosinone,Frosinone,ITE4,Lazio,41.6398,13.3411,291,282
+ITF11,L'Aquila,L'Aquila,ITF1,Abruzzo,42.3505,13.3995,714,1058
+ITF12,Teramo,Teramo,ITF1,Abruzzo,42.6612,13.699,265,312
+ITF13,Pescara,Pescara,ITF1,Abruzzo,42.4584,14.2028,4,35
+ITF14,Chieti,Chieti,ITF1,Abruzzo,42.3483,14.1649,330,218
+ITF21,Isernia,Isernia,ITF2,Molise,41.596,14.234,423,664
+ITF22,Campobasso,Campobasso,ITF2,Molise,41.5595,14.6674,701,554
+ITF31,Caserta,Caserta,ITF3,Campania,41.0726,14.3323,68,80
+ITF32,Benevento,Benevento,ITF3,Campania,41.1307,14.7782,135,318
+ITF33,Napoli,Napoli,ITF3,Campania,40.8522,14.2681,17,31
+ITF34,Avellino,Avellino,ITF3,Campania,40.9149,14.791,348,613
+ITF35,Salerno,Salerno,ITF3,Campania,40.6754,14.7933,4,235
+ITF41,Foggia,Foggia,ITF4,Puglia,41.4584,15.5519,76,10
+ITF42,Bari,Bari,ITF4,Puglia,41.1207,16.8698,5,42
+ITF43,Taranto,Taranto,ITF4,Puglia,40.4644,17.2471,15,8
+ITF44,Brindisi,Brindisi,ITF4,Puglia,40.6322,17.9361,13,30
+ITF45,Lecce,Lecce,ITF4,Puglia,40.3548,18.1724,49,18
+ITF51,Potenza,Potenza,ITF5,Basilicata,40.6418,15.8079,819,961
+ITF52,Matera,Matera,ITF5,Basilicata,40.666,16.6046,401,326
+ITF61,Cosenza,Cosenza,ITF6,Calabria,39.2989,16.2531,238,731
+ITF62,Crotone,Crotone,ITF6,Calabria,39.0808,17.1276,8,56
+ITF63,Catanzaro,Catanzaro,ITF6,Calabria,38.8825,16.6009,320,162
+ITF64,Vibo Valentia,Vibo Valentia,ITF6,Calabria,38.6762,16.1009,476,163
+ITF65,Reggio di Calabria,Reggio di Calabria,ITF6,Calabria,38.1105,15.6613,31,441
+ITG11,Trapani,Trapani,ITG1,Sicilia,38.0,12.6,3,112
+ITG12,Palermo,Palermo,ITG1,Sicilia,38.1166,13.3636,14,237
+ITG13,Messina,Messina,ITG1,Sicilia,38.1939,15.5526,3,148
+ITG14,Agrigento,Agrigento,ITG1,Sicilia,37.3107,13.5766,230,177
+ITG15,Caltanissetta,Caltanissetta,ITG1,Sicilia,37.4903,14.0622,568,454
+ITG16,Enna,Enna,ITG1,Sicilia,37.5655,14.2743,931,549
+ITG17,Catania,Catania,ITG1,Sicilia,37.4922,15.0704,7,7
+ITG18,Ragusa,Ragusa,ITG1,Sicilia,36.9257,14.7244,502,410
+ITG19,Siracusa,Siracusa,ITG1,Sicilia,37.1,15.2,17,114
+ITG25,Sassari,Sassari,ITG2,Sardegna,40.7259,8.5555,225,291
+ITG26,Nuoro,Nuoro,ITG2,Sardegna,40.3199,9.3257,549,507
+ITG27,Cagliari,Cagliari,ITG2,Sardegna,39.3,9.1,6,9
+ITG28,Oristano,Oristano,ITG2,Sardegna,39.9036,8.5926,9,9

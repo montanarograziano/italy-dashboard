@@ -154,7 +154,7 @@ datasets:
     search_hint: "stranieri"
     # dims: FREQ.REF_AREA.DATA_TYPE.SEX.AGE — ALL includes ~7900 municipalities
     # and the server drops the connection. Restrict to Italy + NUTS2 regions.
-    key: "A.IT+ITC1+ITC2+ITC3+ITC4+ITH1+ITH2+ITH3+ITH4+ITH5+ITI1+ITI2+ITI3+ITI4+ITF1+ITF2+ITF3+ITF4+ITF5+ITF6+ITG1+ITG2..."
+    key: "A.IT+ITC1+ITC2+ITC3+ITC4+ITD1+ITD2+ITD3+ITD4+ITD5+ITE1+ITE2+ITE3+ITE4+ITF1+ITF2+ITF3+ITF4+ITF5+ITF6+ITG1+ITG2..."
     start_period: "1970"
     columns:
       territory: [REF_AREA, ITTER107]
