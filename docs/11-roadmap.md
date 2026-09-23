@@ -29,3 +29,8 @@ diffs, making upstream ISTAT revisions visible instead of silent.
 **Monthly inflation × temperature:** statistically the strongest available
 cross-phenomenon analysis, because inflation is the one monthly series. Needs
 an ISTAT re-fetch with the food ECOICOP subgroup instead of all-items.
+
+**Month × year anomaly heatmap (Reflex app):** the static app draws it with
+Observable Plot; the Reflex climate page still lacks it because Recharts has no
+heatmap mark. The query (`climate_month_heatmap`) and `mart_climate_monthly`
+already exist, so only the chart is missing.
