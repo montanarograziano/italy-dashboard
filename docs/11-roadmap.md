@@ -2,10 +2,6 @@
 
 Ordered by analytical value, not effort.
 
-**Income dataflow** — the one missing piece of the income↔crime view: find the
-ID (`just discover "reddito disponibile"`), set it, refresh. Everything else is
-already built.
-
 **Detainees by education (individual-level socioeconomics)** — Ministry of
 Justice publishes detainees by education level 2005–2025; as a curated dbt seed,
 compared against the general population's education distribution, it is the
@@ -27,20 +23,9 @@ region names localize with the UI.
 **Refresh delta reports** — snapshot row counts per dataset per refresh and log
 diffs, making upstream ISTAT revisions visible instead of silent.
 
-**In-app attribution footer** — CC BY 4.0 (ISTAT, Open-Meteo/ERA5) and IODL 2.0
-(MUR/USTAT) both require a visible credit wherever the data is displayed, not
-just documented; see [Datasets](04-datasets.md#licensing). Currently only the
-docs carry it, not the running dashboard.
-
 **Precipitation:** the Open-Meteo fetcher already exists; adding
 `precipitation_sum` to `DAILY_VARS` and one mart column is most of the work.
 
 **Monthly inflation × temperature:** statistically the strongest available
 cross-phenomenon analysis, because inflation is the one monthly series. Needs
 an ISTAT re-fetch with the food ECOICOP subgroup instead of all-items.
-
-**Month × year anomaly heatmap:** deferred from the climate page because
-Recharts has no heatmap mark at all, in any version currently in use; this is
-a library gap, not a styling one, so it needs a different charting library
-rather than more work inside Recharts. `mart_climate_monthly` already holds
-the data.

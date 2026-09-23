@@ -1,5 +1,6 @@
 import type { ReactNode, SelectHTMLAttributes } from "react";
 import { useLang, tr } from "./i18n";
+import attribution from "../../shared/attribution.json";
 import { border, inkMuted, inkPrimary, inkSecondary, surface, warning } from "./theme";
 
 // Shared page-shell components, pulled out of six near-identical copies
@@ -297,5 +298,62 @@ export function DataTable({
         </table>
       </div>
     </details>
+  );
+}
+
+interface Provider {
+  name: string;
+  license: string | null;
+  url: string | null;
+}
+
+const PROVIDERS: Provider[] = attribution.providers;
+
+/** Visible data credit on every page: CC BY 4.0 (ISTAT, Copernicus,
+ * Open-Meteo) and IODL 2.0 (MUR/USTAT) require attribution wherever the data
+ * is displayed, plus a note that it was modified. Mirrors Reflex's
+ * `components.attribution_footer`; both read shared/attribution.json. A
+ * provider with a null `license` (INPS: undocumented, see
+ * docs/04-datasets.md) is credited without asserting one. Plain inline text,
+ * so it wraps at phone width instead of scrolling. */
+export function AttributionFooter() {
+  useLang(); // copy swaps language
+  const small = { color: inkMuted(), fontSize: "0.8rem", margin: "0 0 0.35rem" };
+  return (
+    <footer
+      style={{
+        marginTop: "2.5rem",
+        paddingTop: "1rem",
+        borderTop: `1px solid ${border()}`,
+      }}
+    >
+      <p style={small}>
+        {tr("Data sources")}:{" "}
+        {PROVIDERS.map((p, i) => (
+          <span key={p.name}>
+            {i > 0 && " · "}
+            {p.name} (
+            {p.license && p.url ? (
+              <a
+                href={p.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: inkSecondary() }}
+              >
+                {p.license}
+              </a>
+            ) : (
+              tr("license not documented")
+            )}
+            )
+          </span>
+        ))}
+      </p>
+      <p style={small}>
+        {tr(
+          "Figures are aggregated or derived from the providers' data (modified by this project); no endorsement by the providers is implied.",
+        )}
+      </p>
+    </footer>
   );
 }

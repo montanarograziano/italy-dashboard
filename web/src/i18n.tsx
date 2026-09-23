@@ -56,6 +56,11 @@ export const IT: Record<string, string> = {
   Region: "Regione",
   Province: "Provincia",
   City: "Città",
+  // attribution footer (ui.tsx AttributionFooter; translations.py footer_*)
+  "Data sources": "Fonti dei dati",
+  "license not documented": "licenza non documentata",
+  "Figures are aggregated or derived from the providers' data (modified by this project); no endorsement by the providers is implied.":
+    "I valori sono aggregati o derivati dai dati dei fornitori (modificati da questo progetto); ciò non implica alcuna approvazione da parte dei fornitori.",
   // KPI tiles
   "Felony convictions": "Condanne per delitto",
   "latest year, total": "ultimo anno, totale",

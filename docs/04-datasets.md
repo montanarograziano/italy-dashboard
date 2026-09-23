@@ -301,9 +301,10 @@ fetching it is not (non-commercial, rate-capped). A dataset can be openly
 licensed and still gate you at the API layer.
 
 CC BY 4.0 and IODL 2.0 both require visible attribution wherever the data is
-*displayed*. This documentation carries that attribution; the running
-dashboard UI does not yet render an in-app source/attribution footer — a known
-gap tracked in the project [roadmap](11-roadmap.md), not a silent omission.
+*displayed*. This documentation carries it, and so does every page of both
+frontends: a footer credits each provider above with its license, and notes
+that the figures are aggregated or derived from the original data (see
+[Dashboard → Attribution footer](06-dashboard.md#attribution-footer)).
 
 Run `just provenance` for a machine-readable manifest (source, license, row
 count, SHA-256) of every file the committed `data/` snapshot ships.
