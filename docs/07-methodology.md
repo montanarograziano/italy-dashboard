@@ -208,7 +208,10 @@ NULL for a year where any member capital's is.
 
 **Region and Italia are unweighted means of the capitals' annual totals**, for
 the same missing-weights reason as temperature. Italia's 1991-2020 mean is
-about 999 mm a year on 123 wet days (≥ 1 mm, the ETCCDI R1mm index). Over
+about 999 mm a year on 123 wet days (≥ 1 mm, the ETCCDI R1mm index). Read
+wet-day counts as relative, not absolute: reanalysis spreads light rain over
+too many days (the "drizzle" bias), so gauges typically record fewer wet days
+for the same total. Over
 1951-2025 the Italia series has no meaningful linear trend (about −5 mm per
 decade, R² < 0.01): year-to-year variation dominates, which is why the card
 leads with a 10-year centred rolling mean rather than a fitted line.
