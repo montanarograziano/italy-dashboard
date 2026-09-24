@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+import json
+from pathlib import Path
+from typing import Any, TypedDict
 
 import reflex as rx
 
@@ -12,6 +14,28 @@ from italy_dashboard.state import AppState
 
 # Components accept either a live Reflex Var (state attribute) or a plain value.
 ChartData = rx.Var | list[dict[str, Any]]
+
+# Same file web/src/ui.tsx imports, so both frontends credit the same providers
+# with the same license names and links. Shipped at runtime (see Dockerfile's
+# `COPY shared`), like shared/queries/*.sql.
+ATTRIBUTION_PATH = Path(__file__).resolve().parent.parent / "shared" / "attribution.json"
+
+
+class Provider(TypedDict):
+    name: str
+    license: str | None
+    url: str | None
+
+
+def load_providers() -> list[Provider]:
+    """Providers credited in the footer, in display order.
+
+    `license`/`url` are null together for a provider whose data license is not
+    documented (INPS, per docs/04-datasets.md): the footer then says so rather
+    than guessing one.
+    """
+    return json.loads(ATTRIBUTION_PATH.read_text(encoding="utf-8"))["providers"]
+
 
 NAV_LINKS = [
     ("nav_home", "/"),
@@ -138,6 +162,52 @@ def data_gate(
     )
 
 
+def _provider_credit(provider: Provider) -> list[rx.Component | str]:
+    """`Name (License)`, the license linked to the provider's own terms page."""
+    license_part: rx.Component
+    if provider["license"] and provider["url"]:
+        license_part = rx.link(
+            provider["license"],
+            href=provider["url"],
+            is_external=True,
+            rel="noopener noreferrer",
+            color=theme.ink_secondary(),
+            _hover={"color": theme.ink_primary()},
+            text_decoration="underline",
+        )
+    else:
+        license_part = rx.fragment(t("footer_license_undocumented"))
+    return [provider["name"], " (", license_part, ")"]
+
+
+def attribution_footer() -> rx.Component:
+    """Visible data credit on every page (CC BY 4.0 / IODL 2.0 require it).
+
+    Mirrors `AttributionFooter` in web/src/ui.tsx. Plain inline text so it
+    wraps at any width instead of forcing a horizontal scroll.
+    """
+    parts: list[rx.Component | str] = []
+    for i, provider in enumerate(load_providers()):
+        if i:
+            parts.append(" · ")
+        parts.extend(_provider_credit(provider))
+    return rx.el.footer(
+        rx.text(
+            t("footer_sources"),
+            ": ",
+            *parts,
+            color=theme.ink_muted(),
+            font_size="0.8em",
+        ),
+        rx.text(t("footer_modified"), color=theme.ink_muted(), font_size="0.8em"),
+        width="100%",
+        max_width="1100px",
+        margin="0 auto",
+        padding="1em 1.5em 2em",
+        border_top=theme.border_css(),
+    )
+
+
 def shell(*children: rx.Component, has_loaded: rx.Var | bool) -> rx.Component:
     """Page frame: navbar + the shared "no data snapshot" banner + content.
 
@@ -166,6 +236,7 @@ def shell(*children: rx.Component, has_loaded: rx.Var | bool) -> rx.Component:
             margin="0 auto",
             padding="1.5em",
         ),
+        attribution_footer(),
         background=theme.page_bg(),
         min_height="100vh",
         font_family=theme.FONT,

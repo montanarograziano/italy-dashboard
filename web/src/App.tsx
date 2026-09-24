@@ -10,6 +10,7 @@ import Labor from "./pages/Labor";
 import NotFound from "./pages/NotFound";
 import Population from "./pages/Population";
 import { ROUTES, useRoute } from "./router";
+import { AttributionFooter } from "./ui";
 import {
   border,
   currentMode,
@@ -260,6 +261,7 @@ function Shell() {
         })}
       </nav>
       <main>{page}</main>
+      <AttributionFooter />
     </div>
   );
 }

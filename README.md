@@ -101,14 +101,13 @@ to a React frontend plus a FastAPI backend), and a second, independent static
 frontend (`web/`, TypeScript and DuckDB-WASM) queries the same Parquet marts
 entirely in the browser, no backend at all. Both read the same local snapshot.
 
-**One codebase, two languages, honestly scoped.** The Reflex app's navbar has a
-live **EN · IT** toggle that translates every UI label, KPI, and chart caption;
-the preference persists in the browser. Data values themselves (region and
+**One codebase, two languages, honestly scoped.** Both frontends have a live
+**EN · IT** toggle in the header that translates every UI label, KPI, and chart
+caption; the preference persists in the browser (the static app defaults to
+Italian when the browser language is Italian). Data values themselves (region and
 crime-category names) stay in English in both frontends regardless, since they
 come straight from ISTAT's SDMX responses as fetched, not from the toggle, see
-[Dashboard: Language](docs/06-dashboard.md#language). The static app (the
-primary GitHub Pages demo above) does not have the toggle at all yet: a full
-Italian UI pass is tracked, not silently assumed.
+[Dashboard: Language](docs/06-dashboard.md#language).
 
 <img src="docs/readme/bilingual-en.png" width="430" alt="Reflex app home page in English: navbar with an EN and IT toggle, EN highlighted, KPI tiles in English">
 <img src="docs/readme/bilingual-it.png" width="430" alt="The same page one click later: navbar toggle now shows IT highlighted, every navigation label and KPI tile translated into Italian">
@@ -159,8 +158,9 @@ terms, verified against their current published pages, not assumed.
 | [Copernicus C3S ERA5-Land](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land) | CC BY 4.0 | Free for any use, requires a CDS account |
 
 A data license and a free-API usage cap are two different axes: Open-Meteo's data
-is CC BY 4.0, but its zero-cost API tier is non-commercial-only regardless. Full
-table and the in-app-attribution gap: [Datasets → Licensing](docs/04-datasets.md#licensing).
+is CC BY 4.0, but its zero-cost API tier is non-commercial-only regardless. Every
+page of both frontends credits each provider and its license in a footer. Full
+table: [Datasets → Licensing](docs/04-datasets.md#licensing).
 
 ### Getting started
 
@@ -203,12 +203,10 @@ a case that page does not cover is a legitimate, welcome
 
 Said plainly, not buried:
 
-- **Climate and Climate × Crime are beta.** Partial temperature coverage, stated
-  on screen (see the screenshot above), not hidden in a footnote.
-- **No in-app attribution footer yet.** CC BY 4.0 and IODL 2.0 both require visible
-  credit where the data is *displayed*; this documentation carries it, the running
-  UI does not yet. Tracked in [Roadmap](docs/11-roadmap.md).
-- **The static app has no Italian UI yet;** see [How it works](#how-it-works) above.
+- **Climate × Crime is association only.** Temperature now covers all 106
+  province capitals, 1950-2026 (the latest year is partial, so charts use complete
+  years only), but the crime-climate panel is annual, regional and underpowered
+  (province-level offenders start in 2022); the page states this above its charts.
 - **The GitHub Pages demo is a snapshot, not a live feed.** It serves
   whatever was last built and deployed; there is no scheduled auto-redeploy,
   so a page added in a recent commit can lag behind until the next manual
@@ -310,16 +308,15 @@ indipendente e statico (`web/`, TypeScript e DuckDB-WASM), interroga gli stessi
 marts Parquet direttamente nel browser, senza alcun backend. Entrambi leggono lo
 stesso snapshot locale.
 
-**Un solo codice, due lingue, con i limiti dichiarati.** La navbar dell'app
-Reflex ha un selettore **EN · IT** dal vivo che traduce ogni etichetta
-dell'interfaccia, ogni KPI e ogni didascalia dei grafici; la preferenza resta
-salvata nel browser. I valori dei dati (nomi di regioni e categorie di reato)
-restano in inglese in entrambi i frontend, perché arrivano direttamente dalle
-risposte SDMX di ISTAT così come raccolte, non dal selettore, vedi [Dashboard:
-Language](docs/06-dashboard.md#language) (in inglese). L'app statica (la demo
-principale su GitHub Pages) non ha ancora nessun selettore di lingua: una
-localizzazione italiana completa dell'interfaccia è nella roadmap, non data per
-scontata.
+**Un solo codice, due lingue, con i limiti dichiarati.** Entrambi i frontend
+hanno nell'intestazione un selettore **EN · IT** dal vivo che traduce ogni
+etichetta dell'interfaccia, ogni KPI e ogni didascalia dei grafici; la
+preferenza resta salvata nel browser (l'app statica parte in italiano se la
+lingua del browser è l'italiano). I valori dei dati (nomi di regioni e
+categorie di reato) restano in inglese in entrambi i frontend, perché arrivano
+direttamente dalle risposte SDMX di ISTAT così come raccolte, non dal
+selettore, vedi [Dashboard: Language](docs/06-dashboard.md#language) (in
+inglese).
 
 <img src="docs/readme/bilingual-it.png" width="430" alt="La home page del deployment Reflex in italiano: selettore di lingua con IT evidenziato, ogni etichetta di navigazione e ogni KPI tradotti">
 <img src="docs/readme/bilingual-en.png" width="430" alt="La stessa pagina un clic prima: selettore con EN evidenziato, interfaccia in inglese, stessi dati">
@@ -364,9 +361,9 @@ i propri termini, verificati sulle pagine ufficiali attuali, non presunti.
 
 Licenza dei dati e limiti dell'API gratuita sono due assi diversi: i dati
 Open-Meteo sono CC BY 4.0, ma il livello gratuito della sua API resta comunque
-solo per uso non commerciale. Tabella completa e il punto ancora aperto
-sull'attribuzione in-app: [Datasets → Licensing](docs/04-datasets.md#licensing)
-(in inglese).
+solo per uso non commerciale. Ogni pagina di entrambi i frontend riporta in un
+footer ciascun fornitore e la sua licenza. Tabella completa: [Datasets →
+Licensing](docs/04-datasets.md#licensing) (in inglese).
 
 ### Per iniziare
 
@@ -408,15 +405,11 @@ benvenuta, non un problema.
 
 Detti chiaramente, non nascosti:
 
-- **Clima e Clima × Criminalità sono beta:** copertura parziale delle
-  temperature, dichiarata a schermo (vedi la schermata sopra), non in una nota
-  a piè di pagina.
-- **Manca ancora un footer di attribuzione in-app:** CC BY 4.0 e IODL 2.0
-  richiedono un credito visibile dove il dato è *mostrato*; questa
-  documentazione lo riporta, l'interfaccia in esecuzione ancora no. Tracciato
-  nella [Roadmap](docs/11-roadmap.md).
-- **L'app statica non ha ancora un'interfaccia in italiano;** vedi
-  [Come funziona](#come-funziona) sopra.
+- **Clima × Criminalità è solo associazione:** le temperature coprono ora
+  tutti i 106 capoluoghi di provincia, 1950-2026 (l'ultimo anno è parziale,
+  quindi i grafici usano solo anni completi), ma il panel clima-criminalità è
+  annuale, regionale e con scarsa potenza statistica (gli autori a livello
+  provinciale partono dal 2022); la pagina lo dichiara sopra i grafici.
 - **La demo su GitHub Pages è uno snapshot, non un flusso live.** Serve
   l'ultima build pubblicata; non c'è un redeploy automatico programmato,
   quindi una pagina aggiunta in un commit recente può non essere ancora nel

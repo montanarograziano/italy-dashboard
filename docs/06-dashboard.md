@@ -40,12 +40,30 @@ ecological correlation with violent-offender rates; both pages surface their
 current backfill coverage rather than presenting a partial snapshot as
 complete — see [Datasets](04-datasets.md#weather_daily-temperature-non-istat).
 
+## Attribution footer
+
+Every page of both frontends ends with a data-sources footer: each provider,
+its license linked to the provider's own terms page, and a note that the
+figures are aggregated or derived (modified) from the original data, as CC BY
+4.0 requires. INPS is credited as "license not documented", matching
+[Datasets → Licensing](04-datasets.md#licensing), rather than given a guessed
+license. The provider list lives once in `shared/attribution.json`, read by
+`components.attribution_footer()` (Reflex, via `shell()`) and
+`AttributionFooter` in `web/src/ui.tsx` (static app, via `App.tsx`);
+`tests/unit/test_attribution.py` checks every footer link is one the licensing
+docs already cite.
+
 ## Language
 
 The navbar's **EN · IT** toggle switches every UI label; the preference persists
 via browser storage. Translations live in `italy_dashboard/translations.py`
 (plain data) with a tiny reactive helper in `i18n.py`. To change the default
 language, edit `lang: str = rx.LocalStorage("en")` in `state.py`.
+
+The static app (`web/`) has the same toggle. Its table (`IT` in
+`web/src/i18n.tsx`) is keyed by the English string the JSX renders, with IT
+values copied from `translations.py`; it defaults to Italian when the browser
+language is Italian, otherwise English.
 
 Data labels (crime types, regions) come from ISTAT as fetched — currently
 English. Fully Italian data labels would require re-fetching with an Italian

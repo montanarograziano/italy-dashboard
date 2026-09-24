@@ -30,6 +30,14 @@ EN: dict[str, str] = {
     "value": "Value",
     "region": "Region",
     "province": "Province",
+    # attribution footer (components.attribution_footer; provider list in
+    # shared/attribution.json)
+    "footer_sources": "Data sources",
+    "footer_license_undocumented": "license not documented",
+    "footer_modified": (
+        "Figures are aggregated or derived from the providers' data (modified by "
+        "this project); no endorsement by the providers is implied."
+    ),
     "no_data": (
         "No data snapshot found. Run  just refresh  (or  just sample  for "
         "synthetic dev data), then reload."
@@ -313,6 +321,13 @@ IT: dict[str, str] = {
     "province": "Provincia",
     "value": "Valore",
     "region": "Regione",
+    # footer attribuzioni
+    "footer_sources": "Fonti dei dati",
+    "footer_license_undocumented": "licenza non documentata",
+    "footer_modified": (
+        "I valori sono aggregati o derivati dai dati dei fornitori (modificati da "
+        "questo progetto); ciò non implica alcuna approvazione da parte dei fornitori."
+    ),
     "no_data": (
         "Nessuno snapshot dati trovato. Esegui  just refresh  (oppure  just "
         "sample  per dati sintetici di sviluppo), poi ricarica."
