@@ -27,4 +27,6 @@ select a.year, e.expected_precip_mm, a.actual_precip_mm
 from actual a
 left join expected e on e.year = a.year
 where e.expected_precip_mm is null
-   or abs(round(e.expected_precip_mm, 1) - a.actual_precip_mm) > 0.1
+   -- The mart stores 1 decimal, so half a step plus float slack; rounding the
+   -- expectation too would fail on ties like 850.55 vs 850.5.
+   or abs(e.expected_precip_mm - a.actual_precip_mm) > 0.051
