@@ -188,6 +188,18 @@ EN: dict[str, str] = {
     "hot_days": "Hot days",
     "tropical_nights": "Tropical nights",
     "frost_days": "Frost days",
+    "precip_title": "Precipitation",
+    "precip_sub": (
+        "Annual total (bars) and a 10-year centred rolling average (line). "
+        "ERA5-Land reanalysis grid-cell precipitation at the province capital, "
+        "not rain-gauge data: good for year-to-year swings and long-run change, "
+        "not for local records."
+    ),
+    "precip_total": "Total (mm)",
+    "precip_rolling": "10-year average (mm)",
+    "wet_days": "Wet days (>= 1 mm)",
+    "precip_anomaly": "vs 1981-2010 (%)",
+    "no_precip": "No precipitation data for this selection in this snapshot.",
     "distribution_title": "Distribution of daily maxima",
     # {early_lo}-{early_hi} / {late_lo}-{late_hi} are substituted in
     # ClimateState.distribution_sub / dist_early_label / dist_late_label. The
@@ -455,6 +467,18 @@ IT: dict[str, str] = {
     "hot_days": "Giorni caldi",
     "tropical_nights": "Notti tropicali",
     "frost_days": "Giorni di gelo",
+    "precip_title": "Precipitazioni",
+    "precip_sub": (
+        "Totale annuo (barre) e media mobile centrata su 10 anni (linea). "
+        "Precipitazione della cella di rianalisi ERA5-Land sul capoluogo, "
+        "non dati da pluviometro: adatta alle oscillazioni tra un anno e l'altro "
+        "e ai cambiamenti di lungo periodo, non ai record locali."
+    ),
+    "precip_total": "Totale (mm)",
+    "precip_rolling": "Media mobile 10 anni (mm)",
+    "wet_days": "Giorni piovosi (>= 1 mm)",
+    "precip_anomaly": "Rispetto al 1981-2010 (%)",
+    "no_precip": "Nessun dato di precipitazione per questa selezione in questa versione dei dati.",
     "distribution_title": "Distribuzione delle massime giornaliere",
     # Vedi il commento nella tabella EN: sono template, non stringhe fisse.
     "distribution_sub": (

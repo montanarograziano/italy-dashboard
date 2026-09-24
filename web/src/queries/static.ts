@@ -1,5 +1,7 @@
 import climateDistributionSql from "../../../shared/queries/climate_distribution.sql?raw";
 import climateDistributionWindowsSql from "../../../shared/queries/climate_distribution_windows.sql?raw";
+import climatePrecipAnnualSql from "../../../shared/queries/climate_precip_annual.sql?raw";
+import climateRegionPrecipAnnualSql from "../../../shared/queries/climate_region_precip_annual.sql?raw";
 import incomeCorrelationsSql from "../../../shared/queries/income_correlations.sql?raw";
 import inflationSeriesSql from "../../../shared/queries/inflation_series.sql?raw";
 import incomeYearsSql from "../../../shared/queries/income_years.sql?raw";
@@ -106,4 +108,18 @@ export async function climateDistribution(city: string) {
     lateLo,
     lateHi,
   ]);
+}
+
+// Matches italy_dashboard.queries.climate_precip_series: annual precipitation
+// for one capital (total, wet days, % anomaly vs 1981-2010, 10-year centred
+// rolling mean), partial years and precipitation-less years dropped. All the
+// logic lives in the shared SQL; see its header for the rules.
+export async function climatePrecipSeries(city: string) {
+  return runSql(climatePrecipAnnualSql, [city, MIN_DAYS_FOR_A_FULL_YEAR]);
+}
+
+// Matches italy_dashboard.queries.climate_region_precip_series: the
+// region/Italia counterpart ('Italia' is just another region_name there).
+export async function climateRegionPrecipSeries(region: string = "Italia") {
+  return runSql(climateRegionPrecipAnnualSql, [region, MIN_DAYS_FOR_A_FULL_YEAR]);
 }

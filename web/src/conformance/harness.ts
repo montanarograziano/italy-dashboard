@@ -26,6 +26,8 @@ const IMPLEMENTED: Record<string, (...args: never[]) => Promise<unknown>> = {
   income_years: staticQueries.incomeYears,
   income_scatter: staticQueries.incomeScatter,
   climate_annual_series: staticQueries.climateAnnualSeries,
+  climate_precip_series: staticQueries.climatePrecipSeries,
+  climate_region_precip_series: staticQueries.climateRegionPrecipSeries,
   db_ready: ready.dbReady,
   climate_ready: ready.climateReady,
   climate_region_ready: ready.climateRegionReady,

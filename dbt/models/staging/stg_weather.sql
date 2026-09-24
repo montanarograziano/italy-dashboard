@@ -1,4 +1,4 @@
--- Staging: daily temperatures joined to the province-capitals seed, one row
+-- Staging: daily temperatures and precipitation joined to the province-capitals seed, one row
 -- per (province, date). The join is an INNER join on purpose: a snapshot row
 -- whose province code is not in the seed is a bug, not data to carry forward.
 --
@@ -14,6 +14,16 @@
 -- threshold counts (hot days, frost days, tropical nights) are what it fixes.
 -- A constant lapse rate cannot model winter valley inversions, so alpine
 -- valley minima can still be off by a degree or two.
+--
+-- Precipitation gets NO elevation offset: the lapse rate is a temperature
+-- relation, and there is no comparably simple height correction for rain.
+-- `precip_mm` is the raw ERA5-Land grid-cell total for the UTC day (hourly
+-- `tp` de-accumulated and summed, see ingestion/cds.py), not a rain-gauge
+-- reading. De-accumulation differences leave float noise a hair below zero
+-- (the snapshot's minimum is -6e-5 mm); that is clamped to 0, since a
+-- negative rainfall is not a measurement. A missing value stays NULL: it is
+-- never filled with 0, because "no data" and "a dry day" are different facts
+-- and summing one as the other would understate every total downstream.
 {% set lapse_rate_c_per_m = 0.0065 %}
 
 with raw as (
@@ -38,7 +48,11 @@ select
     month(cast(r.date as date))                as month,
     cast(r.t_min as double) + c.lapse_offset   as t_min,
     cast(r.t_mean as double) + c.lapse_offset  as t_mean,
-    cast(r.t_max as double) + c.lapse_offset   as t_max
+    cast(r.t_max as double) + c.lapse_offset   as t_max,
+    case
+        when cast(r.precip_sum as double) < 0 then 0.0
+        else cast(r.precip_sum as double)
+    end                                        as precip_mm
 from raw r
 join capitals c on r.province_code = c.province_code
 where r.t_mean is not null

@@ -1434,6 +1434,149 @@ def test_partial_years_are_excluded_from_region_scope_too(partial_year_region_ma
         assert "2022" not in stripe_years, region
 
 
+# ---------------------------------------------------------------- precipitation
+
+PRECIP_KEYS = {"period", "precip_mm", "wet_days", "anomaly_pct", "precip_rolling"}
+
+
+def test_climate_precip_series_has_totals_and_wet_days(climate_db):
+    rows = q.climate_precip_series("Roma")
+    assert rows, "the sample snapshot carries synthetic precipitation"
+    assert set(rows[0]) == PRECIP_KEYS
+    assert [r["period"] for r in rows] == sorted(r["period"] for r in rows)
+    assert all(r["precip_mm"] >= 0 for r in rows)
+    assert all(0 <= r["wet_days"] <= 366 for r in rows)
+
+
+def test_climate_region_precip_series_reaches_region_and_italia(climate_db):
+    for region in ("Piemonte", q.ITALIA):
+        rows = q.climate_region_precip_series(region)
+        assert rows, region
+        assert set(rows[0]) == PRECIP_KEYS
+        assert all(r["precip_mm"] >= 0 for r in rows), region
+
+
+def test_precip_series_unknown_scope_or_no_snapshot_is_empty(climate_db, tmp_path, monkeypatch):
+    assert q.climate_precip_series("Atlantis") == []
+    assert q.climate_region_precip_series("Nonexistentia") == []
+    empty = tmp_path / "nope"
+    empty.mkdir()
+    monkeypatch.setattr(q, "DATA_DIR", empty)
+    monkeypatch.setattr(q, "MARTS_DIR", empty / "marts")
+    assert q.climate_precip_series("Roma") == []
+    assert q.climate_region_precip_series(q.ITALIA) == []
+
+
+@pytest.fixture
+def precip_annual_mart(sample_db):
+    """Sixteen years for one capital, shaped to pin every rule of the precip
+    series: 2000-2013 complete at 800 mm except 2005, whose total is NULL (no
+    precipitation data, which must never read as a dry year); 2014 complete
+    at 1,800 mm; 2015 partial (200 days, a short 300 mm total that would
+    otherwise plot as a record drought). Written to both marts, one province,
+    so region == national == the province.
+    """
+    marts = sample_db / "marts"
+    marts.mkdir(exist_ok=True)
+
+    def total(year: int) -> float | None:
+        return {2005: None, 2014: 1800.0, 2015: 300.0}.get(year, 800.0)
+
+    years = list(range(2000, 2016))
+    annual = [
+        {
+            "province_code": "IT999",
+            "capital_city": "Testville",
+            "region_code": "ITZ9",
+            "region_name": "Testregion",
+            "year": str(y),
+            "days_observed": 200 if y == 2015 else 365,
+            "precip_mm": total(y),
+            "wet_days": None if total(y) is None else 90,
+            "precip_anomaly_pct_1981_2010": None,
+        }
+        for y in years
+    ]
+    pl.DataFrame(annual).write_parquet(marts / "mart_climate_annual.parquet")
+    pl.DataFrame(
+        [
+            {
+                "region_code": code,
+                "region_name": name,
+                "year": row["year"],
+                "precip_mm": row["precip_mm"],
+                "wet_days": row["wet_days"],
+                "precip_anomaly_pct_1981_2010": None,
+            }
+            for row in annual
+            for code, name in (("ITZ9", "Testregion"), ("IT", q.ITALIA))
+        ],
+        schema_overrides={"wet_days": pl.Float64},
+    ).write_parquet(marts / "mart_climate_region.parquet")
+    return marts
+
+
+@pytest.mark.parametrize(
+    ("label", "rows_fn"),
+    [
+        ("city", lambda: q.climate_precip_series("Testville")),
+        ("region", lambda: q.climate_region_precip_series("Testregion")),
+        ("italia", lambda: q.climate_region_precip_series(q.ITALIA)),
+    ],
+)
+def test_precip_series_drops_partial_and_null_years_and_guards_rolling(
+    precip_annual_mart, label: str, rows_fn
+):
+    """A short year's total is SHORT, not noisy, and a NULL total is not zero.
+
+    Both are dropped outright rather than plotted, and the rolling mean must
+    not average across the hole the NULL year leaves: ROWS BETWEEN counts
+    rows, so without the span check 2001-2010 would silently take in 2011.
+    """
+    rows = rows_fn()
+    by_year = {r["period"]: r for r in rows}
+    assert "2015" not in by_year, f"{label}: the partial year is plotted"
+    assert "2005" not in by_year, f"{label}: a NULL total is plotted"
+    assert all(r["precip_mm"] is not None for r in rows)
+    assert len(rows) == 14, label  # 2000-2014 minus 2005
+
+    # Every window touching the 2005 hole spans more than 9 years, so it is
+    # NULL; the first full, gap-free window is 2006-2015 minus 2015, i.e.
+    # none, and 2006-2014 has only nine years. So: no rolling value at all
+    # until the record reaches ten consecutive complete years.
+    assert all(r["precip_rolling"] is None for r in rows), label
+
+
+def test_precip_rolling_mean_is_the_centred_ten_year_mean(precip_annual_mart):
+    """With the hole filled, 2004's centred window is 2000-2009 and 2005's is
+    2001-2010 (4 before, 5 after), both at 800 mm; 2009's window 2005-2014
+    takes in 2014's 1,800 mm, so its mean is 900."""
+    annual = pl.read_parquet(precip_annual_mart / "mart_climate_annual.parquet")
+    annual = annual.with_columns(
+        pl.when(pl.col("year") == "2005")
+        .then(pl.lit(800.0))
+        .otherwise(pl.col("precip_mm"))
+        .alias("precip_mm")
+    )
+    annual.write_parquet(precip_annual_mart / "mart_climate_annual.parquet")
+    rows = {r["period"]: r["precip_rolling"] for r in q.climate_precip_series("Testville")}
+    assert rows["2003"] is None  # needs 1999, which does not exist
+    assert rows["2004"] == 800.0
+    assert rows["2005"] == 800.0
+    assert rows["2009"] == 900.0
+    assert rows["2010"] is None  # would need 2015, the dropped partial year
+
+
+def test_dbt_full_year_threshold_matches_the_query_layer():
+    """The marts gate precipitation normals/anomalies on the dbt var, the query
+    layer gates every plotted series on MIN_DAYS_FOR_A_FULL_YEAR: two copies
+    of one definition of "a complete year", pinned to agree."""
+    import yaml
+
+    project = yaml.safe_load((q.PROJECT_ROOT / "dbt" / "dbt_project.yml").read_text())
+    assert project["vars"]["min_days_for_a_full_year"] == q.MIN_DAYS_FOR_A_FULL_YEAR
+
+
 def test_distribution_is_empty_at_region_and_italy_scope(climate_daily_mart):
     """mart_climate_region has no daily rows (see queries.climate_distribution's
     docstring): a region or Italia name never matches a capital_city, so the

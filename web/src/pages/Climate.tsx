@@ -4,6 +4,7 @@ import {
   bandTrendSpec,
   distributionSpec,
   monthHeatmapSpec,
+  precipSpec,
   rankingSpec,
   stripesSpec,
   thresholdSpec,
@@ -25,7 +26,13 @@ import {
   climateRegionThresholdDays,
 } from "../queries/climateScope";
 import { climateReady, climateRegionReady } from "../queries/ready";
-import { climateAnnualSeries, climateDistribution, climateDistributionWindows } from "../queries/static";
+import {
+  climateAnnualSeries,
+  climateDistribution,
+  climateDistributionWindows,
+  climatePrecipSeries,
+  climateRegionPrecipSeries,
+} from "../queries/static";
 import { tr, trt, useLang } from "../i18n";
 import { gridline, inkMuted, inkPrimary, inkSecondary, type Mode } from "../theme";
 import { Callout, Card, DataTable, EmptyNote, SectionHeading, Select } from "../ui";
@@ -191,6 +198,7 @@ export default function Climate({ mode }: { mode: Mode }) {
   const [annual, setAnnual] = useState<Row[]>([]);
   const [stripes, setStripes] = useState<Row[]>([]);
   const [thresholds, setThresholds] = useState<Row[]>([]);
+  const [precip, setPrecip] = useState<Row[]>([]);
   const [heatmap, setHeatmap] = useState<Row[]>([]);
   const [distribution, setDistribution] = useState<Row[]>([]);
   const [distributionWindows, setDistributionWindows] = useState<Windows | null>(null);
@@ -278,6 +286,8 @@ export default function Climate({ mode }: { mode: Mode }) {
       if (cancelled) return;
       const thresholdRows = await (isCityScope ? climateThresholdDays(city) : climateRegionThresholdDays(region));
       if (cancelled) return;
+      const precipRows = await (isCityScope ? climatePrecipSeries(city) : climateRegionPrecipSeries(region));
+      if (cancelled) return;
       let heatmapRows: Row[] = [];
       let distRows: Row[] = [];
       let windows: Windows | null = null;
@@ -308,6 +318,7 @@ export default function Climate({ mode }: { mode: Mode }) {
       setAnnual(annualRows);
       setStripes(stripeRows);
       setThresholds(thresholdRows);
+      setPrecip(precipRows);
       setHeatmap(heatmapRows);
       setDistribution(distRows);
       setDistributionWindows(windows);
@@ -382,6 +393,7 @@ export default function Climate({ mode }: { mode: Mode }) {
   const annualSpec = useMemo(() => bandTrendSpec(annual), [annual, mode, lang]);
   const stripesChartSpec = useMemo(() => stripesSpec(stripes), [stripes, mode, lang]);
   const thresholdsChartSpec = useMemo(() => thresholdSpec(thresholds), [thresholds, mode, lang]);
+  const precipChartSpec = useMemo(() => precipSpec(precip), [precip, mode, lang]);
   const heatmapSpec = useMemo(() => monthHeatmapSpec(heatmap), [heatmap, mode, lang]);
   const distributionChartSpec = useMemo(
     () => (distributionWindows ? distributionSpec(distribution, distributionWindows) : null),
@@ -543,6 +555,36 @@ export default function Climate({ mode }: { mode: Mode }) {
               <PlotFigure spec={thresholdsChartSpec} />
             )}
           </div>
+        </Card>
+
+        <Card
+          title={tr("Precipitation")}
+          subtitle={tr(
+            "Annual total (bars) and a 10-year centred rolling average (line). ERA5-Land reanalysis grid-cell precipitation at the province capital, not rain-gauge data: good for year-to-year swings and long-run change, not for local records.",
+          )}
+        >
+          <div data-testid="climate-precip">
+            {scopeLoading ? (
+              <Loading stage="data" />
+            ) : precip.length === 0 ? (
+              <EmptyNote>{trt("No precipitation data for {name} in this snapshot.", { name: scopeName })}</EmptyNote>
+            ) : (
+              <PlotFigure spec={precipChartSpec} />
+            )}
+          </div>
+          {!scopeLoading && precip.length > 0 && (
+            <DataTable
+              rows={precip}
+              columns={[
+                { key: "period", label: tr("Year") },
+                { key: "precip_mm", label: tr("Total (mm)") },
+                { key: "wet_days", label: tr("Wet days (≥ 1 mm)") },
+                { key: "anomaly_pct", label: tr("vs 1981-2010 (%)") },
+                { key: "precip_rolling", label: tr("10-year average (mm)") },
+              ]}
+              testId="climate-precip-table"
+            />
+          )}
         </Card>
 
         <Card

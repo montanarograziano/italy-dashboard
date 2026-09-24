@@ -54,6 +54,12 @@ MOLISE = ("ITF22", "ITF2", 1981, 2004, lambda y: 16.0 + 0.04 * (y - 1981))
 UMBRIA = ("ITE21", "ITE2", 1981, 2005, lambda y: 14.0 + 0.06 * (y - 1981))
 PROVINCES = [PIEMONTE, LAZIO, CAMPANIA, MOLISE, UMBRIA]
 
+# Precipitation per province-day (mm): a constant, so every expected total is
+# arithmetic. Campania's is NULL throughout, which pins the "NULL is not zero"
+# rule at region AND national scope: its region's total must be NULL, and so
+# must Italy's in every year Campania is part of the national mean.
+PRECIP_MM = {"ITC11": 2.0, "ITE43": 4.0, "ITF33": None, "ITF22": 1.0, "ITE21": 3.0}
+
 # stg_weather shifts each city's raw cell values to the city's height using
 # the real seed; the independent expectation must apply the same shift.
 _SEED = pl.read_csv(PROJECT_ROOT / "dbt" / "seeds" / "province_capitals.csv")
@@ -99,6 +105,7 @@ def region_mart(tmp_path_factory: pytest.TempPathFactory) -> pl.DataFrame:
                     "t_min": t_mean - 5.0,
                     "t_mean": t_mean,
                     "t_max": t_mean + 5.0,
+                    "precip_sum": PRECIP_MM[province_code],
                 }
             )
     pl.DataFrame(
@@ -109,6 +116,7 @@ def region_mart(tmp_path_factory: pytest.TempPathFactory) -> pl.DataFrame:
             "t_min": pl.Float64,
             "t_mean": pl.Float64,
             "t_max": pl.Float64,
+            "precip_sum": pl.Float64,
         },
     ).write_parquet(data_dir / "weather_daily.parquet")
 
@@ -240,3 +248,38 @@ def test_it_row_not_double_counted_into_a_real_region(region_mart: pl.DataFrame)
     assert region_mart.filter(pl.col("region_code") == "IT")["region_name"].unique().to_list() == [
         "Italia"
     ]
+
+
+def test_precip_null_is_never_summed_as_zero(region_mart: pl.DataFrame) -> None:
+    """Campania has no precipitation at all: its regional total is NULL, not
+    0 mm, and Italy's total is NULL in every year Campania belongs to the
+    national mean (1981-2000) rather than a mean over the other capitals."""
+    campania = region_mart.filter(pl.col("region_code") == "ITF3")
+    assert campania["precip_mm"].null_count() == campania.height
+    assert campania["wet_days"].null_count() == campania.height
+
+    italia = region_mart.filter(pl.col("region_code") == "IT")
+    with_campania = italia.filter(pl.col("year").cast(pl.Int32) <= 2000)
+    assert with_campania["precip_mm"].null_count() == with_campania.height
+
+
+def test_precip_national_total_is_the_unweighted_mean_of_capitals(
+    region_mart: pl.DataFrame,
+) -> None:
+    """2003: Piemonte 2, Lazio 4, Molise 1, Umbria 3 mm on the one day each
+    has, Campania's record has ended. Unweighted mean of the four totals."""
+    row = region_mart.filter((pl.col("region_code") == "IT") & (pl.col("year") == "2003"))
+    assert row["precip_mm"].item() == pytest.approx((2.0 + 4.0 + 1.0 + 3.0) / 4, abs=0.05)
+    # 1 mm is AT the wet-day threshold (>= 1 mm), so all four days are wet.
+    assert row["wet_days"].item() == pytest.approx(1.0)
+
+
+def test_precip_anomaly_needs_complete_years(region_mart: pl.DataFrame) -> None:
+    """Every fixture year holds ONE day, so none is complete: the precipitation
+    normal must be withheld everywhere, even for regions whose TEMPERATURE
+    normal passes the 25-of-30 guard. A normal averaged over one-day "years"
+    would be a 1/365 scale error, not a climate normal."""
+    assert region_mart["precip_anomaly_pct_1981_2010"].null_count() == region_mart.height
+    assert region_mart["precip_anomaly_pct_1971_2000"].null_count() == region_mart.height
+    piemonte = region_mart.filter(pl.col("region_code") == "ITC1")
+    assert piemonte["anomaly_1981_2010"].null_count() == 0  # temperature still passes

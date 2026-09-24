@@ -483,15 +483,30 @@ SAMPLE_CAPITALS: list[tuple[str, float]] = [
 WEATHER_YEARS = list(range(1981, 2025))
 
 
+def _synthetic_precip(rng: random.Random, lat: float) -> float:
+    """One fake day's precipitation in mm: wet on roughly a third of days
+    (fewer towards the south), exponential amounts averaging about 7 mm, so an
+    annual total lands in Italy's plausible 500-1,300 mm band. Shape only:
+    no seasonality, no trend, nothing to read climatologically."""
+    wet_probability = 0.22 + 0.02 * (lat - 36.0)
+    if rng.random() >= wet_probability:
+        return 0.0
+    return round(rng.expovariate(1 / 7.0), 1)
+
+
 def generate_weather_parquet(data_dir: Path, seed: int = 42) -> Path:
     """Daily min/mean/max for 20 capitals: latitude gradient + seasonal cycle
-    + a warming trend, so the climate marts have something to aggregate."""
+    + a warming trend, so the climate marts have something to aggregate; plus
+    a shape-only synthetic daily precipitation (see `_synthetic_precip`)."""
     import math
     from datetime import date, timedelta
 
     from ingestion.weather import SNAPSHOT_NAME, WEATHER_COLUMNS
 
     rng = random.Random(seed)
+    # A SEPARATE stream for precipitation, so adding it did not reshuffle the
+    # temperature draws every existing sample-data expectation was built on.
+    precip_rng = random.Random(seed + 1)
     rows: list[dict] = []
     for code, lat in SAMPLE_CAPITALS:
         # Warmer towards the south; roughly 0.7 C per degree of latitude.
@@ -511,10 +526,7 @@ def generate_weather_parquet(data_dir: Path, seed: int = 42) -> Path:
                         "t_min": round(mean - spread / 2, 1),
                         "t_mean": round(mean, 1),
                         "t_max": round(mean + spread / 2, 1),
-                        # No synthetic precip yet: real precip_sum coverage is
-                        # still Open-Meteo-only and mostly NULL historically
-                        # (see ingestion/weather.py), so NULL here matches it.
-                        "precip_sum": None,
+                        "precip_sum": _synthetic_precip(precip_rng, lat),
                     }
                 )
                 day += timedelta(days=1)

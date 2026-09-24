@@ -9,6 +9,12 @@
 -- gap. Below the threshold, a handful of years would produce a
 -- confident-looking anomaly that is really just noise dressed up as a
 -- 30-year normal.
+--
+-- Precipitation is a TOTAL, not a mean, so a month with missing days is not
+-- merely noisy, it is short: `precip_mm` is NULL unless every observed day
+-- carries a value (a sum that silently skips NULL days would read as a dry
+-- month), and `days_observed` is published so the running, still-unfinished
+-- month is visible as such rather than plotting as a drought.
 
 {{ config(
     materialized='external',
@@ -27,7 +33,9 @@ with monthly as (
         month,
         avg(t_mean) as t_mean,
         avg(t_min)  as t_min_mean,
-        avg(t_max)  as t_max_mean
+        avg(t_max)  as t_max_mean,
+        count(*)    as days_observed,
+        case when count(precip_mm) = count(*) then sum(precip_mm) end as precip_mm
     from {{ ref('mart_climate_daily') }}
     group by province_code, year, month
 ),
@@ -63,6 +71,8 @@ select
     round(m.t_mean, 2)     as t_mean,
     round(m.t_min_mean, 2) as t_min_mean,
     round(m.t_max_mean, 2) as t_max_mean,
+    round(m.precip_mm, 1)  as precip_mm,
+    m.days_observed,
     round(m.t_mean - c.base_1971_2000, 2) as anomaly_1971_2000,
     round(m.t_mean - c.base_1981_2010, 2) as anomaly_1981_2010
 from monthly m

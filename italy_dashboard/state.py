@@ -567,6 +567,7 @@ class ClimateState(AppState):
     ranking: list[Row] = []
     stripes_grid: list[GridItem] = []
     thresholds: list[Row] = []
+    precip: list[Row] = []
     distribution: list[Row] = []
     mart_ready: bool = False
     has_loaded: bool = False  # see AppState's docstring: page-scoped, not inherited
@@ -585,6 +586,13 @@ class ClimateState(AppState):
     @rx.var
     def has_partial_endpoint(self) -> bool:
         return self.partial_endpoint != "—"
+
+    @rx.var
+    def has_precip(self) -> bool:
+        """Whether the selected scope has any precipitation to draw: False on
+        a snapshot whose weather predates precip_sum, where the card says so
+        instead of drawing an empty frame (NULL is never read as zero)."""
+        return bool(self.precip)
 
     @rx.var
     def partial_endpoint_note(self) -> str:
@@ -767,6 +775,7 @@ class ClimateState(AppState):
             self.annual = q.climate_annual_series(self.city)
             self.stripes = q.climate_stripes(self.city)
             self.thresholds = q.climate_threshold_days(self.city)
+            self.precip = q.climate_precip_series(self.city)
             # Resolved once and passed down: the card labels and the
             # histogram must describe the SAME two windows, and a second
             # lookup is a second chance for them to disagree.
@@ -779,6 +788,7 @@ class ClimateState(AppState):
             self.annual = q.climate_region_annual_series(self.region)
             self.stripes = q.climate_region_stripes(self.region)
             self.thresholds = q.climate_region_threshold_days(self.region)
+            self.precip = q.climate_region_precip_series(self.region)
             # Region/Italia scope has no drawable distribution:
             # mart_climate_region holds yearly aggregates only, never the
             # daily readings the histogram needs (see

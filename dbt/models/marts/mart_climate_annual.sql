@@ -14,6 +14,23 @@
 -- year would make the mart brittle against a single upstream gap. Below the
 -- threshold, a handful of years would produce a confident-looking anomaly
 -- that is really just noise dressed up as a 30-year normal.
+--
+-- Precipitation follows the same rules with two differences, both because it
+-- is a TOTAL rather than a mean:
+--   * `precip_mm` (annual total) and `wet_days` (days >= 1 mm) are NULL
+--     unless every observed day carries a value; a SUM that skipped NULL days
+--     would read as a dry year. The partial running year still gets a (short)
+--     total, exposed next to `days_observed` like every other column here.
+--   * Its baseline only admits COMPLETE years (the `min_days_for_a_full_year`
+--     var, the same threshold the query layer uses), and still needs 25 of
+--     them in the window. A temperature mean over 200 days is still roughly a
+--     mean; a rainfall total over 200 days is a third short, and one such
+--     year would drag the normal down. For the same reason the anomaly is
+--     NULL for an incomplete year rather than a phantom drought.
+-- The anomaly is RELATIVE (percent of the normal), the convention for
+-- precipitation: a 100 mm deficit is a dry year in Genova and a drought in
+-- Cagliari, so an absolute anomaly would not compare across cities.
+{% set full_year = var('min_days_for_a_full_year') %}
 
 {{ config(
     materialized='external',
@@ -37,7 +54,10 @@ with annual as (
         count(*)                                as days_observed,
         sum(case when is_hot_day then 1 else 0 end)         as hot_days,
         sum(case when is_tropical_night then 1 else 0 end)  as tropical_nights,
-        sum(case when is_frost_day then 1 else 0 end)       as frost_days
+        sum(case when is_frost_day then 1 else 0 end)       as frost_days,
+        case when count(precip_mm) = count(*) then sum(precip_mm) end as precip_mm,
+        case when count(is_wet_day) = count(*)
+             then sum(case when is_wet_day then 1 else 0 end) end   as wet_days
     from {{ ref('mart_climate_daily') }}
     group by province_code, year
 ),
@@ -56,7 +76,9 @@ clino as (
              ) >= 25
              then avg(case when cast(year as integer)
                       between 1981 and 2010 then t_mean end)
-        end as base_1981_2010
+        end as base_1981_2010,
+        {{ precip_baseline('1971', '2000', full_year) }} as precip_base_1971_2000,
+        {{ precip_baseline('1981', '2010', full_year) }} as precip_base_1981_2010
     from annual
     group by province_code
 )
@@ -78,6 +100,10 @@ select
     a.frost_days,
     a.days_observed,
     round(a.t_mean - c.base_1971_2000, 2) as anomaly_1971_2000,
-    round(a.t_mean - c.base_1981_2010, 2) as anomaly_1981_2010
+    round(a.t_mean - c.base_1981_2010, 2) as anomaly_1981_2010,
+    round(a.precip_mm, 1) as precip_mm,
+    a.wet_days,
+    {{ precip_anomaly_pct('a', 'c.precip_base_1971_2000', full_year) }} as precip_anomaly_pct_1971_2000,
+    {{ precip_anomaly_pct('a', 'c.precip_base_1981_2010', full_year) }} as precip_anomaly_pct_1981_2010
 from annual a
 left join clino c on a.province_code = c.province_code

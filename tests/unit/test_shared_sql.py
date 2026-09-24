@@ -16,6 +16,8 @@ from italy_dashboard import queries as q
 EXPECTED_QUERIES = {
     "climate_distribution",
     "climate_distribution_windows",
+    "climate_precip_annual",
+    "climate_region_precip_annual",
     "crime_climate_scatter",
     "crime_climate_stats",
     "income_correlations",

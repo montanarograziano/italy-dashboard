@@ -208,6 +208,15 @@ export const IT: Record<string, string> = {
   "Hot days": "Giorni caldi",
   "Tropical nights": "Notti tropicali",
   "Frost days": "Giorni di gelo",
+  Precipitation: "Precipitazioni",
+  "Annual total (bars) and a 10-year centred rolling average (line). ERA5-Land reanalysis grid-cell precipitation at the province capital, not rain-gauge data: good for year-to-year swings and long-run change, not for local records.":
+    "Totale annuo (barre) e media mobile centrata su 10 anni (linea). Precipitazione della cella di rianalisi ERA5-Land sul capoluogo, non dati da pluviometro: adatta alle oscillazioni tra un anno e l'altro e ai cambiamenti di lungo periodo, non ai record locali.",
+  "Total (mm)": "Totale (mm)",
+  "Wet days (≥ 1 mm)": "Giorni piovosi (≥ 1 mm)",
+  "vs 1981-2010 (%)": "Rispetto al 1981-2010 (%)",
+  "10-year average (mm)": "Media mobile 10 anni (mm)",
+  "No precipitation data for {name} in this snapshot.":
+    "Nessun dato di precipitazione per {name} in questa versione dei dati.",
   "Distribution of daily maxima": "Distribuzione delle massime giornaliere",
   "Share of days per 2°C bucket, the city's record split into an early and a late window.":
     "Quota di giorni per intervallo di 2°C, la serie della città divisa in una finestra iniziale e una finale.",
@@ -264,6 +273,9 @@ export const IT: Record<string, string> = {
   "Mean: {v}": "Media: {v}",
   "Range: {v1} to {v2}": "Intervallo: da {v1} a {v2}",
   "10-yr average: {v}": "Media mobile (10 anni): {v}",
+  "Precipitation (mm)": "Precipitazioni (mm)",
+  "Total: {v}": "Totale: {v}",
+  "Wet days (≥ 1 mm): {v}": "Giorni piovosi (≥ 1 mm): {v}",
   "{value} vs 1981-2010": "{value} rispetto alla norma 1981-2010",
   "{t} daily max": "{t} massima giornaliera",
   "{label}: {v}% of days": "{label}: {v}% dei giorni",

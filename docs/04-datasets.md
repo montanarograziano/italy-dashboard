@@ -144,7 +144,8 @@ locations into one series and fake a step change in the trend. Moving a city
 simply misses the cache and refetches it whole.
 
 Feeds `mart_climate_daily`, `mart_climate_monthly`, `mart_climate_annual`,
-`mart_climate_region` and `mart_crime_climate`.
+`mart_climate_region` (temperature and precipitation) and `mart_crime_climate`
+(temperature only).
 
 ### Full backfill via Copernicus CDS (ARCO)
 
@@ -251,6 +252,26 @@ the per-city offset it predicts matches the measured gap to within 0.1 °C for
 Aosta, Sondrio, Bolzano, Trento and Genova. A single lapse rate cannot model
 winter valley inversions, so alpine valley minima can still be off by a degree
 or two.
+
+### Precipitation (both fetchers)
+
+The same snapshot carries `precip_sum`, the day's total precipitation in mm:
+Open-Meteo's `precipitation_sum`, or on the ARCO path ERA5-Land's hourly
+`total_precipitation` de-accumulated, converted from metres to millimetres and
+summed per **UTC** day. The current snapshot has it for every city-day
+(2,968,728 rows, 1950-01-02 to 2026-09-06). As plausibility checks, the
+1991-2020 mean annual totals run from Cagliari 427 mm and Bari 596 mm through
+Roma 913 mm to Milano 1,230 mm and Udine 1,525 mm.
+
+It is **grid-cell reanalysis precipitation, not rain-gauge data.** A 0.1° cell
+averages rainfall over roughly 100 km², so convective downpours are smeared out
+and daily maxima understate what a gauge in the city would record; totals over
+a year, and changes in them, are what it is fit for. Unlike temperature it gets
+**no elevation correction** (there is no lapse-rate analogue for rain), and
+de-accumulation float noise just below zero is clamped to 0 in `stg_weather`. A
+missing value stays NULL all the way through the marts: it is never filled with
+0, because "no data" and "a dry day" are different facts. See
+[Methodology](07-methodology.md#precipitation) for how the marts aggregate it.
 
 ### Why not ISTAT
 
