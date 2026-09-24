@@ -111,3 +111,35 @@ def test_stage_copies_exactly_the_allowed_parquet_and_nothing_else(tmp_path, mon
     assert (
         fake_staging / f"{sample}.parquet"
     ).read_bytes() == f"fake-parquet-bytes:{sample}".encode()
+
+
+def test_restaging_leaves_unchanged_files_in_place(tmp_path, monkeypatch):
+    """A second `npm run dev`/`build` re-stages while another Vite server is
+    live. Wiping and recopying deleted the parquet mid-request and hung every
+    DuckDB-WASM page on that server, so unchanged files must keep their inode,
+    changed ones must get the new bytes, and stale ones must go."""
+    import scripts.stage_web_data as stage_web_data
+
+    fake_data = tmp_path / "data"
+    fake_staging = tmp_path / "public-data"
+    for rel in stage_web_data.STAGED:
+        src = fake_data / f"{rel}.parquet"
+        src.parent.mkdir(parents=True, exist_ok=True)
+        src.write_bytes(f"v1:{rel}".encode())
+    monkeypatch.setattr(stage_web_data, "DATA_DIR", fake_data)
+    monkeypatch.setattr(stage_web_data, "STAGING_DIR", fake_staging)
+    stage_web_data.stage()
+
+    unchanged, changed = sorted(stage_web_data.STAGED)[:2]
+    inode_before = (fake_staging / f"{unchanged}.parquet").stat().st_ino
+    (fake_data / f"{changed}.parquet").write_bytes(b"v2")
+    stale = fake_staging / "marts" / "mart_removed_upstream.parquet"
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_bytes(b"old")
+
+    stage_web_data.stage()
+
+    assert (fake_staging / f"{unchanged}.parquet").stat().st_ino == inode_before
+    assert (fake_staging / f"{changed}.parquet").read_bytes() == b"v2"
+    assert not stale.exists()
+    assert not list(fake_staging.rglob(".*.tmp"))

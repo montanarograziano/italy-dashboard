@@ -32,7 +32,9 @@ therefore `just test-conformance`, which drives the dev server) and
 from __future__ import annotations
 
 import argparse
+import filecmp
 import json
+import os
 import re
 import shutil
 import sys
@@ -70,10 +72,17 @@ STAGED: set[str] = _registered_paths() - EXCLUDED_FROM_STATIC_BUILD
 
 
 def stage(*, strict: bool = False) -> list[str]:
-    """(Re)create staging directory; strict mode gates production first.
+    """Sync the staging directory; strict mode gates production first.
 
     Returns missing paths in development mode. Strict mode fails before any
     copy, so production cannot publish a partial static snapshot.
+
+    Syncs in place rather than wiping and recopying: `npm run dev` and
+    `npm run build` both re-stage via their pre-hooks, so a second dev server
+    or a build started while another Vite server is live would otherwise
+    delete the parquet files mid-request (DuckDB-WASM range reads then hang
+    and pages never render). Unchanged files are left untouched, changed ones
+    are swapped in atomically, and stale ones are removed.
     """
     if strict:
         manifest_path = DATA_DIR / "release-manifest.json"
@@ -84,19 +93,29 @@ def stage(*, strict: bool = False) -> list[str]:
             raise RuntimeError(f"release gate refused: {exc}") from exc
         if errors:
             raise RuntimeError("release gate refused: " + "; ".join(errors))
-    if STAGING_DIR.exists():
-        shutil.rmtree(STAGING_DIR)
-    STAGING_DIR.mkdir(parents=True)
+    STAGING_DIR.mkdir(parents=True, exist_ok=True)
 
     missing: list[str] = []
+    expected: set[Path] = set()
     for rel in sorted(STAGED):
         src = DATA_DIR / f"{rel}.parquet"
         if not src.exists():
             missing.append(rel)
             continue
         dest = STAGING_DIR / f"{rel}.parquet"
+        expected.add(dest)
+        if dest.is_file() and filecmp.cmp(src, dest, shallow=False):
+            continue
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dest)
+        tmp = dest.with_name(f".{dest.name}.tmp")
+        shutil.copy2(src, tmp)
+        os.replace(tmp, dest)
+
+    for path in sorted(STAGING_DIR.rglob("*"), reverse=True):
+        if path.is_file() and path not in expected:
+            path.unlink()
+        elif path.is_dir() and not any(path.iterdir()):
+            path.rmdir()
     return missing
 
 
